@@ -30,11 +30,6 @@ function getSpiceLevel(book: HotlistBookDetail): number {
   return book.book.spice[0].spiceLevel;
 }
 
-function formatRating(value: number | null): string {
-  if (value === null) return "\u2014";
-  return value.toFixed(1);
-}
-
 /** Build an Amazon search URL as fallback when we don't have an ASIN */
 function amazonSearchUrl(title: string, author: string, tag: string): string {
   const query = encodeURIComponent(`${title} ${author}`);
