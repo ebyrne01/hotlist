@@ -9,8 +9,17 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        background: "var(--background)",
-        foreground: "var(--foreground)",
+        fire: "#d4430e",
+        cream: "#faf7f2",
+        ink: "#12080a",
+        muted: "#7a6055",
+        gold: "#b07d2a",
+        border: "#e0d2c8",
+      },
+      fontFamily: {
+        display: ['"Playfair Display"', "serif"],
+        body: ['"Libre Baskerville"', "serif"],
+        mono: ['"DM Mono"', "monospace"],
       },
     },
   },

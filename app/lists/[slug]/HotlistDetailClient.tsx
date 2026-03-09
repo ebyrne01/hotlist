@@ -1,0 +1,261 @@
+"use client";
+
+import { useState, useRef } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
+import HotlistTable from "@/components/hotlists/HotlistTable";
+import SearchBar from "@/components/search/SearchBar";
+import type { HotlistDetail } from "@/lib/types";
+
+interface Props {
+  hotlist: HotlistDetail;
+  isOwner: boolean;
+  currentUserId: string | null;
+}
+
+export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }: Props) {
+  const router = useRouter();
+  const [name, setName] = useState(hotlist.name);
+  const [editing, setEditing] = useState(false);
+  const [isPublic, setIsPublic] = useState(hotlist.isPublic);
+  const [shareSlug] = useState(hotlist.shareSlug);
+  const [copied, setCopied] = useState(false);
+  const [books, setBooks] = useState(hotlist.books);
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  // Track which books have no ratings yet (likely being enriched in background)
+  const enrichingBookIds = new Set(
+    books
+      .filter((b) => !b.book.ratings.some((r) => r.rating !== null))
+      .map((b) => b.bookId)
+  );
+
+  async function handleNameSave() {
+    if (!name.trim() || name.trim() === hotlist.name) {
+      setName(hotlist.name);
+      setEditing(false);
+      return;
+    }
+    const supabase = createClient();
+    await supabase
+      .from("hotlists")
+      .update({ name: name.trim(), updated_at: new Date().toISOString() })
+      .eq("id", hotlist.id);
+    setEditing(false);
+  }
+
+  async function handleTogglePublic() {
+    const supabase = createClient();
+    const newPublic = !isPublic;
+
+    const updates: Record<string, unknown> = {
+      is_public: newPublic,
+      updated_at: new Date().toISOString(),
+    };
+
+    await supabase.from("hotlists").update(updates).eq("id", hotlist.id);
+    setIsPublic(newPublic);
+
+    // Auto-copy link when toggling to public
+    if (newPublic) {
+      const slug = shareSlug ?? hotlist.id;
+      const url = `${window.location.origin}/lists/${slug}`;
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 3000);
+    }
+  }
+
+  async function handleCopyLink() {
+    const slug = shareSlug ?? hotlist.id;
+    const url = `${window.location.origin}/lists/${slug}`;
+    await navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function handleRemoveBook(bookId: string) {
+    const supabase = createClient();
+    await supabase
+      .from("hotlist_books")
+      .delete()
+      .eq("hotlist_id", hotlist.id)
+      .eq("book_id", bookId);
+
+    setBooks((prev) => prev.filter((b) => b.bookId !== bookId));
+  }
+
+  async function handleRateBook(bookId: string, stars: number) {
+    if (!currentUserId) return;
+    const supabase = createClient();
+
+    await supabase.from("user_ratings").upsert(
+      {
+        user_id: currentUserId,
+        book_id: bookId,
+        star_rating: stars,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id,book_id" }
+    );
+
+    setBooks((prev) =>
+      prev.map((b) =>
+        b.bookId === bookId
+          ? { ...b, userRating: { starRating: stars, spiceRating: b.userRating?.spiceRating ?? null, note: b.userRating?.note ?? null } }
+          : b
+      )
+    );
+  }
+
+  async function handleDelete() {
+    const supabase = createClient();
+    await supabase.from("hotlists").delete().eq("id", hotlist.id);
+    router.push("/lists");
+  }
+
+  return (
+    <div className="max-w-5xl mx-auto px-4 py-8">
+      {/* Non-owner banner */}
+      {!isOwner && (
+        <div className="mb-6 px-4 py-3 bg-cream border border-border rounded-lg flex items-center justify-between flex-wrap gap-2">
+          <p className="text-sm font-body text-muted">
+            <strong className="text-ink">{hotlist.ownerName ?? "A reader"}&apos;s</strong> Hotlist
+          </p>
+          <Link
+            href="/"
+            className="text-xs font-mono text-fire hover:underline"
+          >
+            Build your own on Hotlist &rarr;
+          </Link>
+        </div>
+      )}
+
+      {/* Header */}
+      <div className="flex items-start justify-between mb-6 flex-wrap gap-3">
+        <div className="flex-1 min-w-0">
+          {isOwner && editing ? (
+            <input
+              ref={nameInputRef}
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onBlur={handleNameSave}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleNameSave();
+                if (e.key === "Escape") { setName(hotlist.name); setEditing(false); }
+              }}
+              className="font-display text-2xl font-bold text-ink bg-transparent border-b-2 border-fire/50 focus:outline-none w-full"
+              autoFocus
+            />
+          ) : (
+            <h1
+              className={`font-display text-2xl font-bold text-ink ${isOwner ? "cursor-pointer hover:text-fire/80 transition-colors" : ""}`}
+              onClick={() => {
+                if (isOwner) {
+                  setEditing(true);
+                  setTimeout(() => nameInputRef.current?.focus(), 0);
+                }
+              }}
+              title={isOwner ? "Click to edit name" : undefined}
+            >
+              {name}
+            </h1>
+          )}
+          <p className="text-xs font-mono text-muted mt-1">
+            {books.length} {books.length === 1 ? "book" : "books"}
+          </p>
+        </div>
+
+        {isOwner && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Privacy toggle — clickable badge */}
+            <button
+              onClick={handleTogglePublic}
+              className={`inline-flex items-center gap-1.5 text-xs font-mono px-3 py-1.5 rounded-full border transition-all ${
+                isPublic
+                  ? "text-green-700 bg-green-50 border-green-200 hover:bg-green-100"
+                  : "text-muted bg-cream border-border hover:border-fire/30 hover:text-ink"
+              }`}
+              title={isPublic ? "Click to make private" : "Click to make public & shareable"}
+            >
+              <span className="text-[11px]">{isPublic ? "\uD83C\uDF10" : "\uD83D\uDD12"}</span>
+              {isPublic
+                ? (copied ? "Link copied!" : "Public")
+                : "Private \u2014 tap to share"}
+            </button>
+
+            {/* Copy link button (only when public, separate from toggle) */}
+            {isPublic && !copied && (
+              <button
+                onClick={handleCopyLink}
+                className="inline-flex items-center gap-1 text-xs font-mono px-3 py-1.5 rounded-full border border-fire/20 text-fire hover:bg-fire/5 transition-colors"
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="4" y="4" width="7" height="7" rx="1" />
+                  <path d="M8 4V2.5A1.5 1.5 0 006.5 1H2.5A1.5 1.5 0 001 2.5v4A1.5 1.5 0 002.5 8H4" />
+                </svg>
+                Copy Link
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Comparison table */}
+      <HotlistTable
+        books={books}
+        isOwner={isOwner}
+        onRemoveBook={isOwner ? handleRemoveBook : undefined}
+        onRateBook={isOwner ? handleRateBook : undefined}
+        enrichingBookIds={enrichingBookIds}
+      />
+
+      {/* Add more books (owner only) */}
+      {isOwner && (
+        <div className="mt-8">
+          <p className="text-xs font-mono text-muted uppercase tracking-wide mb-2">
+            Add another book
+          </p>
+          <div className="max-w-md">
+            <SearchBar variant="navbar" />
+          </div>
+        </div>
+      )}
+
+      {/* Delete (owner only) */}
+      {isOwner && (
+        <div className="mt-12 pt-6 border-t border-border">
+          {showConfirmDelete ? (
+            <div className="flex items-center gap-3">
+              <p className="text-sm font-body text-muted">
+                Delete &ldquo;{name}&rdquo; permanently?
+              </p>
+              <button
+                onClick={handleDelete}
+                className="text-xs font-mono px-3 py-1.5 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
+              >
+                Yes, delete
+              </button>
+              <button
+                onClick={() => setShowConfirmDelete(false)}
+                className="text-xs font-mono text-muted hover:text-ink transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowConfirmDelete(true)}
+              className="text-xs font-mono text-muted/50 hover:text-red-600 transition-colors"
+            >
+              Delete this hotlist
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
