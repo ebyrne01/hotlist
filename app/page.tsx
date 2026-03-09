@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { createClient } from "@supabase/supabase-js";
 import HeroSection from "@/components/home/HeroSection";
 import TropeGrid from "@/components/home/TropeGrid";

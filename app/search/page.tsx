@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { searchBooks } from "@/lib/search";
 import BookCard from "@/components/books/BookCard";
 

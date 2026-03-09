@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { createClient } from "@supabase/supabase-js";
 import BookCard from "@/components/books/BookCard";
 import { hydrateBookDetail } from "@/lib/books/cache";
@@ -8,13 +10,6 @@ function getAdminClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
-}
-
-// Pre-generate pages for all 25 tropes
-export async function generateStaticParams() {
-  const supabase = getAdminClient();
-  const { data } = await supabase.from("tropes").select("slug");
-  return (data ?? []).map((t) => ({ slug: t.slug }));
 }
 
 interface TropePageProps {
