@@ -58,6 +58,10 @@ function extractCreatorHandle(url: string, platform: string): string | null {
 
 /**
  * Download video/audio URL via RapidAPI.
+ *
+ * Supports "social-download-all-in-one" API (POST /v1/social/autolink).
+ * Response contains a `medias` array with video/audio download links.
+ *
  * Returns null on any failure — never throws.
  */
 export async function getVideoDownloadUrl(
@@ -70,10 +74,12 @@ export async function getVideoDownloadUrl(
   }
 
   const apiKey = process.env.RAPIDAPI_KEY;
-  const apiHost = process.env.RAPIDAPI_VIDEO_HOST;
+  const apiHost =
+    process.env.RAPIDAPI_VIDEO_HOST ??
+    "social-download-all-in-one.p.rapidapi.com";
 
-  if (!apiKey || !apiHost) {
-    console.error("[downloader] Missing RAPIDAPI_KEY or RAPIDAPI_VIDEO_HOST");
+  if (!apiKey) {
+    console.error("[downloader] Missing RAPIDAPI_KEY");
     return null;
   }
 
@@ -81,13 +87,15 @@ export async function getVideoDownloadUrl(
 
   try {
     const response = await fetch(
-      `https://${apiHost}/api/download?url=${encodeURIComponent(url)}`,
+      `https://${apiHost}/v1/social/autolink`,
       {
-        method: "GET",
+        method: "POST",
         headers: {
           "x-rapidapi-key": apiKey,
           "x-rapidapi-host": apiHost,
+          "Content-Type": "application/json",
         },
+        body: JSON.stringify({ url }),
       }
     );
 
@@ -101,24 +109,28 @@ export async function getVideoDownloadUrl(
 
     const data = await response.json();
 
-    // RapidAPI responses vary by provider — adapt as needed for chosen API
-    // Common patterns: data.audio, data.video, data.links, etc.
-    const audioUrl =
-      data.audio?.url ??
-      data.audio ??
-      data.music?.url ??
-      data.links?.audio ??
-      null;
-    const videoUrl =
-      data.video?.url ??
-      data.video ??
-      data.links?.video ??
-      data.downloadUrl ??
-      data.url ??
-      null;
+    // "social-download-all-in-one" returns:
+    // { url, source, title, thumbnail, medias: [{ quality, type, url, extension }] }
+    const medias: Array<{
+      quality?: string;
+      type?: string;
+      url?: string;
+      extension?: string;
+    }> = data.medias ?? [];
+
+    const audioMedia = medias.find((m) => m.type === "audio");
+    const videoMedia =
+      medias.find((m) => m.type === "video" && m.quality === "hd_no_watermark") ??
+      medias.find((m) => m.type === "video" && m.quality === "hd") ??
+      medias.find((m) => m.type === "video" && m.quality === "no_watermark") ??
+      medias.find((m) => m.type === "video" && !m.quality?.includes("watermark")) ??
+      medias.find((m) => m.type === "video");
+
+    const audioUrl = audioMedia?.url ?? null;
+    const videoUrl = videoMedia?.url ?? null;
 
     if (!audioUrl && !videoUrl) {
-      console.error("[downloader] No download URLs in response:", data);
+      console.error("[downloader] No download URLs in response:", JSON.stringify(data).slice(0, 500));
       return null;
     }
 
@@ -126,10 +138,14 @@ export async function getVideoDownloadUrl(
       audioUrl,
       videoUrl,
       platform,
-      creatorHandle: creatorHandle ?? data.author?.username ?? data.creator ?? null,
-      videoTitle: data.title ?? data.desc ?? null,
-      thumbnailUrl: data.thumbnail ?? data.cover ?? data.thumbnailUrl ?? null,
-      durationSeconds: data.duration ?? data.durationSeconds ?? null,
+      creatorHandle:
+        creatorHandle ??
+        (data.unique_id ? `@${data.unique_id}` : null) ??
+        null,
+      videoTitle: data.title ?? null,
+      thumbnailUrl: data.thumbnail ?? null,
+      durationSeconds:
+        data.duration != null ? Math.round(data.duration / 1000) : null,
     };
   } catch (err) {
     console.error("[downloader] Failed:", err);
