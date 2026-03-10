@@ -240,6 +240,145 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // ── PART 3: Google Books Subject Discovery (older popular books) ──
+
+    const GB_DISCOVERY_QUERIES = [
+      "subject:romance",
+      "subject:romantic fiction",
+      "subject:love stories",
+      "subject:fantasy romance",
+    ];
+
+    if (timeRemaining() > 12_000) {
+      // Rotate through queries week by week
+      const { data: gbCounterRow } = await supabase
+        .from("homepage_cache")
+        .select("fetched_at")
+        .eq("cache_key", "gb_discovery_counter")
+        .single();
+
+      let gbQueryIndex = 0;
+      if (gbCounterRow) {
+        const last = new Date(gbCounterRow.fetched_at);
+        gbQueryIndex =
+          (last.getMilliseconds() + 1) % GB_DISCOVERY_QUERIES.length;
+      }
+
+      const discoveryQuery = GB_DISCOVERY_QUERIES[gbQueryIndex];
+      const googleApiKey = process.env.GOOGLE_BOOKS_API_KEY;
+
+      try {
+        const params = new URLSearchParams({
+          q: discoveryQuery,
+          orderBy: "relevance",
+          maxResults: "20",
+          printType: "books",
+          langRestrict: "en",
+        });
+        if (googleApiKey) params.set("key", googleApiKey);
+
+        const res = await fetch(`${GOOGLE_BOOKS_URL}?${params}`);
+        if (res.ok) {
+          const data = await res.json();
+          const volumes = data.items ?? [];
+
+          for (const vol of volumes) {
+            if (timeRemaining() < 5_000) break;
+
+            const info = vol.volumeInfo;
+            if (!info?.title || !info?.authors?.length) continue;
+
+            const title = info.title;
+            const author = info.authors.join(", ");
+            if (isJunkTitle(title)) continue;
+
+            // Check if romance
+            const categories = info.categories ?? [];
+            const descLower = (info.description ?? "").toLowerCase();
+            const isRomance =
+              categories.some((c: string) =>
+                c.toLowerCase().includes("romance")
+              ) ||
+              [
+                "romance",
+                "love story",
+                "romantic",
+                "enemies to lovers",
+              ].some((kw) => descLower.includes(kw)) ||
+              isKnownRomanceAuthor(author);
+            if (!isRomance) continue;
+
+            // Check if already in DB by title
+            const { data: existing } = await supabase
+              .from("books")
+              .select("id")
+              .ilike("title", title)
+              .limit(1)
+              .single();
+            if (existing) continue;
+
+            // Resolve to Goodreads
+            const goodreadsId = await resolveToGoodreadsId(title, author);
+            if (!goodreadsId) continue;
+
+            const { data: byGr } = await supabase
+              .from("books")
+              .select("id")
+              .eq("goodreads_id", goodreadsId)
+              .single();
+            if (byGr) continue;
+
+            const grDetail = await getGoodreadsBookById(goodreadsId);
+            if (!grDetail) continue;
+
+            const saved = await saveGoodreadsBookToCache({
+              title: grDetail.title,
+              author: grDetail.author,
+              goodreadsId: grDetail.goodreadsId,
+              goodreadsUrl: grDetail.goodreadsUrl,
+              coverUrl: grDetail.coverUrl,
+              description: grDetail.description,
+              seriesName: grDetail.seriesName,
+              seriesPosition: grDetail.seriesPosition,
+              publishedYear: grDetail.publishedYear,
+              pageCount: grDetail.pageCount,
+              genres: grDetail.genres,
+            });
+
+            if (saved) {
+              booksAdded++;
+              scheduleEnrichment(
+                saved.id,
+                saved.title,
+                saved.author,
+                saved.isbn
+              );
+              scheduleMetadataEnrichment(
+                saved.id,
+                saved.title,
+                saved.author,
+                saved.isbn
+              );
+            }
+          }
+        }
+
+        // Save counter for next week
+        const counterTs = new Date();
+        counterTs.setMilliseconds(gbQueryIndex);
+        await supabase.from("homepage_cache").upsert(
+          {
+            cache_key: "gb_discovery_counter",
+            book_ids: [],
+            fetched_at: counterTs.toISOString(),
+          },
+          { onConflict: "cache_key" }
+        );
+      } catch (err) {
+        errors.push(`Google discovery ${discoveryQuery}: ${String(err)}`);
+      }
+    }
+
     // Log completion
     if (logId) {
       await supabase
