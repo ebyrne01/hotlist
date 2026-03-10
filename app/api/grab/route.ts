@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
   try {
     const raw = await req.json();
     body = bodySchema.parse(raw);
-  } catch (err) {
+  } catch {
     return Response.json(
       { error: "Invalid request. Please provide a valid TikTok, Instagram, or YouTube URL." },
       { status: 400 }
