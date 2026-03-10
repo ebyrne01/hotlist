@@ -526,6 +526,24 @@ export default async function BookPage({ params }: PageProps) {
         )}
       </div>
 
+        {/* ── Grab from video CTA ── */}
+        <section className="mt-8 pt-6 border-t border-border">
+          <div className="flex items-center gap-3">
+            <span className="text-lg">📹</span>
+            <div>
+              <p className="text-sm font-body text-ink font-medium">
+                Seen this book on BookTok?
+              </p>
+              <Link
+                href="/grab"
+                className="text-xs font-mono text-fire hover:text-fire/80 transition-colors"
+              >
+                Grab books from that video &rarr;
+              </Link>
+            </div>
+          </div>
+        </section>
+
       {/* ── Sticky mobile CTA ── */}
       <div className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-sm border-t border-border px-4 py-3">
         <BookDetailClient

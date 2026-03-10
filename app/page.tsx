@@ -271,6 +271,15 @@ export default async function Home() {
                   <strong className="text-ink">Build your Hotlist.</strong> Save books to a comparison table and decide what to read next.
                 </p>
               </div>
+              <div className="flex gap-3">
+                <span className="text-xl shrink-0">📹</span>
+                <p className="text-sm font-body text-muted">
+                  <strong className="text-ink">Grab from BookTok.</strong> Paste a TikTok or Instagram URL and we&apos;ll extract every book recommendation automatically.{" "}
+                  <a href="/grab" className="text-fire hover:text-fire/80 font-mono text-xs transition-colors">
+                    Try it &rarr;
+                  </a>
+                </p>
+              </div>
             </div>
           </div>
         </section>

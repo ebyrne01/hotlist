@@ -302,3 +302,24 @@ insert into tropes (slug, name, sort_order) values
   ('holiday-romance',     'Holiday Romance',      23),
   ('friends-to-lovers',   'Friends to Lovers',   24),
   ('love-triangle',       'Love Triangle',        25);
+
+-- ────────────────────────────────────────────────────────────
+-- VIDEO GRABS (Grab from Video feature)
+-- ────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS video_grabs (
+  id              uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  url             text UNIQUE NOT NULL,
+  platform        text,
+  creator_handle  text,
+  thumbnail_url   text,
+  transcript      text,
+  extracted_books jsonb,
+  processed_at    timestamptz DEFAULT now(),
+  user_id         uuid REFERENCES auth.users(id)
+);
+
+ALTER TABLE video_grabs ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Video grabs are public" ON video_grabs FOR SELECT USING (true);
+CREATE POLICY "Authenticated users can create grabs" ON video_grabs
+  FOR INSERT WITH CHECK (auth.uid() = user_id);

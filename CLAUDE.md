@@ -35,6 +35,9 @@ ANTHROPIC_API_KEY=
 GOOGLE_BOOKS_API_KEY=
 AMAZON_AFFILIATE_TAG=
 NEXT_PUBLIC_APP_URL=
+RAPIDAPI_KEY=              # from rapidapi.com (video downloader)
+RAPIDAPI_VIDEO_HOST=       # specific host for chosen downloader API
+OPENAI_API_KEY=            # from platform.openai.com (Whisper transcription)
 ```
 
 ## Brand
@@ -100,6 +103,16 @@ See `schema.sql` for full schema. Key tables:
 - `/lib/scraping/` — per-site scrapers (Goodreads ratings, Amazon, spice inference)
 - `/components` — React components
 - `/components/ui` — base UI primitives
+
+## Grab from Video feature
+- Video download: RapidAPI (third-party TikTok/Instagram/YouTube downloader)
+- Transcription: OpenAI Whisper API (model: whisper-1) — NOT Claude
+- Book extraction: Claude Haiku (claude-haiku-4-5-20251001)
+- Resolution: Goodreads canonical lookup (same as search)
+- Cache: `video_grabs` Supabase table — never process the same URL twice
+- Files: `/lib/video/` (downloader, transcription, book-extractor, book-resolver, index)
+- UI: `/app/grab/page.tsx`
+- API: `/app/api/grab/route.ts` (streaming)
 
 ## Coding style
 - TypeScript everywhere

@@ -48,6 +48,12 @@ export default function Navbar() {
 
         {/* Desktop nav links */}
         <div className="hidden sm:flex items-center gap-4 ml-auto">
+          <Link
+            href="/grab"
+            className="text-xs font-mono text-muted hover:text-ink transition-colors"
+          >
+            Grab
+          </Link>
           {user && (
             <>
               <Link
@@ -157,6 +163,13 @@ export default function Navbar() {
         <div className="sm:hidden border-t border-border bg-cream px-4 py-3 space-y-3">
           <SearchBar variant="navbar" />
           <div className="flex flex-col gap-2">
+            <Link
+              href="/grab"
+              className="text-sm font-mono text-muted hover:text-ink transition-colors"
+              onClick={() => setMenuOpen(false)}
+            >
+              Grab from Video
+            </Link>
             {user ? (
               <>
                 <Link
