@@ -324,7 +324,7 @@ export default function GrabPage() {
                   href={`/lists/${addedHotlistSlug}`}
                   className="inline-flex items-center gap-2 px-5 py-2.5 bg-fire text-white text-sm font-mono font-medium rounded-lg hover:bg-fire/90 transition-colors"
                 >
-                  View Hotlist \u2192
+                  {"View Hotlist \u2192"}
                 </Link>
               ) : (
                 <button
