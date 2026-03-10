@@ -1,16 +1,9 @@
 export const dynamic = "force-dynamic";
 
-import { createClient } from "@supabase/supabase-js";
+import { getAdminClient } from "@/lib/supabase/admin";
 import BookCard from "@/components/books/BookCard";
 import { hydrateBookDetail } from "@/lib/books/cache";
 import type { BookDetail } from "@/lib/types";
-
-function getAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
 
 interface TropePageProps {
   params: { slug: string };
@@ -83,7 +76,7 @@ export default async function TropePage({ params }: TropePageProps) {
             No books tagged with {trope.name} yet
           </p>
           <p className="text-sm font-body text-muted/60 mt-2">
-            Search for books and they&apos;ll appear here as we discover their tropes
+            We&apos;re still tagging our library — check back soon!
           </p>
         </div>
       ) : (

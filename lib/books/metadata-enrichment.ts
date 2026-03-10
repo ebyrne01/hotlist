@@ -15,17 +15,9 @@
  * those always come from Goodreads.
  */
 
-import { createClient } from "@supabase/supabase-js";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { searchGoogleBooks } from "./google-books";
 import { getOpenLibraryByISBN } from "./open-library";
-
-function getAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { global: { fetch: (...args) => fetch(args[0], { ...args[1], cache: "no-store" }) } }
-  );
-}
 
 interface SupplementaryMetadata {
   isbn?: string | null;

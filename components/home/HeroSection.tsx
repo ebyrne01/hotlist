@@ -28,7 +28,7 @@ export default function HeroSection() {
 
         <a
           href="#tropes"
-          className="mt-6 text-xs font-mono text-cream/40 hover:text-cream/60 transition-colors"
+          className="mt-6 text-sm font-mono text-cream/50 hover:text-cream/70 transition-colors"
         >
           or browse by trope &darr;
         </a>

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import HotlistTable from "@/components/hotlists/HotlistTable";
-import SearchBar from "@/components/search/SearchBar";
+import SearchBar, { type SearchResult } from "@/components/search/SearchBar";
 import type { HotlistDetail } from "@/lib/types";
 
 interface Props {
@@ -38,33 +38,43 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
       setEditing(false);
       return;
     }
-    const supabase = createClient();
-    await supabase
-      .from("hotlists")
-      .update({ name: name.trim(), updated_at: new Date().toISOString() })
-      .eq("id", hotlist.id);
-    setEditing(false);
+    try {
+      const supabase = createClient();
+      await supabase
+        .from("hotlists")
+        .update({ name: name.trim(), updated_at: new Date().toISOString() })
+        .eq("id", hotlist.id);
+      setEditing(false);
+    } catch (err) {
+      console.error("[handleNameSave] failed:", err);
+      setName(hotlist.name);
+      setEditing(false);
+    }
   }
 
   async function handleTogglePublic() {
-    const supabase = createClient();
     const newPublic = !isPublic;
+    try {
+      const supabase = createClient();
 
-    const updates: Record<string, unknown> = {
-      is_public: newPublic,
-      updated_at: new Date().toISOString(),
-    };
+      const updates: Record<string, unknown> = {
+        is_public: newPublic,
+        updated_at: new Date().toISOString(),
+      };
 
-    await supabase.from("hotlists").update(updates).eq("id", hotlist.id);
-    setIsPublic(newPublic);
+      await supabase.from("hotlists").update(updates).eq("id", hotlist.id);
+      setIsPublic(newPublic);
 
-    // Auto-copy link when toggling to public
-    if (newPublic) {
-      const slug = shareSlug ?? hotlist.id;
-      const url = `${window.location.origin}/lists/${slug}`;
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 3000);
+      // Auto-copy link when toggling to public
+      if (newPublic) {
+        const slug = shareSlug ?? hotlist.id;
+        const url = `${window.location.origin}/lists/${slug}`;
+        await navigator.clipboard.writeText(url);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 3000);
+      }
+    } catch (err) {
+      console.error("[handleTogglePublic] failed:", err);
     }
   }
 
@@ -77,43 +87,142 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
   }
 
   async function handleRemoveBook(bookId: string) {
-    const supabase = createClient();
-    await supabase
-      .from("hotlist_books")
-      .delete()
-      .eq("hotlist_id", hotlist.id)
-      .eq("book_id", bookId);
+    try {
+      const supabase = createClient();
+      await supabase
+        .from("hotlist_books")
+        .delete()
+        .eq("hotlist_id", hotlist.id)
+        .eq("book_id", bookId);
 
-    setBooks((prev) => prev.filter((b) => b.bookId !== bookId));
+      setBooks((prev) => prev.filter((b) => b.bookId !== bookId));
+    } catch (err) {
+      console.error("[handleRemoveBook] failed:", err);
+    }
   }
 
   async function handleRateBook(bookId: string, stars: number) {
     if (!currentUserId) return;
-    const supabase = createClient();
+    try {
+      const supabase = createClient();
 
-    await supabase.from("user_ratings").upsert(
-      {
-        user_id: currentUserId,
-        book_id: bookId,
-        star_rating: stars,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id,book_id" }
-    );
+      await supabase.from("user_ratings").upsert(
+        {
+          user_id: currentUserId,
+          book_id: bookId,
+          star_rating: stars,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id,book_id" }
+      );
 
-    setBooks((prev) =>
-      prev.map((b) =>
-        b.bookId === bookId
-          ? { ...b, userRating: { starRating: stars, spiceRating: b.userRating?.spiceRating ?? null, note: b.userRating?.note ?? null } }
-          : b
-      )
-    );
+      setBooks((prev) =>
+        prev.map((b) =>
+          b.bookId === bookId
+            ? { ...b, userRating: { starRating: stars, spiceRating: b.userRating?.spiceRating ?? null, note: b.userRating?.note ?? null } }
+            : b
+        )
+      );
+    } catch (err) {
+      console.error("[handleRateBook] failed:", err);
+    }
+  }
+
+  async function handleAddBookFromSearch(searchResult: SearchResult) {
+    // Check if book is already in this hotlist
+    if (books.some((b) => b.bookId === searchResult.id)) return;
+
+    try {
+      const supabase = createClient();
+      const nextPosition = books.length + 1;
+
+      // Insert into hotlist_books
+      const { data: insertedRow } = await supabase
+        .from("hotlist_books")
+        .insert({
+          hotlist_id: hotlist.id,
+          book_id: searchResult.id,
+          position: nextPosition,
+        })
+        .select("id, added_at")
+        .single();
+
+      if (!insertedRow) return;
+
+      // Update hotlist timestamp
+      await supabase
+        .from("hotlists")
+        .update({ updated_at: new Date().toISOString() })
+        .eq("id", hotlist.id);
+
+      // Create an optimistic HotlistBookDetail entry with what we know
+      // Ratings/spice/tropes will be empty until enrichment runs
+      const now = new Date().toISOString();
+      setBooks((prev) => [
+        ...prev,
+        {
+          id: insertedRow.id,
+          bookId: searchResult.id,
+          position: nextPosition,
+          addedAt: insertedRow.added_at ?? now,
+          book: {
+            id: searchResult.id,
+            isbn: null,
+            isbn13: null,
+            googleBooksId: null,
+            title: searchResult.title,
+            author: searchResult.author,
+            seriesName: searchResult.seriesName,
+            seriesPosition: searchResult.seriesPosition,
+            coverUrl: searchResult.coverUrl,
+            pageCount: null,
+            publishedYear: null,
+            publisher: null,
+            description: null,
+            aiSynopsis: null,
+            goodreadsId: searchResult.goodreadsId,
+            goodreadsUrl: null,
+            amazonAsin: null,
+            romanceIoSlug: null,
+            romanceIoHeatLabel: null,
+            genres: [],
+            subgenre: searchResult.subgenre,
+            metadataSource: "goodreads",
+            slug: searchResult.slug,
+            createdAt: now,
+            updatedAt: now,
+            dataRefreshedAt: null,
+            ratings: [],
+            spice: [],
+            tropes: [],
+          },
+          userRating: null,
+        },
+      ]);
+
+      // Trigger background enrichment
+      fetch("/api/books/enrich", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bookId: searchResult.id,
+          title: searchResult.title,
+          author: searchResult.author,
+        }),
+      }).catch(() => {});
+    } catch (err) {
+      console.error("[handleAddBookFromSearch] failed:", err);
+    }
   }
 
   async function handleDelete() {
-    const supabase = createClient();
-    await supabase.from("hotlists").delete().eq("id", hotlist.id);
-    router.push("/lists");
+    try {
+      const supabase = createClient();
+      await supabase.from("hotlists").delete().eq("id", hotlist.id);
+      router.push("/lists");
+    } catch (err) {
+      console.error("[handleDelete] failed:", err);
+    }
   }
 
   return (
@@ -220,7 +329,7 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
             Add another book
           </p>
           <div className="max-w-md">
-            <SearchBar variant="navbar" />
+            <SearchBar variant="navbar" onSelectBook={handleAddBookFromSearch} />
           </div>
         </div>
       )}

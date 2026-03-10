@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/weekly-refresh",
+      "schedule": "0 10 * * 2"
+    },
+    {
+      "path": "/api/cron/monthly-enrichment",
+      "schedule": "0 2 1 * *"
+    }
+  ]
+}

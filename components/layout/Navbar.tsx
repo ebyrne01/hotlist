@@ -48,12 +48,22 @@ export default function Navbar() {
 
         {/* Desktop nav links */}
         <div className="hidden sm:flex items-center gap-4 ml-auto">
-          <Link
-            href="/#tropes"
-            className="text-xs font-mono text-muted hover:text-ink transition-colors"
-          >
-            Tropes
-          </Link>
+          {user && (
+            <>
+              <Link
+                href="/lists"
+                className="text-xs font-mono text-fire hover:text-fire/80 transition-colors font-medium"
+              >
+                My Hotlists
+              </Link>
+              <Link
+                href="/reading"
+                className="text-xs font-mono text-muted hover:text-ink transition-colors"
+              >
+                Reading List
+              </Link>
+            </>
+          )}
           {isLoading ? (
             <div className="w-8 h-8 rounded-full bg-border animate-pulse" />
           ) : user ? (
@@ -91,7 +101,7 @@ export default function Navbar() {
                   href="/lists"
                   className="block px-3 py-2 text-xs font-mono text-muted hover:text-ink hover:bg-cream transition-colors"
                 >
-                  My Lists
+                  My Hotlists
                 </Link>
                 <button
                   onClick={signOut}
@@ -147,28 +157,28 @@ export default function Navbar() {
         <div className="sm:hidden border-t border-border bg-cream px-4 py-3 space-y-3">
           <SearchBar variant="navbar" />
           <div className="flex flex-col gap-2">
-            <Link
-              href="/#tropes"
-              className="text-sm font-mono text-muted hover:text-ink transition-colors"
-              onClick={() => setMenuOpen(false)}
-            >
-              Tropes
-            </Link>
             {user ? (
               <>
+                <Link
+                  href="/lists"
+                  className="text-sm font-mono text-fire font-medium hover:text-fire/80 transition-colors"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  My Hotlists
+                </Link>
+                <Link
+                  href="/reading"
+                  className="text-sm font-mono text-muted hover:text-ink transition-colors"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  Reading List
+                </Link>
                 <Link
                   href="/profile"
                   className="text-sm font-mono text-muted hover:text-ink transition-colors"
                   onClick={() => setMenuOpen(false)}
                 >
                   Profile
-                </Link>
-                <Link
-                  href="/lists"
-                  className="text-sm font-mono text-muted hover:text-ink transition-colors"
-                  onClick={() => setMenuOpen(false)}
-                >
-                  My Lists
                 </Link>
                 <button
                   onClick={() => {

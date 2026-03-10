@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import type { Metadata } from "next";
 import Link from "next/link";
-import { createClient } from "@supabase/supabase-js";
+import { getAdminClient } from "@/lib/supabase/admin";
 import BookCover from "@/components/ui/BookCover";
 import RatingBadge from "@/components/ui/RatingBadge";
 import Badge from "@/components/ui/Badge";
@@ -11,18 +11,11 @@ import { hydrateBookDetail } from "@/lib/books/cache";
 import { getBookDetail } from "@/lib/books";
 import { extractGoodreadsIdFromSlug } from "@/lib/books/goodreads-search";
 import { isJunkTitle } from "@/lib/books/romance-filter";
+import { deduplicateBooks } from "@/lib/books/utils";
 import type { BookDetail } from "@/lib/types";
 import BookDetailClient from "./BookDetailClient";
 import { InlineUserRating } from "./InlineRatings";
 import SpiceSection from "./SpiceSection";
-
-function getAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { global: { fetch: (...args) => fetch(args[0], { ...args[1], cache: "no-store" }) } }
-  );
-}
 
 // ── Helpers ──────────────────────────────────────────
 
@@ -63,68 +56,6 @@ async function getBook(slug: string): Promise<BookDetail | null> {
   return null;
 }
 
-/**
- * Normalize a title for deduplication.
- * Strips subtitles, edition markers, series info, and foreign language suffixes
- * so "Iron Flame", "Iron Flame (Wing and Claw Collection)", and
- * "Onyx Storm - Edizione italiana" all collapse to their base title.
- */
-function normalizeTitle(title: string): string {
-  return title
-    .replace(/\s*[\(\[].*/g, "")          // strip (parenthetical) and everything after
-    .replace(/\s*[-–—:,].*/g, "")         // strip subtitle after dash/colon/comma
-    .replace(/\s+by\s+.*/i, "")           // strip "by Author" suffix
-    .replace(/\bsigned\b/i, "")           // strip "SIGNED"
-    .replace(/\bedition\b/i, "")          // strip "edition"
-    .replace(/[^\w\s]/g, "")              // remove remaining punctuation
-    .replace(/\s+/g, " ")                 // collapse whitespace
-    .toLowerCase()
-    .trim();
-}
-
-/**
- * Deduplicate books by normalized title + author.
- * When duplicates exist (foreign editions, collections, alternate ISBNs),
- * keep the best English edition with the most reviews.
- */
-function deduplicateBooks(books: BookDetail[]): BookDetail[] {
-  const seen = new Map<string, BookDetail>();
-
-  for (const book of books) {
-    const key = `${normalizeTitle(book.title)}::${book.author.toLowerCase().trim()}`;
-    const existing = seen.get(key);
-
-    if (!existing) {
-      seen.set(key, book);
-      continue;
-    }
-
-    // Prefer the edition with more data: most reviews, then highest rating
-    const existingReviews = existing.ratings.reduce((sum, r) => sum + (r.ratingCount ?? 0), 0);
-    const bookReviews = book.ratings.reduce((sum, r) => sum + (r.ratingCount ?? 0), 0);
-
-    // Prefer English editions: penalize titles with non-ASCII characters
-    const existingNonAscii = /[^\x00-\x7F]/.test(existing.title);
-    const bookNonAscii = /[^\x00-\x7F]/.test(book.title);
-
-    // Prefer shorter, cleaner titles (the canonical edition is usually just "Iron Flame")
-    const existingShorter = existing.title.length <= book.title.length;
-
-    if (existingNonAscii && !bookNonAscii) {
-      seen.set(key, book);
-    } else if (!existingNonAscii && bookNonAscii) {
-      // keep current English edition
-    } else if (bookReviews > existingReviews) {
-      seen.set(key, book);
-    } else if (bookReviews === existingReviews && !existingShorter) {
-      // Same reviews — prefer the shorter (canonical) title
-      seen.set(key, book);
-    }
-  }
-
-  return Array.from(seen.values());
-}
-
 async function getRelatedBooks(
   book: BookDetail,
   limit: number = 10
@@ -149,7 +80,16 @@ async function getRelatedBooks(
       if (isJunkTitle(title)) continue;
       results.push(await hydrateBookDetail(supabase, b));
     }
-    return deduplicateBooks(results).slice(0, limit);
+
+    // Quality threshold for related books
+    const qualified = deduplicateBooks(results)
+      .filter((b) => {
+        if (!b.coverUrl) return false;
+        const grRating = b.ratings.find((r) => r.source === "goodreads");
+        return grRating && (grRating.ratingCount ?? 0) >= 500;
+      })
+      .slice(0, limit);
+    return qualified;
   }
 
   // Find books sharing the most tropes
@@ -195,7 +135,15 @@ async function getRelatedBooks(
   const orderMap = new Map(sortedIds.map((id, i) => [id, i]));
   results.sort((a, b) => (orderMap.get(a.id) ?? 99) - (orderMap.get(b.id) ?? 99));
 
-  return deduplicateBooks(results).slice(0, limit);
+  // Quality threshold for related books
+  const qualified = deduplicateBooks(results)
+    .filter((b) => {
+      if (!b.coverUrl) return false;
+      const grRating = b.ratings.find((r) => r.source === "goodreads");
+      return grRating && (grRating.ratingCount ?? 0) >= 500;
+    })
+    .slice(0, limit);
+  return qualified;
 }
 
 // ── SEO metadata ─────────────────────────────────────
@@ -394,10 +342,10 @@ export default async function BookPage({ params }: PageProps) {
                 rel="noopener noreferrer"
                 className="inline-flex items-center justify-center gap-2 rounded-lg bg-fire text-white font-body font-medium text-sm px-4 min-h-[44px] hover:bg-fire/90 transition-colors"
               >
-                Buy on Kindle &rarr;
+                Read on Kindle &rarr;
               </a>
               <p className="text-[10px] font-mono text-muted/50 uppercase tracking-wide mt-1">
-                Buy in Print
+                Read in Print
               </p>
               <div className="flex gap-2">
                 <a
@@ -431,6 +379,7 @@ export default async function BookPage({ params }: PageProps) {
             <BookDetailClient
               section="reading-status"
               bookId={book.id}
+              bookTitle={book.title}
             />
           </div>
 
@@ -449,7 +398,7 @@ export default async function BookPage({ params }: PageProps) {
             )}
 
             {/* Ratings row */}
-            <div className="flex items-start gap-6 mt-5 pb-5 border-b border-border">
+            <div data-rating-row className="flex items-start gap-6 mt-5 pb-5 border-b border-border">
               <RatingBadge
                 score={goodreadsRating?.rating ?? null}
                 source="goodreads"
@@ -462,7 +411,9 @@ export default async function BookPage({ params }: PageProps) {
               />
               {romanceIoSpice && (
                 <a
-                  href={book.romanceIoSlug ? `https://romance.io/books/${book.romanceIoSlug}` : undefined}
+                  href={book.romanceIoSlug
+                    ? `https://romance.io/books/${book.romanceIoSlug}`
+                    : `https://romance.io/search?q=${encodeURIComponent(book.title + " " + book.author)}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="group"
@@ -522,7 +473,7 @@ export default async function BookPage({ params }: PageProps) {
                 </div>
               ) : (
                 <p className="text-sm font-body text-muted/50 italic">
-                  Tropes loading...
+                  No tropes tagged yet
                 </p>
               )}
             </div>

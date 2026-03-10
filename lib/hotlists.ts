@@ -5,7 +5,7 @@
  * (browser or server) and rely on RLS for authorization.
  */
 
-import { createClient } from "@supabase/supabase-js";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { hydrateBookDetail } from "@/lib/books/cache";
 import type { Hotlist, HotlistDetail, HotlistBookDetail, UserRating } from "@/lib/types";
 
@@ -34,15 +34,6 @@ function mapHotlist(row: Record<string, unknown>, books: Hotlist["books"] = []):
   };
 }
 
-// Admin client for server-side operations (bypasses RLS)
-function getAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { global: { fetch: (...args) => fetch(args[0], { ...args[1], cache: "no-store" }) } }
-  );
-}
-
 // ── Read operations ──────────────────────────────────
 
 /** Get all hotlists for a user, with book count. */
@@ -67,7 +58,7 @@ export async function getUserHotlists(supabase: any, userId: string): Promise<(H
 export async function getHotlistWithBooks(
   hotlistIdOrSlug: string,
   userId?: string
-): Promise<HotlistDetail | null> {
+): Promise<HotlistDetail | { _accessDenied: true } | null> {
   const supabase = getAdminClient();
 
   // Try by share_slug first, then by id
@@ -94,7 +85,9 @@ export async function getHotlistWithBooks(
 
   // Access control: private lists only visible to owner
   const isOwner = userId === (hotlistRow.user_id as string);
-  if (!(hotlistRow.is_public as boolean) && !isOwner) return null;
+  if (!(hotlistRow.is_public as boolean) && !isOwner) {
+    return { _accessDenied: true as const };
+  }
 
   // Fetch hotlist books
   const { data: hotlistBooks } = await supabase

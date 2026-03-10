@@ -23,7 +23,7 @@
  * - Trope rows: Supabase query by trope tag
  */
 
-import { createClient } from "@supabase/supabase-js";
+import { getAdminClient } from "@/lib/supabase/admin";
 import type { BookDetail } from "@/lib/types";
 import {
   searchGoodreads,
@@ -45,13 +45,6 @@ import { scheduleEnrichment } from "@/lib/scraping";
 import { scheduleMetadataEnrichment } from "./metadata-enrichment";
 import { isJunkTitle } from "./romance-filter";
 
-function getAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
-
 // ── Search ────────────────────────────────────────────
 
 /**
@@ -59,40 +52,108 @@ function getAdminClient() {
  * Combines Supabase cache + Goodreads search.
  */
 export async function findBook(query: string): Promise<BookDetail[]> {
-  const lowerQuery = query.trim().toLowerCase();
-
-  // 1. Check cache first
+  // 1. Check cache first (fast — local DB query)
   const cached = await searchBooksInCache(query);
   const filteredCache = cached.filter((b) => !isJunkTitle(b.title));
 
-  // If top result closely matches the query title, return cache results
+  // 2. If cache has results, return them immediately.
+  //    Kick off Goodreads search in background to discover new books for future searches.
   if (filteredCache.length > 0) {
-    const topTitle = filteredCache[0].title.toLowerCase();
-    const hasCloseMatch =
-      topTitle === lowerQuery ||
-      topTitle.startsWith(lowerQuery) ||
-      topTitle.includes(lowerQuery) ||
-      lowerQuery.split(/\s+/).every((w) => topTitle.includes(w));
-
-    if (hasCloseMatch) {
-      return filteredCache;
-    }
+    // Fire-and-forget: search Goodreads and save any new books to cache
+    backgroundGoodreadsSearch(query).catch(() => {});
+    return filteredCache;
   }
 
-  // 2. Search Goodreads (canonical source) — cache had no close match
-  const goodreadsResults = await searchGoodreads(query);
+  // 3. No cache results — search Goodreads with a 10s timeout
+  //    This is the "slow path" for books we've never seen before.
+  try {
+    const goodreadsResults = await withTimeout(searchGoodreads(query), 10_000);
 
-  if (goodreadsResults.length > 0) {
-    const saved: BookDetail[] = [];
+    if (goodreadsResults.length > 0) {
+      const saved: BookDetail[] = [];
 
-    for (const result of goodreadsResults) {
+      // Only fetch details for the first 3 results to stay fast
+      for (const result of goodreadsResults.slice(0, 3)) {
+        if (isJunkTitle(result.title)) continue;
+
+        const detail = await withTimeout(getGoodreadsBookById(result.goodreadsId), 5_000).catch(() => null);
+        if (!detail) continue;
+
+        const book = await saveGoodreadsBookToCache({
+          title: detail.title,
+          author: detail.author,
+          goodreadsId: detail.goodreadsId,
+          goodreadsUrl: detail.goodreadsUrl,
+          coverUrl: detail.coverUrl,
+          description: detail.description,
+          seriesName: detail.seriesName,
+          seriesPosition: detail.seriesPosition,
+          publishedYear: detail.publishedYear,
+          pageCount: detail.pageCount,
+          genres: detail.genres,
+        });
+
+        if (book) {
+          saved.push({ ...book, ratings: [], spice: [], tropes: [] });
+          scheduleMetadataEnrichment(book.id, book.title, book.author, book.isbn);
+          scheduleEnrichment(book.id, book.title, book.author, book.isbn);
+        }
+      }
+
+      if (saved.length > 0) {
+        // Save remaining results in background (beyond the first 3)
+        if (goodreadsResults.length > 3) {
+          backgroundSaveGoodreadsResults(goodreadsResults.slice(3)).catch(() => {});
+        }
+        return saved;
+      }
+    }
+  } catch {
+    console.log("[findBook] Goodreads search timed out for:", query);
+  }
+
+  // 4. Fallback: Google Books (for books Goodreads doesn't have)
+  try {
+    const googleResults = await withTimeout(searchGoogleBooks(query), 5_000);
+    const fallbackSaved: BookDetail[] = [];
+
+    for (const bookData of googleResults) {
+      if (isJunkTitle(bookData.title)) continue;
+      if (!bookData.goodreadsId || bookData.goodreadsId.startsWith("unknown-")) continue;
+
+      const book = await saveBookToCache(bookData);
+      if (book) {
+        fallbackSaved.push({ ...book, ratings: [], spice: [], tropes: [] });
+        scheduleEnrichment(book.id, book.title, book.author, book.isbn);
+      }
+    }
+
+    return fallbackSaved;
+  } catch {
+    return [];
+  }
+}
+
+// ── Helpers for search performance ───────────────────
+
+/** Wraps a promise with a timeout. Rejects if the promise doesn't resolve in time. */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`Timed out after ${ms}ms`)), ms);
+    promise
+      .then((val) => { clearTimeout(timer); resolve(val); })
+      .catch((err) => { clearTimeout(timer); reject(err); });
+  });
+}
+
+/** Search Goodreads in the background and save any new books to cache for future searches. */
+async function backgroundGoodreadsSearch(query: string): Promise<void> {
+  try {
+    const results = await searchGoodreads(query);
+    for (const result of results.slice(0, 5)) {
       if (isJunkTitle(result.title)) continue;
-
-      // Get full detail from Goodreads for genre info
-      const detail = await getGoodreadsBookById(result.goodreadsId);
+      const detail = await getGoodreadsBookById(result.goodreadsId).catch(() => null);
       if (!detail) continue;
-
-      // Save to Supabase cache
       const book = await saveGoodreadsBookToCache({
         title: detail.title,
         author: detail.author,
@@ -106,44 +167,40 @@ export async function findBook(query: string): Promise<BookDetail[]> {
         pageCount: detail.pageCount,
         genres: detail.genres,
       });
-
       if (book) {
-        saved.push({ ...book, ratings: [], spice: [], tropes: [] });
-
-        // Background enrichment: metadata from Google Books, ratings from scrapers
         scheduleMetadataEnrichment(book.id, book.title, book.author, book.isbn);
         scheduleEnrichment(book.id, book.title, book.author, book.isbn);
       }
     }
-
-    if (saved.length > 0) {
-      // Merge with any non-duplicate cache results
-      const savedIds = new Set(saved.map((b) => b.id));
-      const extras = filteredCache.filter((b) => !savedIds.has(b.id));
-      return [...saved, ...extras].slice(0, 15);
-    }
+  } catch {
+    // Background — swallow errors
   }
+}
 
-  // If we had cache results but no Goodreads results, return cache anyway
-  if (filteredCache.length > 0) {
-    return filteredCache;
-  }
-
-  // 3. Fallback: Google Books (for books Goodreads doesn't have)
-  const googleResults = await searchGoogleBooks(query);
-  const fallbackSaved: BookDetail[] = [];
-
-  for (const bookData of googleResults) {
-    if (isJunkTitle(bookData.title)) continue;
-
-    const book = await saveBookToCache(bookData);
+/** Save remaining Goodreads results in background after returning the first batch. */
+async function backgroundSaveGoodreadsResults(results: Awaited<ReturnType<typeof searchGoodreads>>): Promise<void> {
+  for (const result of results) {
+    if (isJunkTitle(result.title)) continue;
+    const detail = await getGoodreadsBookById(result.goodreadsId).catch(() => null);
+    if (!detail) continue;
+    const book = await saveGoodreadsBookToCache({
+      title: detail.title,
+      author: detail.author,
+      goodreadsId: detail.goodreadsId,
+      goodreadsUrl: detail.goodreadsUrl,
+      coverUrl: detail.coverUrl,
+      description: detail.description,
+      seriesName: detail.seriesName,
+      seriesPosition: detail.seriesPosition,
+      publishedYear: detail.publishedYear,
+      pageCount: detail.pageCount,
+      genres: detail.genres,
+    });
     if (book) {
-      fallbackSaved.push({ ...book, ratings: [], spice: [], tropes: [] });
+      scheduleMetadataEnrichment(book.id, book.title, book.author, book.isbn);
       scheduleEnrichment(book.id, book.title, book.author, book.isbn);
     }
   }
-
-  return fallbackSaved;
 }
 
 // ── Book detail ───────────────────────────────────────

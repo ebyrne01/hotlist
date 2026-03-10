@@ -12,7 +12,7 @@ interface Props {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const hotlist = await getHotlistWithBooks(params.slug);
 
-  if (!hotlist) {
+  if (!hotlist || "_accessDenied" in hotlist) {
     return { title: "Hotlist Not Found" };
   }
 
@@ -33,8 +33,28 @@ export default async function HotlistDetailPage({ params }: Props) {
 
   const hotlist = await getHotlistWithBooks(params.slug, user?.id);
 
-  // Private list viewed by non-owner
+  // Hotlist not found (deleted or never existed)
   if (!hotlist) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-16 text-center">
+        <h1 className="font-display text-2xl font-bold text-ink mb-3">
+          Hotlist not found
+        </h1>
+        <p className="text-sm font-body text-muted mb-6">
+          This Hotlist may have been deleted or the link may be incorrect.
+        </p>
+        <a
+          href="/"
+          className="inline-block px-5 py-2.5 bg-fire text-white text-sm font-mono rounded-lg hover:bg-fire/90 transition-colors"
+        >
+          Browse books
+        </a>
+      </div>
+    );
+  }
+
+  // Private list viewed by non-owner
+  if ("_accessDenied" in hotlist) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-16 text-center">
         <h1 className="font-display text-2xl font-bold text-ink mb-3">

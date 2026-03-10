@@ -19,7 +19,7 @@
  * 6. Return hydrated Supabase records
  */
 
-import { createClient } from "@supabase/supabase-js";
+import { getAdminClient } from "@/lib/supabase/admin";
 import {
   resolveToGoodreadsId,
   getGoodreadsBookById,
@@ -30,14 +30,6 @@ import { scheduleEnrichment } from "@/lib/scraping";
 import { scheduleMetadataEnrichment } from "./metadata-enrichment";
 import { isJunkTitle, isKnownRomanceAuthor } from "./romance-filter";
 import type { BookDetail } from "@/lib/types";
-
-function getAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { global: { fetch: (...args) => fetch(args[0], { ...args[1], cache: "no-store" }) } }
-  );
-}
 
 const CACHE_KEY = "nyt_bestseller_romance";
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours

@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import { Check, ExternalLink } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { useSignInModal } from "@/lib/auth/useSignInModal";
 import { clsx } from "clsx";
 
 interface SpiceData {
@@ -38,12 +38,12 @@ export default function SpiceSection({
   const [justSaved, setJustSaved] = useState(false);
   // Live community data that updates after user rates
   const [communitySpice, setCommunitySpice] = useState(initialCommunity);
-  const router = useRouter();
+  const { openSignIn } = useSignInModal();
   const supabase = createClient();
 
   // Determine primary spice source:
   // romance.io (high confidence) > community (≥5 ratings) > goodreads inference
-  const hasRomanceIo = romanceIoSpice && romanceIoSpice.confidence === "high";
+  const hasRomanceIo = !!romanceIoSpice;
   const hasCommunity =
     communitySpice && (communitySpice.ratingCount ?? 0) >= 5;
 
@@ -78,80 +78,87 @@ export default function SpiceSection({
     async (value: number) => {
       if (!user || saving) return;
       setSaving(true);
+      const prevUserSpice = userSpice;
       setUserSpice(value);
       setEditing(false);
 
-      // Save to user_ratings
-      await supabase.from("user_ratings").upsert(
-        {
-          user_id: user.id,
-          book_id: bookId,
-          spice_rating: value,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id,book_id" }
-      );
-
-      // Auto-set reading status to "read" if none set
-      const { data: currentStatus } = await supabase
-        .from("reading_status")
-        .select("status")
-        .eq("user_id", user.id)
-        .eq("book_id", bookId)
-        .single();
-
-      if (!currentStatus) {
-        await supabase.from("reading_status").upsert(
+      try {
+        // Save to user_ratings
+        await supabase.from("user_ratings").upsert(
           {
             user_id: user.id,
             book_id: bookId,
-            status: "read",
+            spice_rating: value,
             updated_at: new Date().toISOString(),
           },
           { onConflict: "user_id,book_id" }
         );
-      }
 
-      // Recalculate community spice aggregate from all user_ratings
-      const { data: allRatings } = await supabase
-        .from("user_ratings")
-        .select("spice_rating")
-        .eq("book_id", bookId)
-        .not("spice_rating", "is", null);
+        // Auto-set reading status to "read" if none set
+        const { data: currentStatus } = await supabase
+          .from("reading_status")
+          .select("status")
+          .eq("user_id", user.id)
+          .eq("book_id", bookId)
+          .single();
 
-      if (allRatings && allRatings.length > 0) {
-        const total = allRatings.reduce(
-          (sum, r) => sum + (r.spice_rating ?? 0),
-          0
-        );
-        const avg = Math.round(total / allRatings.length);
-        const count = allRatings.length;
+        if (!currentStatus) {
+          await supabase.from("reading_status").upsert(
+            {
+              user_id: user.id,
+              book_id: bookId,
+              status: "read",
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "user_id,book_id" }
+          );
+        }
 
-        // Update book_spice community row
-        await supabase.from("book_spice").upsert(
-          {
-            book_id: bookId,
+        // Recalculate community spice aggregate from all user_ratings
+        const { data: allRatings } = await supabase
+          .from("user_ratings")
+          .select("spice_rating")
+          .eq("book_id", bookId)
+          .not("spice_rating", "is", null);
+
+        if (allRatings && allRatings.length > 0) {
+          const total = allRatings.reduce(
+            (sum, r) => sum + (r.spice_rating ?? 0),
+            0
+          );
+          const avg = Math.round(total / allRatings.length);
+          const count = allRatings.length;
+
+          // Update book_spice community row
+          await supabase.from("book_spice").upsert(
+            {
+              book_id: bookId,
+              source: "hotlist_community",
+              spice_level: avg,
+              rating_count: count,
+              scraped_at: new Date().toISOString(),
+            },
+            { onConflict: "book_id,source" }
+          );
+
+          // Update local community spice state
+          setCommunitySpice({
+            spiceLevel: avg,
             source: "hotlist_community",
-            spice_level: avg,
-            rating_count: count,
-            scraped_at: new Date().toISOString(),
-          },
-          { onConflict: "book_id,source" }
-        );
+            ratingCount: count,
+          });
+        }
 
-        // Update local community spice state
-        setCommunitySpice({
-          spiceLevel: avg,
-          source: "hotlist_community",
-          ratingCount: count,
-        });
+        setJustSaved(true);
+        setTimeout(() => setJustSaved(false), 1500);
+      } catch (err) {
+        console.error("[saveSpice] failed:", err);
+        setUserSpice(prevUserSpice);
+      } finally {
+        setSaving(false);
       }
-
-      setSaving(false);
-      setJustSaved(true);
-      setTimeout(() => setJustSaved(false), 1500);
     },
-    [user, saving, bookId, supabase]
+    [user, saving, userSpice, bookId, supabase]
   );
 
   // Build tooltip text based on what data sources are showing
@@ -266,7 +273,7 @@ export default function SpiceSection({
             spiceDifference={spiceDifference}
             onEdit={() => setEditing(true)}
             onSave={saveSpice}
-            onSignIn={() => router.push("/?login=true")}
+            onSignIn={() => openSignIn()}
           />
         </div>
       )}

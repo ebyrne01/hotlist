@@ -1,7 +1,7 @@
 "use client";
 
 import { clsx } from "clsx";
-import Link from "next/link";
+import { useSignInModal } from "@/lib/auth/useSignInModal";
 
 type SpiceSource = "romance_io" | "hotlist_community" | "goodreads_inference";
 type Confidence = "low" | "medium" | "high";
@@ -34,17 +34,19 @@ export default function SpiceIndicator({
   ratingCount,
   className,
 }: SpiceIndicatorProps) {
+  const { openSignIn } = useSignInModal();
+
   // No spice data at all
   if (!level || !source) {
     return (
       <span className={clsx("inline-flex flex-col items-start gap-0.5", className)}>
         <span className="text-xs font-mono text-muted/50">Spice unknown</span>
-        <Link
-          href="/?login=true"
-          className="text-[10px] font-mono text-fire/70 hover:text-fire transition-colors"
+        <button
+          onClick={() => openSignIn()}
+          className="text-[10px] font-mono text-fire/70 hover:text-fire transition-colors text-left"
         >
           Be the first to rate the spice &rarr;
-        </Link>
+        </button>
       </span>
     );
   }
@@ -76,7 +78,7 @@ export default function SpiceIndicator({
         {tooltip && `, ${tooltip}`}
       </span>
       {tooltip && (
-        <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-ink text-white text-xs font-mono px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+        <span className="absolute top-full left-1/2 -translate-x-1/2 mt-1 bg-ink text-white text-xs font-mono px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-20">
           {tooltip}
         </span>
       )}

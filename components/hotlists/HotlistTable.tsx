@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import BookCover from "@/components/ui/BookCover";
 import type { HotlistBookDetail, Rating } from "@/lib/types";
@@ -15,7 +15,7 @@ interface HotlistTableProps {
   enrichingBookIds?: Set<string>;
 }
 
-type SortKey = "goodreads" | "amazon" | "romance_io" | "spice" | "pages";
+type SortKey = "goodreads" | "amazon" | "romance_io" | "spice";
 type SortDir = "asc" | "desc";
 
 function getRating(ratings: Rating[], source: string): number | null {
@@ -34,6 +34,16 @@ function getSpiceLevel(book: HotlistBookDetail): number {
 function amazonSearchUrl(title: string, author: string, tag: string): string {
   const query = encodeURIComponent(`${title} ${author}`);
   return `https://www.amazon.com/s?k=${query}${tag ? `&tag=${tag}` : ""}`;
+}
+
+function bnSearchUrl(title: string, author: string): string {
+  const query = encodeURIComponent(`${title} ${author}`);
+  return `https://www.barnesandnoble.com/s/${query}?store=EBOOK`;
+}
+
+function bookshopSearchUrl(title: string, author: string): string {
+  const query = encodeURIComponent(`${title} ${author}`);
+  return `https://bookshop.org/books/search?keywords=${query}`;
 }
 
 /** Check if a book has any ratings data at all */
@@ -84,10 +94,6 @@ export default function HotlistTable({
         aVal = getSpiceLevel(a);
         bVal = getSpiceLevel(b);
         break;
-      case "pages":
-        aVal = a.book.pageCount;
-        bVal = b.book.pageCount;
-        break;
     }
 
     // Nulls sort last
@@ -111,168 +117,221 @@ export default function HotlistTable({
   const tag = affiliateTag ?? process.env.NEXT_PUBLIC_AMAZON_AFFILIATE_TAG ?? "";
 
   return (
-    <div className="overflow-x-auto -mx-4 sm:mx-0">
-      <table className="w-full min-w-[700px] text-sm">
-        <thead>
-          <tr className="border-b border-border">
-            <th className="text-left px-3 py-2 font-mono text-xs text-muted uppercase tracking-wide sticky left-0 bg-cream z-10">
-              Book
-            </th>
-            <SortHeader label="Goodreads" sortKey="goodreads" currentKey={sortKey} dir={sortDir} onClick={handleSort} />
-            <SortHeader label="Amazon" sortKey="amazon" currentKey={sortKey} dir={sortDir} onClick={handleSort} />
-            <SortHeader label="romance.io" sortKey="romance_io" currentKey={sortKey} dir={sortDir} onClick={handleSort} />
-            <SortHeader label="Spice" sortKey="spice" currentKey={sortKey} dir={sortDir} onClick={handleSort} />
-            <th className="text-center px-3 py-2 font-mono text-xs text-muted uppercase tracking-wide">
-              My Rating
-            </th>
-            <th className="text-left px-3 py-2 font-mono text-xs text-muted uppercase tracking-wide">
-              Tropes
-            </th>
-            <SortHeader label="Pages" sortKey="pages" currentKey={sortKey} dir={sortDir} onClick={handleSort} />
-            <th className="text-center px-3 py-2 font-mono text-xs text-muted uppercase tracking-wide">
-              Buy
-            </th>
-            {isOwner && (
-              <th className="w-10 px-2 py-2" />
-            )}
-          </tr>
-        </thead>
-        <tbody>
-          {sortedBooks.map((hb) => {
-            const gr = getRating(hb.book.ratings, "goodreads");
-            const amz = getRating(hb.book.ratings, "amazon");
-            const rio = getRating(hb.book.ratings, "romance_io");
-            const spice = getSpiceLevel(hb);
-            const slug = hb.book.slug || hb.book.id;
-            const asin = hb.book.amazonAsin;
-            const isEnriching = enrichingBookIds.has(hb.bookId);
-            const noRatings = !hasAnyRatings(hb);
+    <>
+      {/* ── Mobile: Card layout ──────────────────────── */}
+      <div className="sm:hidden space-y-3 -mx-2">
+        {sortedBooks.map((hb) => {
+          const gr = getRating(hb.book.ratings, "goodreads");
+          const amz = getRating(hb.book.ratings, "amazon");
+          const rio = getRating(hb.book.ratings, "romance_io");
+          const spice = getSpiceLevel(hb);
+          const slug = hb.book.slug || hb.book.id;
+          const asin = hb.book.amazonAsin;
+          const isEnriching = enrichingBookIds.has(hb.bookId);
+          const noRatings = !hasAnyRatings(hb);
 
-            return (
-              <tr key={hb.id} className="border-b border-border/50 hover:bg-white/60 transition-colors">
-                {/* Book info — sticky on mobile */}
-                <td className="px-3 py-3 sticky left-0 bg-cream/95 z-10">
-                  <Link href={`/book/${slug}`} className="flex items-center gap-3 group">
-                    <BookCover
-                      title={hb.book.title}
-                      coverUrl={hb.book.coverUrl}
-                      size="sm"
-                    />
-                    <div className="min-w-0">
-                      <p className="font-display font-bold text-ink text-sm leading-tight group-hover:text-fire transition-colors truncate max-w-[180px]">
+          return (
+            <div key={hb.id} className="bg-white rounded-lg border border-border/60 p-3">
+              <div className="flex gap-3">
+                {/* Cover + title */}
+                <Link href={`/book/${slug}`} className="shrink-0">
+                  <BookCover title={hb.book.title} coverUrl={hb.book.coverUrl} size="sm" />
+                </Link>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <Link href={`/book/${slug}`} className="min-w-0">
+                      <p className="font-display font-bold text-ink text-sm leading-tight truncate">
                         {hb.book.title}
                       </p>
-                      <p className="text-xs font-body text-muted truncate max-w-[180px]">
-                        {hb.book.author}
-                      </p>
-                    </div>
-                  </Link>
-                </td>
-
-                {/* Goodreads */}
-                <td className="px-3 py-3 text-center font-mono text-sm">
-                  <RatingCell value={gr} isEnriching={isEnriching && noRatings} />
-                </td>
-
-                {/* Amazon */}
-                <td className="px-3 py-3 text-center font-mono text-sm">
-                  <RatingCell value={amz} isEnriching={isEnriching && noRatings} />
-                </td>
-
-                {/* romance.io */}
-                <td className="px-3 py-3 text-center font-mono text-sm">
-                  <RatingCell value={rio} isEnriching={isEnriching && noRatings} />
-                </td>
-
-                {/* Spice */}
-                <td className="px-3 py-3 text-center">
-                  {spice > 0 ? (
-                    <span className="text-sm" title={`${spice}/5 spice`}>
-                      {"🌶️".repeat(spice)}
-                    </span>
-                  ) : (
-                    <span className="text-muted/40 font-mono text-sm">{"\u2014"}</span>
-                  )}
-                </td>
-
-                {/* My Rating */}
-                <td className="px-3 py-3 text-center">
-                  <InlineStarRating
-                    bookId={hb.bookId}
-                    currentRating={hb.userRating?.starRating ?? null}
-                    isOwner={isOwner}
-                    onRate={onRateBook}
-                  />
-                </td>
-
-                {/* Tropes */}
-                <td className="px-3 py-3">
-                  <div className="flex gap-1 flex-wrap max-w-[160px]">
-                    {hb.book.tropes.slice(0, 3).map((t) => (
-                      <span
-                        key={t.id}
-                        className="text-[10px] font-mono px-1.5 py-0.5 rounded-full border border-border bg-white text-muted whitespace-nowrap"
+                      <p className="text-xs font-body text-muted truncate">{hb.book.author}</p>
+                    </Link>
+                    {isOwner && (
+                      <button
+                        onClick={() => onRemoveBook?.(hb.bookId)}
+                        className="text-muted/40 hover:text-fire transition-colors p-1 shrink-0"
+                        title="Remove"
                       >
-                        {t.name}
-                      </span>
-                    ))}
-                    {hb.book.tropes.length === 0 && (
-                      <span className="text-muted/40 font-mono text-xs">{"\u2014"}</span>
+                        <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                          <line x1="3" y1="3" x2="11" y2="11" />
+                          <line x1="11" y1="3" x2="3" y2="11" />
+                        </svg>
+                      </button>
                     )}
                   </div>
-                </td>
 
-                {/* Pages */}
-                <td className="px-3 py-3 text-center font-mono text-sm">
-                  <span className={hb.book.pageCount ? "text-ink" : "text-muted/40"}>
-                    {hb.book.pageCount ?? "\u2014"}
-                  </span>
-                </td>
+                  {/* Ratings row */}
+                  <div className="flex items-center gap-3 mt-2 text-xs font-mono">
+                    <span className="text-muted" title="Goodreads">
+                      GR: <RatingCell value={gr} isEnriching={isEnriching && noRatings} />
+                    </span>
+                    <span className="text-muted" title="Amazon">
+                      AMZ: <RatingCell value={amz} isEnriching={isEnriching && noRatings} />
+                    </span>
+                    {rio !== null && (
+                      <span className="text-muted" title="romance.io">
+                        R.io: <span className="text-ink">{rio.toFixed(1)}</span>
+                      </span>
+                    )}
+                  </div>
 
-                {/* Buy */}
-                <td className="px-3 py-3 text-center">
-                  {asin ? (
-                    <a
-                      href={`https://www.amazon.com/dp/${asin}?tag=${tag}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[10px] font-mono text-fire hover:underline whitespace-nowrap"
-                    >
-                      Buy &rarr;
-                    </a>
-                  ) : (
-                    <a
-                      href={amazonSearchUrl(hb.book.title, hb.book.author, tag)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[10px] font-mono text-muted hover:text-fire hover:underline whitespace-nowrap transition-colors"
-                    >
-                      Find &rarr;
-                    </a>
-                  )}
-                </td>
+                  {/* Spice + My Rating + Buy */}
+                  <div className="flex items-center gap-3 mt-1.5">
+                    {spice > 0 && (
+                      <span className="text-sm" title={`${spice}/5 spice`}>
+                        {"🌶️".repeat(spice)}
+                      </span>
+                    )}
+                    <InlineStarRating
+                      bookId={hb.bookId}
+                      currentRating={hb.userRating?.starRating ?? null}
+                      isOwner={isOwner}
+                      onRate={onRateBook}
+                    />
+                    <span className="ml-auto">
+                      <BuyDropdown
+                        title={hb.book.title}
+                        author={hb.book.author}
+                        asin={asin}
+                        tag={tag}
+                      />
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
 
-                {/* Remove */}
-                {isOwner && (
-                  <td className="px-2 py-3 text-center">
-                    <button
-                      onClick={() => onRemoveBook?.(hb.bookId)}
-                      className="text-muted/40 hover:text-fire transition-colors p-1"
-                      title="Remove from list"
-                    >
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                        <line x1="3" y1="3" x2="11" y2="11" />
-                        <line x1="11" y1="3" x2="3" y2="11" />
-                      </svg>
-                    </button>
+      {/* ── Desktop: Table layout ────────────────────── */}
+      <div className="hidden sm:block overflow-x-auto">
+        <table className="w-full min-w-[700px] text-sm">
+          <thead>
+            <tr className="border-b border-border">
+              <th className="text-left px-3 py-2 font-mono text-xs text-muted uppercase tracking-wide">
+                Book
+              </th>
+              <SortHeader label="Goodreads" sortKey="goodreads" currentKey={sortKey} dir={sortDir} onClick={handleSort} />
+              <SortHeader label="Amazon" sortKey="amazon" currentKey={sortKey} dir={sortDir} onClick={handleSort} />
+              <SortHeader label="romance.io" sortKey="romance_io" currentKey={sortKey} dir={sortDir} onClick={handleSort} />
+              <SortHeader label="Spice" sortKey="spice" currentKey={sortKey} dir={sortDir} onClick={handleSort} />
+              <th className="text-center px-3 py-2 font-mono text-xs text-muted uppercase tracking-wide">
+                My Rating
+              </th>
+              <th className="text-left px-3 py-2 font-mono text-xs text-muted uppercase tracking-wide">
+                Tropes
+              </th>
+              <th className="text-center px-3 py-2 font-mono text-xs text-muted uppercase tracking-wide">
+                Status
+              </th>
+              <th className="text-center px-3 py-2 font-mono text-xs text-muted uppercase tracking-wide">
+                Buy
+              </th>
+              {isOwner && (
+                <th className="w-10 px-2 py-2" />
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {sortedBooks.map((hb) => {
+              const gr = getRating(hb.book.ratings, "goodreads");
+              const amz = getRating(hb.book.ratings, "amazon");
+              const rio = getRating(hb.book.ratings, "romance_io");
+              const spice = getSpiceLevel(hb);
+              const slug = hb.book.slug || hb.book.id;
+              const asin = hb.book.amazonAsin;
+              const isEnriching = enrichingBookIds.has(hb.bookId);
+              const noRatings = !hasAnyRatings(hb);
+
+              return (
+                <tr key={hb.id} className="border-b border-border/50 hover:bg-white/60 transition-colors">
+                  <td className="px-3 py-3">
+                    <Link href={`/book/${slug}`} className="flex items-center gap-3 group">
+                      <BookCover title={hb.book.title} coverUrl={hb.book.coverUrl} size="sm" />
+                      <div className="min-w-0">
+                        <p className="font-display font-bold text-ink text-sm leading-tight group-hover:text-fire transition-colors truncate max-w-[180px]">
+                          {hb.book.title}
+                        </p>
+                        <p className="text-xs font-body text-muted truncate max-w-[180px]">
+                          {hb.book.author}
+                        </p>
+                      </div>
+                    </Link>
                   </td>
-                )}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+
+                  <td className="px-3 py-3 text-center font-mono text-sm">
+                    <RatingCell value={gr} isEnriching={isEnriching && noRatings} />
+                  </td>
+                  <td className="px-3 py-3 text-center font-mono text-sm">
+                    <RatingCell value={amz} isEnriching={isEnriching && noRatings} />
+                  </td>
+                  <td className="px-3 py-3 text-center font-mono text-sm">
+                    <RatingCell value={rio} isEnriching={isEnriching && noRatings} />
+                  </td>
+                  <td className="px-3 py-3 text-center">
+                    {spice > 0 ? (
+                      <span className="text-sm" title={`${spice}/5 spice`}>
+                        {"🌶️".repeat(spice)}
+                      </span>
+                    ) : (
+                      <span className="text-muted/40 font-mono text-sm">{"\u2014"}</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-3 text-center">
+                    <InlineStarRating
+                      bookId={hb.bookId}
+                      currentRating={hb.userRating?.starRating ?? null}
+                      isOwner={isOwner}
+                      onRate={onRateBook}
+                    />
+                  </td>
+                  <td className="px-3 py-3">
+                    <div className="flex gap-1 flex-wrap max-w-[160px]">
+                      {hb.book.tropes.slice(0, 3).map((t) => (
+                        <span key={t.id} className="text-[10px] font-mono px-1.5 py-0.5 rounded-full border border-border bg-white text-muted whitespace-nowrap">
+                          {t.name}
+                        </span>
+                      ))}
+                      {hb.book.tropes.length === 0 && (
+                        <span className="text-muted/40 font-mono text-xs">{"\u2014"}</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-3 py-3 text-center">
+                    <ReadStatusToggle
+                      bookId={hb.bookId}
+                      isOwner={isOwner}
+                    />
+                  </td>
+                  <td className="px-3 py-3 text-center">
+                    <BuyDropdown
+                      title={hb.book.title}
+                      author={hb.book.author}
+                      asin={asin}
+                      tag={tag}
+                    />
+                  </td>
+                  {isOwner && (
+                    <td className="px-2 py-3 text-center">
+                      <button
+                        onClick={() => onRemoveBook?.(hb.bookId)}
+                        className="text-muted/40 hover:text-fire transition-colors p-1"
+                        title="Remove from list"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                          <line x1="3" y1="3" x2="11" y2="11" />
+                          <line x1="11" y1="3" x2="3" y2="11" />
+                        </svg>
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
 
@@ -330,6 +389,82 @@ function RatingCell({ value, isEnriching }: { value: number | null; isEnriching:
   );
 }
 
+// ── Buy dropdown ─────────────────────────────────────
+
+function BuyDropdown({
+  title,
+  author,
+  asin,
+  tag,
+}: {
+  title: string;
+  author: string;
+  asin: string | null;
+  tag: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  const amazonUrl = asin
+    ? `https://www.amazon.com/dp/${asin}?tag=${tag}`
+    : amazonSearchUrl(title, author, tag);
+  const bnUrl = bnSearchUrl(title, author);
+  const bookshopUrl = bookshopSearchUrl(title, author);
+
+  return (
+    <div ref={ref} className="relative inline-block">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="text-[10px] font-mono text-fire hover:underline whitespace-nowrap"
+      >
+        Buy &rarr;
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 bg-white border border-border rounded-lg shadow-lg py-1 z-30 min-w-[120px]">
+          <a
+            href={amazonUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block px-3 py-1.5 text-xs font-mono text-ink hover:bg-cream transition-colors"
+            onClick={() => setOpen(false)}
+          >
+            Amazon
+          </a>
+          <a
+            href={bnUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block px-3 py-1.5 text-xs font-mono text-ink hover:bg-cream transition-colors"
+            onClick={() => setOpen(false)}
+          >
+            B&amp;N
+          </a>
+          <a
+            href={bookshopUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block px-3 py-1.5 text-xs font-mono text-ink hover:bg-cream transition-colors"
+            onClick={() => setOpen(false)}
+          >
+            Bookshop
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Inline star rating ───────────────────────────────
 
 function InlineStarRating({
@@ -370,5 +505,76 @@ function InlineStarRating({
         </button>
       ))}
     </div>
+  );
+}
+
+// ── Read status toggle ───────────────────────────────
+
+function ReadStatusToggle({
+  bookId,
+  isOwner,
+}: {
+  bookId: string;
+  isOwner: boolean;
+}) {
+  const [status, setStatus] = useState<"read" | "unread">("unread");
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!isOwner) return;
+    import("@/lib/supabase/client").then(({ createClient }) => {
+      const sb = createClient();
+      sb.auth.getUser().then(({ data }) => {
+        if (!data.user) { setLoaded(true); return; }
+        sb.from("reading_status")
+          .select("status")
+          .eq("user_id", data.user.id)
+          .eq("book_id", bookId)
+          .single()
+          .then(({ data: rs }) => {
+            setStatus(rs?.status === "read" ? "read" : "unread");
+            setLoaded(true);
+          });
+      });
+    });
+  }, [bookId, isOwner]);
+
+  async function toggle() {
+    const newStatus = status === "read" ? "unread" : "read";
+    setStatus(newStatus);
+
+    const { createClient } = await import("@/lib/supabase/client");
+    const sb = createClient();
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return;
+
+    if (newStatus === "read") {
+      await sb.from("reading_status").upsert(
+        { user_id: user.id, book_id: bookId, status: "read", updated_at: new Date().toISOString() },
+        { onConflict: "user_id,book_id" }
+      );
+    } else {
+      await sb.from("reading_status")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("book_id", bookId);
+    }
+  }
+
+  if (!isOwner || !loaded) {
+    return <span className="text-muted/40 font-mono text-xs">{"\u2014"}</span>;
+  }
+
+  return (
+    <button
+      onClick={toggle}
+      className={`text-[10px] font-mono px-2 py-1 rounded-full border transition-colors ${
+        status === "read"
+          ? "bg-green-50 text-green-700 border-green-200"
+          : "bg-white text-muted border-border hover:border-fire/30 hover:text-ink"
+      }`}
+    >
+      {status === "read" ? "Read" : "Unread"}
+    </button>
   );
 }

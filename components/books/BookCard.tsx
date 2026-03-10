@@ -13,10 +13,9 @@ interface BookCardProps {
   className?: string;
 }
 
-function getAverageRating(book: BookDetail): number | null {
-  const rated = book.ratings.filter((r) => r.rating !== null);
-  if (rated.length === 0) return null;
-  return rated.reduce((sum, r) => sum + (r.rating ?? 0), 0) / rated.length;
+function getRatingBySource(book: BookDetail, source: string): number | null {
+  const r = book.ratings.find((r) => r.source === source);
+  return r?.rating ?? null;
 }
 
 function getSpice(book: BookDetail) {
@@ -28,7 +27,8 @@ function getSpice(book: BookDetail) {
 }
 
 export default function BookCard({ book, layout = "grid", className }: BookCardProps) {
-  const avg = getAverageRating(book);
+  const grRating = getRatingBySource(book, "goodreads");
+  const amzRating = getRatingBySource(book, "amazon");
   const spice = getSpice(book);
   const topTropes = book.tropes.slice(0, 2);
   const slug = book.slug || book.id;
@@ -48,10 +48,17 @@ export default function BookCard({ book, layout = "grid", className }: BookCardP
             {book.title}
           </h3>
           <p className="text-xs font-body text-muted truncate">{book.author}</p>
-          <div className="flex items-center gap-2 mt-auto">
-            {avg !== null && (
-              <span className="text-xs font-mono text-gold font-medium">
-                {avg.toFixed(1)}
+          <div className="flex items-center gap-3 mt-auto">
+            {grRating !== null && (
+              <span className="text-xs font-mono">
+                <span className="text-muted/60">GR</span>{" "}
+                <span className="text-gold font-medium">{grRating.toFixed(1)}</span>
+              </span>
+            )}
+            {amzRating !== null && (
+              <span className="text-xs font-mono">
+                <span className="text-muted/60">AMZ</span>{" "}
+                <span className="text-gold font-medium">{amzRating.toFixed(1)}</span>
               </span>
             )}
             {spice && (
@@ -95,14 +102,21 @@ export default function BookCard({ book, layout = "grid", className }: BookCardP
         />
       </div>
       <div className="p-2.5 flex flex-col gap-1">
-        <h3 className="font-display font-bold text-ink text-xs leading-tight break-words">
+        <h3 className="font-display font-bold text-ink text-sm leading-tight break-words">
           {book.title}
         </h3>
-        <p className="text-[11px] font-body text-muted truncate">{book.author}</p>
-        <div className="flex items-center gap-1.5 mt-1">
-          {avg !== null && (
-            <span className="text-[11px] font-mono text-gold font-medium">
-              {avg.toFixed(1)}
+        <p className="text-xs font-body text-ink/60 truncate">{book.author}</p>
+        <div className="flex items-center gap-2 mt-1 flex-wrap">
+          {grRating !== null && (
+            <span className="text-[11px] font-mono">
+              <span className="text-muted/60">GR</span>{" "}
+              <span className="text-gold font-medium">{grRating.toFixed(1)}</span>
+            </span>
+          )}
+          {amzRating !== null && (
+            <span className="text-[11px] font-mono">
+              <span className="text-muted/60">AMZ</span>{" "}
+              <span className="text-gold font-medium">{amzRating.toFixed(1)}</span>
             </span>
           )}
           {spice && (

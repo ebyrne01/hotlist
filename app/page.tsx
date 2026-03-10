@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 
-import { createClient } from "@supabase/supabase-js";
+import { getAdminClient } from "@/lib/supabase/admin";
 import HeroSection from "@/components/home/HeroSection";
 import TropeGrid from "@/components/home/TropeGrid";
 import BookRow from "@/components/books/BookRow";
@@ -8,14 +8,8 @@ import { getNYTBestsellerRomance } from "@/lib/books/nyt-lists";
 import { getRomanceNewReleases } from "@/lib/books/new-releases";
 import { hydrateBookDetail } from "@/lib/books/cache";
 import { isJunkTitle } from "@/lib/books/romance-filter";
+import { deduplicateBooks } from "@/lib/books/utils";
 import type { BookDetail } from "@/lib/types";
-
-function getAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
 
 /**
  * What's Hot: NYT bestsellers filtered to romance/romantasy.
@@ -72,7 +66,14 @@ async function getWhatsHot(): Promise<BookDetail[]> {
     if (isJunkTitle(book.title as string)) continue;
     hydrated.push(await hydrateBookDetail(supabase, book));
   }
-  return hydrated;
+
+  // Quality threshold: only show books with sufficient Goodreads data + cover
+  const qualified = hydrated.filter((book) => {
+    if (!book.coverUrl) return false;
+    const grRating = book.ratings.find((r) => r.source === "goodreads");
+    return grRating && (grRating.ratingCount ?? 0) >= 100;
+  });
+  return qualified;
 }
 
 async function getNewReleases(): Promise<BookDetail[]> {
@@ -111,7 +112,62 @@ async function getSpiciest(): Promise<BookDetail[]> {
     if (isJunkTitle(book.title as string)) continue;
     hydrated.push(await hydrateBookDetail(supabase, book));
   }
-  return deduplicateBooks(hydrated);
+
+  // Quality threshold: only show books with sufficient Goodreads data + cover
+  const qualified = hydrated.filter((book) => {
+    if (!book.coverUrl) return false;
+    const grRating = book.ratings.find((r) => r.source === "goodreads");
+    return grRating && (grRating.ratingCount ?? 0) >= 100;
+  });
+  return deduplicateBooks(qualified);
+}
+
+async function getRomantasyPicks(): Promise<BookDetail[]> {
+  const supabase = getAdminClient();
+
+  // Find books with romantasy/fantasy-romance genres
+  const { data: books } = await supabase
+    .from("books")
+    .select("*")
+    .not("cover_url", "is", null)
+    .or(
+      "genres.cs.{romantasy},genres.cs.{fantasy romance},genres.cs.{romantic fantasy},genres.cs.{fae},genres.cs.{faerie}"
+    )
+    .order("updated_at", { ascending: false })
+    .limit(30);
+
+  if (!books || books.length === 0) {
+    // Fallback: search descriptions for romantasy keywords
+    const { data: fallback } = await supabase
+      .from("books")
+      .select("*")
+      .not("cover_url", "is", null)
+      .or("description.ilike.%romantasy%,description.ilike.%fae court%,description.ilike.%fantasy romance%")
+      .order("updated_at", { ascending: false })
+      .limit(20);
+
+    if (!fallback || fallback.length === 0) return [];
+
+    const hydrated: BookDetail[] = [];
+    for (const book of fallback as Record<string, unknown>[]) {
+      if (isJunkTitle(book.title as string)) continue;
+      hydrated.push(await hydrateBookDetail(supabase, book));
+    }
+    return deduplicateBooks(hydrated.filter((b) => !!b.coverUrl)).slice(0, 12);
+  }
+
+  const hydrated: BookDetail[] = [];
+  for (const book of books as Record<string, unknown>[]) {
+    if (isJunkTitle(book.title as string)) continue;
+    hydrated.push(await hydrateBookDetail(supabase, book));
+  }
+
+  const qualified = hydrated.filter((b) => {
+    if (!b.coverUrl) return false;
+    const grRating = b.ratings.find((r) => r.source === "goodreads");
+    return grRating && (grRating.ratingCount ?? 0) >= 100;
+  });
+  return deduplicateBooks(qualified).slice(0, 12);
 }
 
 async function getTropes() {
@@ -123,36 +179,13 @@ async function getTropes() {
   return data ?? [];
 }
 
-/** Deduplicate books by goodreads_id, ISBN, and title+author. */
-function deduplicateBooks(books: BookDetail[]): BookDetail[] {
-  const seen = new Set<string>();
-  const result: BookDetail[] = [];
-
-  for (const book of books) {
-    const keys = [
-      book.goodreadsId,
-      book.isbn,
-      book.isbn13,
-      book.googleBooksId,
-      `${book.title.toLowerCase()}::${book.author.toLowerCase()}`,
-    ].filter(Boolean) as string[];
-
-    if (keys.some((k) => seen.has(k))) continue;
-    keys.forEach((k) => seen.add(k));
-
-    if (isJunkTitle(book.title)) continue;
-
-    result.push(book);
-  }
-
-  return result;
-}
 
 export default async function Home() {
-  const [hotBooks, newReleases, spicyBooks, tropes] = await Promise.all([
+  const [hotBooks, newReleases, spicyBooks, romantasyBooks, tropes] = await Promise.all([
     getWhatsHot(),
     getNewReleases(),
     getSpiciest(),
+    getRomantasyPicks(),
     getTropes(),
   ]);
 
@@ -182,6 +215,16 @@ export default async function Home() {
               ✨ New Releases
             </h2>
             <BookRow books={filteredReleases} />
+          </section>
+        )}
+
+        {/* Romantasy Picks */}
+        {romantasyBooks.length > 0 && (
+          <section className="py-8">
+            <h2 className="font-display text-xl sm:text-2xl font-bold text-ink mb-4">
+              🗡️ Romantasy Picks
+            </h2>
+            <BookRow books={romantasyBooks} />
           </section>
         )}
 

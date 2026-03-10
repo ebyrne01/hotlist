@@ -27,10 +27,10 @@ export default function TropeGrid({ tropes }: TropeGridProps) {
             key={trope.id}
             href={`/tropes/${trope.slug}`}
             className={clsx(
-              "rounded-full border font-body transition-all hover:shadow-md hover:border-fire/40 hover:bg-fire/5",
+              "rounded-full border font-body transition-all hover:shadow-md hover:border-fire/40 hover:bg-fire/5 inline-flex items-center justify-center text-center leading-none",
               isPopular
-                ? "px-4 py-2 text-sm border-border bg-white text-ink font-medium"
-                : "px-3 py-1.5 text-xs border-border bg-white text-muted hover:text-ink"
+                ? "px-5 py-2.5 text-sm border-border bg-white text-ink font-medium"
+                : "px-4 py-2 text-sm border-border bg-white text-ink/70 hover:text-ink"
             )}
           >
             {trope.name}

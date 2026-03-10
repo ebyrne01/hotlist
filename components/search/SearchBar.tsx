@@ -8,7 +8,7 @@ import { clsx } from "clsx";
 import BookCover from "@/components/ui/BookCover";
 
 // API search result shape (lean — not the full BookDetail)
-interface SearchResult {
+export interface SearchResult {
   id: string;
   goodreadsId: string;
   title: string;
@@ -24,9 +24,11 @@ interface SearchResult {
 interface SearchBarProps {
   variant?: "hero" | "navbar";
   className?: string;
+  /** When provided, selecting a result calls this instead of navigating to book detail */
+  onSelectBook?: (book: SearchResult) => void;
 }
 
-export default function SearchBar({ variant = "navbar", className }: SearchBarProps) {
+export default function SearchBar({ variant = "navbar", className, onSelectBook }: SearchBarProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [noResults, setNoResults] = useState(false);
@@ -114,12 +116,16 @@ export default function SearchBar({ variant = "navbar", className }: SearchBarPr
   );
 
   const handleSelect = useCallback(
-    (slug: string) => {
+    (book: SearchResult) => {
       setIsOpen(false);
       setQuery("");
-      router.push(`/book/${slug}`);
+      if (onSelectBook) {
+        onSelectBook(book);
+      } else {
+        router.push(`/book/${book.slug}`);
+      }
     },
-    [router]
+    [router, onSelectBook]
   );
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -209,7 +215,7 @@ export default function SearchBar({ variant = "navbar", className }: SearchBarPr
             {results.map((book) => (
               <button
                 key={book.id}
-                onClick={() => handleSelect(book.slug)}
+                onClick={() => handleSelect(book)}
                 className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-cream transition-colors text-left"
               >
                 <BookCover title={book.title} coverUrl={book.coverUrl} size="sm" />
@@ -239,7 +245,7 @@ export default function SearchBar({ variant = "navbar", className }: SearchBarPr
               </button>
             ))}
 
-            {query.trim() && results.length > 0 && (
+            {query.trim() && (
               <button
                 onClick={() => { setIsOpen(false); router.push(`/search?q=${encodeURIComponent(query)}`); }}
                 className="w-full px-4 py-2.5 text-xs font-mono text-fire hover:bg-cream transition-colors text-left border-t border-border"

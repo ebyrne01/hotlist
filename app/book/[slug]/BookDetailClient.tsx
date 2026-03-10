@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import AddToHotlistPopover from "@/components/hotlists/AddToHotlistPopover";
-import type { ReadingStatus } from "@/lib/types";
+import ReadingStatusButtons from "@/components/books/ReadingStatusButtons";
+import RatingWidget from "@/components/books/RatingWidget";
 
 interface BookDetailClientProps {
   section: "reading-status" | "add-to-hotlist" | "mobile-cta";
@@ -14,10 +15,11 @@ interface BookDetailClientProps {
 export default function BookDetailClient({
   section,
   bookId,
+  bookTitle,
 }: BookDetailClientProps) {
   switch (section) {
     case "reading-status":
-      return <ReadingStatusSection bookId={bookId} />;
+      return <ReadingStatusWithToast bookId={bookId} bookTitle={bookTitle ?? "this book"} />;
     case "add-to-hotlist":
       return <AddToHotlistPopover bookId={bookId} variant="button" />;
     case "mobile-cta":
@@ -25,25 +27,26 @@ export default function BookDetailClient({
   }
 }
 
-// ── Reading Status ───────────────────────────────────
+// ── Reading Status + "Finished!" toast + RatingWidget ──
 
-const STATUS_OPTIONS: { value: ReadingStatus; label: string }[] = [
-  { value: "want_to_read", label: "Want to Read" },
-  { value: "reading", label: "Reading" },
-  { value: "read", label: "Read" },
-];
-
-function ReadingStatusSection({ bookId }: { bookId: string }) {
+function ReadingStatusWithToast({
+  bookId,
+  bookTitle,
+}: {
+  bookId: string;
+  bookTitle: string;
+}) {
   const [user, setUser] = useState<{ id: string } | null>(null);
-  const [status, setStatus] = useState<ReadingStatus | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [showFinishedToast, setShowFinishedToast] = useState(false);
+  const [showNoteWidget, setShowNoteWidget] = useState(false);
+  const [hasReadStatus, setHasReadStatus] = useState(false);
   const supabase = createClient();
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) {
         setUser({ id: data.user.id });
-        // Fetch current status
+        // Check if already marked as read (to show note widget)
         supabase
           .from("reading_status")
           .select("status")
@@ -51,63 +54,71 @@ function ReadingStatusSection({ bookId }: { bookId: string }) {
           .eq("book_id", bookId)
           .single()
           .then(({ data: rs }) => {
-            if (rs) setStatus(rs.status as ReadingStatus);
+            if (rs?.status === "read") {
+              setHasReadStatus(true);
+              setShowNoteWidget(true);
+            }
           });
       }
     });
   }, [bookId, supabase]);
 
-  if (!user) return null;
+  function handleMarkedRead() {
+    setShowFinishedToast(true);
+    setHasReadStatus(true);
+    // Auto-dismiss toast after 5 seconds
+    setTimeout(() => setShowFinishedToast(false), 5000);
+  }
 
-  async function handleStatusChange(newStatus: ReadingStatus) {
-    if (!user) return;
-    setSaving(true);
-    const isDeselect = status === newStatus;
-
-    if (isDeselect) {
-      await supabase
-        .from("reading_status")
-        .delete()
-        .eq("user_id", user.id)
-        .eq("book_id", bookId);
-      setStatus(null);
-    } else {
-      await supabase.from("reading_status").upsert(
-        {
-          user_id: user.id,
-          book_id: bookId,
-          status: newStatus,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id,book_id" }
-      );
-      setStatus(newStatus);
+  function handleRateNow() {
+    setShowFinishedToast(false);
+    setShowNoteWidget(true);
+    // Scroll the star rating into view — it's in the InlineUserRating above
+    const ratingRow = document.querySelector("[data-rating-row]");
+    if (ratingRow) {
+      ratingRow.scrollIntoView({ behavior: "smooth", block: "center" });
     }
-    setSaving(false);
   }
 
   return (
     <div className="w-full">
-      <h3 className="text-xs font-mono text-muted uppercase tracking-wide mb-2">
-        Reading Status
-      </h3>
-      <div className="flex gap-1.5">
-        {STATUS_OPTIONS.map((opt) => (
-          <button
-            key={opt.value}
-            onClick={() => handleStatusChange(opt.value)}
-            disabled={saving}
-            className={`flex-1 text-xs font-mono px-2 py-2 rounded-md border transition-colors ${
-              status === opt.value
-                ? "bg-fire text-white border-fire"
-                : "bg-white text-muted border-border hover:border-fire/30"
-            } ${saving ? "opacity-50" : ""}`}
-          >
-            {opt.label}
-          </button>
-        ))}
-      </div>
+      <ReadingStatusButtons
+        bookId={bookId}
+        bookTitle={bookTitle}
+        onMarkedRead={handleMarkedRead}
+      />
+
+      {/* "Finished!" toast */}
+      {showFinishedToast && (
+        <div className="mt-3 p-3 bg-white border border-fire/20 rounded-lg flex items-center justify-between gap-3 animate-in fade-in slide-in-from-bottom-2">
+          <p className="text-sm font-body text-ink">
+            Finished <span className="font-semibold italic">{bookTitle}</span>!
+            How was it?
+          </p>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={handleRateNow}
+              className="text-xs font-mono px-3 py-1.5 bg-fire text-white rounded-md hover:bg-fire/90 transition-colors"
+            >
+              Rate Now
+            </button>
+            <button
+              onClick={() => {
+                setShowFinishedToast(false);
+                setShowNoteWidget(true);
+              }}
+              className="text-xs font-mono text-muted hover:text-ink transition-colors px-2 py-1.5"
+            >
+              Later
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Private note widget — shown when book is marked as Read */}
+      {user && showNoteWidget && hasReadStatus && (
+        <RatingWidget bookId={bookId} userId={user.id} />
+      )}
     </div>
   );
 }
-

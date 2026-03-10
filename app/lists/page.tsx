@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { createClient } from "@/lib/supabase/client";
@@ -22,6 +22,10 @@ export default function MyHotlistsPage() {
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [copied, setCopied] = useState<string | null>(null);
+  const renameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -57,50 +61,98 @@ export default function MyHotlistsPage() {
     if (!user || !newName.trim()) return;
     setCreating(true);
 
-    const supabase = createClient();
-    const shareSlug =
-      newName.trim().toLowerCase()
-        .replace(/[^a-z0-9\s-]/g, "")
-        .replace(/\s+/g, "-")
-        .slice(0, 30) + "-" + Math.random().toString(36).slice(2, 6);
+    try {
+      const supabase = createClient();
+      const shareSlug =
+        newName.trim().toLowerCase()
+          .replace(/[^a-z0-9\s-]/g, "")
+          .replace(/\s+/g, "-")
+          .slice(0, 30) + "-" + Math.random().toString(36).slice(2, 6);
 
-    const { data } = await supabase
-      .from("hotlists")
-      .insert({
-        user_id: user.id,
-        name: newName.trim(),
-        is_public: false,
-        share_slug: shareSlug,
-      })
-      .select("id, name, is_public, share_slug, updated_at")
-      .single();
+      const { data } = await supabase
+        .from("hotlists")
+        .insert({
+          user_id: user.id,
+          name: newName.trim(),
+          is_public: false,
+          share_slug: shareSlug,
+        })
+        .select("id, name, is_public, share_slug, updated_at")
+        .single();
 
-    if (data) {
-      setHotlists((prev) => [
-        {
-          id: data.id,
-          name: data.name,
-          isPublic: data.is_public,
-          shareSlug: data.share_slug,
-          updatedAt: data.updated_at,
-          bookCount: 0,
-        },
-        ...prev,
-      ]);
-      setNewName("");
-      setShowCreate(false);
+      if (data) {
+        setHotlists((prev) => [
+          {
+            id: data.id,
+            name: data.name,
+            isPublic: data.is_public,
+            shareSlug: data.share_slug,
+            updatedAt: data.updated_at,
+            bookCount: 0,
+          },
+          ...prev,
+        ]);
+        setNewName("");
+        setShowCreate(false);
+      }
+    } catch (err) {
+      console.error("[handleCreate] failed:", err);
+    } finally {
+      setCreating(false);
     }
-    setCreating(false);
   }
 
   async function handleDelete(id: string) {
     if (!confirm("Delete this hotlist? This can't be undone.")) return;
     setDeleting(id);
 
-    const supabase = createClient();
-    await supabase.from("hotlists").delete().eq("id", id);
-    setHotlists((prev) => prev.filter((h) => h.id !== id));
-    setDeleting(null);
+    try {
+      const supabase = createClient();
+      await supabase.from("hotlists").delete().eq("id", id);
+      setHotlists((prev) => prev.filter((h) => h.id !== id));
+    } catch (err) {
+      console.error("[handleDelete] failed:", err);
+    } finally {
+      setDeleting(null);
+    }
+  }
+
+  async function handleRename(id: string) {
+    if (!editName.trim()) {
+      setEditingId(null);
+      return;
+    }
+    try {
+      const supabase = createClient();
+      await supabase.from("hotlists").update({ name: editName.trim() }).eq("id", id);
+      setHotlists((prev) =>
+        prev.map((h) => (h.id === id ? { ...h, name: editName.trim() } : h))
+      );
+    } catch (err) {
+      console.error("[handleRename] failed:", err);
+    } finally {
+      setEditingId(null);
+    }
+  }
+
+  async function handleTogglePublic(id: string, currentlyPublic: boolean) {
+    try {
+      const supabase = createClient();
+      await supabase.from("hotlists").update({ is_public: !currentlyPublic }).eq("id", id);
+      setHotlists((prev) =>
+        prev.map((h) => (h.id === id ? { ...h, isPublic: !currentlyPublic } : h))
+      );
+    } catch (err) {
+      console.error("[handleTogglePublic] failed:", err);
+    }
+  }
+
+  function handleCopyLink(shareSlug: string | null, id: string) {
+    const slug = shareSlug ?? id;
+    const url = `${window.location.origin}/lists/${slug}`;
+    navigator.clipboard.writeText(url);
+    setCopied(id);
+    setTimeout(() => setCopied(null), 2000);
   }
 
   function timeAgo(dateStr: string): string {
@@ -194,37 +246,92 @@ export default function MyHotlistsPage() {
               key={hl.id}
               className="flex items-center justify-between px-4 py-3 bg-white border border-border rounded-lg hover:border-fire/20 transition-colors group"
             >
-              <Link
-                href={`/lists/${hl.shareSlug ?? hl.id}`}
-                className="flex-1 min-w-0"
-              >
-                <div className="flex items-center gap-3">
-                  <h3 className="font-display font-bold text-ink text-base truncate group-hover:text-fire transition-colors">
-                    {hl.name}
-                  </h3>
-                  <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${
-                    hl.isPublic
-                      ? "text-green-700 bg-green-50 border-green-200"
-                      : "text-muted bg-cream border-border"
-                  }`}>
-                    {hl.isPublic ? "Public" : "Private"}
-                  </span>
-                </div>
-                <p className="text-xs font-mono text-muted mt-0.5">
-                  {hl.bookCount} {hl.bookCount === 1 ? "book" : "books"} &middot; updated {timeAgo(hl.updatedAt)}
-                </p>
-              </Link>
-              <button
-                onClick={() => handleDelete(hl.id)}
-                disabled={deleting === hl.id}
-                className="ml-3 text-muted/30 hover:text-fire transition-colors p-1 opacity-0 group-hover:opacity-100"
-                title="Delete hotlist"
-              >
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <line x1="3" y1="3" x2="11" y2="11" />
-                  <line x1="11" y1="3" x2="3" y2="11" />
-                </svg>
-              </button>
+              <div className="flex-1 min-w-0">
+                {editingId === hl.id ? (
+                  <input
+                    ref={renameRef}
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleRename(hl.id);
+                      if (e.key === "Escape") setEditingId(null);
+                    }}
+                    onBlur={() => handleRename(hl.id)}
+                    className="font-display font-bold text-ink text-base w-full border-b border-fire/40 bg-transparent focus:outline-none px-0 py-0"
+                    autoFocus
+                  />
+                ) : (
+                  <Link href={`/lists/${hl.shareSlug ?? hl.id}`}>
+                    <div className="flex items-center gap-3">
+                      <h3 className="font-display font-bold text-ink text-base truncate group-hover:text-fire transition-colors">
+                        {hl.name}
+                      </h3>
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handleTogglePublic(hl.id, hl.isPublic);
+                        }}
+                        className={`text-[10px] font-mono px-2 py-0.5 rounded-full border transition-colors ${
+                          hl.isPublic
+                            ? "text-green-700 bg-green-50 border-green-200 hover:bg-green-100"
+                            : "text-muted bg-cream border-border hover:border-fire/30"
+                        }`}
+                        title={hl.isPublic ? "Click to make private" : "Click to make public"}
+                      >
+                        {hl.isPublic ? "Public" : "Private"}
+                      </button>
+                    </div>
+                    <p className="text-xs font-mono text-muted mt-0.5">
+                      {hl.bookCount} {hl.bookCount === 1 ? "book" : "books"} &middot; updated {timeAgo(hl.updatedAt)}
+                    </p>
+                  </Link>
+                )}
+              </div>
+              <div className="flex items-center gap-1 ml-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                {/* Rename */}
+                <button
+                  onClick={() => {
+                    setEditingId(hl.id);
+                    setEditName(hl.name);
+                  }}
+                  className="text-muted/40 hover:text-ink transition-colors p-1"
+                  title="Rename"
+                >
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M8.5 2.5l3 3M1.5 9.5l6-6 3 3-6 6H1.5v-3z" />
+                  </svg>
+                </button>
+                {/* Copy share link */}
+                <button
+                  onClick={() => handleCopyLink(hl.shareSlug, hl.id)}
+                  className="text-muted/40 hover:text-ink transition-colors p-1"
+                  title="Copy share link"
+                >
+                  {copied === hl.id ? (
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 7.5l3 3 5-6" />
+                    </svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="4.5" y="4.5" width="7" height="7" rx="1" />
+                      <path d="M9.5 4.5V3a1 1 0 00-1-1H3a1 1 0 00-1 1v5.5a1 1 0 001 1h1.5" />
+                    </svg>
+                  )}
+                </button>
+                {/* Delete */}
+                <button
+                  onClick={() => handleDelete(hl.id)}
+                  disabled={deleting === hl.id}
+                  className="text-muted/40 hover:text-fire transition-colors p-1"
+                  title="Delete hotlist"
+                >
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <line x1="3" y1="3" x2="11" y2="11" />
+                    <line x1="11" y1="3" x2="3" y2="11" />
+                  </svg>
+                </button>
+              </div>
             </div>
           ))}
         </div>

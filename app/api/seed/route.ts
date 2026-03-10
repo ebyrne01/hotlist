@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { searchBooks } from "@/lib/search";
 import { findBook } from "@/lib/books";
 
@@ -28,7 +28,16 @@ const SEED_TITLES = [
   "Pride and Prejudice Jane Austen",
 ];
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // Only allow in development, or with the service role key as a bearer token
+  const isDev = process.env.NODE_ENV === "development";
+  const authHeader = request.headers.get("authorization");
+  const isAuthorized = authHeader === `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`;
+
+  if (!isDev && !isAuthorized) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const results: { query: string; found: string | null }[] = [];
 
   for (const query of SEED_TITLES) {

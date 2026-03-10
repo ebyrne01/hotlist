@@ -1,22 +1,13 @@
-import { createClient } from "@supabase/supabase-js";
+import { getAdminClient } from "@/lib/supabase/admin";
 import type { Book, BookData, BookDetail, Rating, SpiceRating, Trope } from "@/lib/types";
 import { generateBookSlug } from "./goodreads-search";
+import { isJunkTitle } from "./romance-filter";
 
 /** Returns null if the URL is a known placeholder image */
 function cleanCoverUrl(url: string | null | undefined): string | null {
   if (!url) return null;
   if (url.includes("no-cover") || url.includes("nophoto")) return null;
   return url;
-}
-
-// Use the service role client for cache writes (bypasses RLS)
-// Disable Next.js fetch cache so we always get fresh data from Supabase
-function getAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { global: { fetch: (...args) => fetch(args[0], { ...args[1], cache: "no-store" }) } }
-  );
 }
 
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -138,7 +129,8 @@ export async function searchBooksInCache(query: string): Promise<BookDetail[]> {
     top.map((book) => hydrateBookDetail(supabase, book))
   );
 
-  return results;
+  // Filter out books without covers and junk titles
+  return results.filter((b) => b.coverUrl && !isJunkTitle(b.title));
 }
 
 // ── Write to cache ───────────────────────────────────
@@ -197,56 +189,15 @@ export async function saveGoodreadsBookToCache(bookData: BookData): Promise<Book
 }
 
 /**
- * Legacy save for books without Goodreads ID (e.g. from Google Books).
- * These get a placeholder goodreads_id until resolved.
+ * Save a book to cache. Requires a valid goodreads_id.
+ * Books from Google Books without a Goodreads match are discarded.
  */
 export async function saveBookToCache(bookData: BookData): Promise<Book | null> {
-  if (bookData.goodreadsId) {
-    return saveGoodreadsBookToCache(bookData);
+  if (!bookData.goodreadsId || bookData.goodreadsId.startsWith("unknown-")) {
+    console.warn("[cache] Discarding book without real goodreads_id:", bookData.title);
+    return null;
   }
-
-  const supabase = getAdminClient();
-
-  // Generate a placeholder goodreads_id from google_books_id or isbn
-  const placeholderId = `unknown-${bookData.googleBooksId ?? bookData.isbn13 ?? bookData.isbn ?? Date.now()}`;
-
-  const row = {
-    title: bookData.title,
-    author: bookData.author,
-    isbn: bookData.isbn ?? null,
-    isbn13: bookData.isbn13 ?? null,
-    google_books_id: bookData.googleBooksId ?? null,
-    cover_url: cleanCoverUrl(bookData.coverUrl),
-    page_count: bookData.pageCount ?? null,
-    published_year: bookData.publishedYear ?? null,
-    publisher: bookData.publisher ?? null,
-    description: bookData.description ?? null,
-    goodreads_id: placeholderId,
-    amazon_asin: bookData.amazonAsin ?? null,
-    romance_io_slug: bookData.romanceIoSlug ?? null,
-    romance_io_heat_label: bookData.romanceIoHeatLabel ?? null,
-    genres: bookData.genres ?? [],
-    metadata_source: "google_books" as const,
-    slug: generateBookSlug(bookData.title, placeholderId),
-    data_refreshed_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  };
-
-  // Upsert by google_books_id if present, otherwise isbn13, otherwise isbn
-  let conflictColumn = "goodreads_id";
-  if (row.google_books_id) conflictColumn = "google_books_id";
-  else if (row.isbn13) conflictColumn = "isbn13";
-  else if (row.isbn) conflictColumn = "isbn";
-
-  const { data, error } = await supabase
-    .from("books")
-    .upsert(row, { onConflict: conflictColumn })
-    .select()
-    .single();
-
-  if (error || !data) return null;
-
-  return mapDbBook(data);
+  return saveGoodreadsBookToCache(bookData);
 }
 
 export async function saveSynopsis(bookId: string, synopsis: string): Promise<void> {

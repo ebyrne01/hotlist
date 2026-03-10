@@ -1,16 +1,8 @@
-import { createClient } from "@supabase/supabase-js";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { scrapeGoodreadsRating, type GoodreadsData } from "./goodreads";
 import { scrapeAmazonRating, type AmazonData } from "./amazon";
 import { inferSpiceFromGoodreadsShelves } from "./goodreads-spice";
 import { getRomanceIoSpice } from "./romance-io-search";
-
-function getAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { global: { fetch: (...args) => fetch(args[0], { ...args[1], cache: "no-store" }) } }
-  );
-}
 
 const STALE_MS = 24 * 60 * 60 * 1000; // 24 hours
 

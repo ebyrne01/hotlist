@@ -5,19 +5,11 @@
  * deduplicates, filters to romance, and caches in Supabase.
  */
 
-import { createClient } from "@supabase/supabase-js";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { saveBookToCache, hydrateBookDetail } from "./cache";
 import { scheduleEnrichment } from "@/lib/scraping";
 import { isJunkTitle, isKnownRomanceAuthor, isRomanceByGenres } from "./romance-filter";
 import type { BookDetail, BookData } from "@/lib/types";
-
-function getAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { global: { fetch: (...args) => fetch(args[0], { ...args[1], cache: "no-store" }) } }
-  );
-}
 
 const CACHE_KEY = "romance_new_releases";
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -212,5 +204,6 @@ async function hydrateFromIds(
   const orderMap = new Map(bookIds.map((id, i) => [id, i]));
   results.sort((a, b) => (orderMap.get(a.id) ?? 99) - (orderMap.get(b.id) ?? 99));
 
-  return results;
+  // New releases just need a cover — they're too new for many Goodreads ratings
+  return results.filter((book) => !!book.coverUrl);
 }

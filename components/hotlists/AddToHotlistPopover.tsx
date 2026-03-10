@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useSignInModal } from "@/lib/auth/useSignInModal";
@@ -15,6 +16,7 @@ interface AddToHotlistPopoverProps {
 interface HotlistItem {
   id: string;
   name: string;
+  shareSlug: string;
   bookCount: number;
 }
 
@@ -35,9 +37,23 @@ export default function AddToHotlistPopover({
   const popoverRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Close on click outside
+  // Detect mobile (<=640px, matches Tailwind sm breakpoint)
+  const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
-    if (!open) return;
+    const mq = window.matchMedia("(max-width: 640px)");
+    setIsMobile(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+
+  // Close on click outside (desktop) or on backdrop (mobile)
+  const handleBackdropClick = useCallback((e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) setOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (!open || isMobile) return;
     function handleClick(e: MouseEvent) {
       if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
         setOpen(false);
@@ -45,7 +61,15 @@ export default function AddToHotlistPopover({
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
-  }, [open]);
+  }, [open, isMobile]);
+
+  // Prevent body scroll when mobile sheet is open
+  useEffect(() => {
+    if (open && isMobile) {
+      document.body.style.overflow = "hidden";
+      return () => { document.body.style.overflow = ""; };
+    }
+  }, [open, isMobile]);
 
   // Focus input when showing
   useEffect(() => {
@@ -68,7 +92,7 @@ export default function AddToHotlistPopover({
     // Fetch user's hotlists with book counts
     const { data: lists } = await supabase
       .from("hotlists")
-      .select("id, name, hotlist_books(count)")
+      .select("id, name, share_slug, hotlist_books(count)")
       .eq("user_id", user.id)
       .order("updated_at", { ascending: false });
 
@@ -77,6 +101,7 @@ export default function AddToHotlistPopover({
       return {
         id: row.id as string,
         name: row.name as string,
+        shareSlug: row.share_slug as string,
         bookCount: countData?.[0]?.count ?? 0,
       };
     });
@@ -134,50 +159,54 @@ export default function AddToHotlistPopover({
   }
 
   async function toggleBook(hotlistId: string) {
-    const supabase = createClient();
-    const isAdded = addedTo.has(hotlistId);
+    try {
+      const supabase = createClient();
+      const isAdded = addedTo.has(hotlistId);
 
-    if (isAdded) {
-      // Remove
-      await supabase
-        .from("hotlist_books")
-        .delete()
-        .eq("hotlist_id", hotlistId)
-        .eq("book_id", bookId);
+      if (isAdded) {
+        // Remove
+        await supabase
+          .from("hotlist_books")
+          .delete()
+          .eq("hotlist_id", hotlistId)
+          .eq("book_id", bookId);
 
-      setAddedTo((prev) => {
-        const next = new Set(prev);
-        next.delete(hotlistId);
-        return next;
-      });
-      setHotlists((prev) =>
-        prev.map((h) => h.id === hotlistId ? { ...h, bookCount: h.bookCount - 1 } : h)
-      );
-    } else {
-      // Add
-      const { count } = await supabase
-        .from("hotlist_books")
-        .select("id", { count: "exact", head: true })
-        .eq("hotlist_id", hotlistId);
+        setAddedTo((prev) => {
+          const next = new Set(prev);
+          next.delete(hotlistId);
+          return next;
+        });
+        setHotlists((prev) =>
+          prev.map((h) => h.id === hotlistId ? { ...h, bookCount: h.bookCount - 1 } : h)
+        );
+      } else {
+        // Add
+        const { count } = await supabase
+          .from("hotlist_books")
+          .select("id", { count: "exact", head: true })
+          .eq("hotlist_id", hotlistId);
 
-      await supabase.from("hotlist_books").insert({
-        hotlist_id: hotlistId,
-        book_id: bookId,
-        position: (count ?? 0) + 1,
-      });
+        await supabase.from("hotlist_books").insert({
+          hotlist_id: hotlistId,
+          book_id: bookId,
+          position: (count ?? 0) + 1,
+        });
 
-      await supabase
-        .from("hotlists")
-        .update({ updated_at: new Date().toISOString() })
-        .eq("id", hotlistId);
+        await supabase
+          .from("hotlists")
+          .update({ updated_at: new Date().toISOString() })
+          .eq("id", hotlistId);
 
-      setAddedTo((prev) => new Set([...Array.from(prev), hotlistId]));
-      setHotlists((prev) =>
-        prev.map((h) => h.id === hotlistId ? { ...h, bookCount: h.bookCount + 1 } : h)
-      );
+        setAddedTo((prev) => new Set([...Array.from(prev), hotlistId]));
+        setHotlists((prev) =>
+          prev.map((h) => h.id === hotlistId ? { ...h, bookCount: h.bookCount + 1 } : h)
+        );
 
-      // Trigger background enrichment for this book
-      triggerEnrichmentIfNeeded();
+        // Trigger background enrichment for this book
+        triggerEnrichmentIfNeeded();
+      }
+    } catch (err) {
+      console.error("[toggleBook] failed:", err);
     }
   }
 
@@ -185,40 +214,45 @@ export default function AddToHotlistPopover({
     if (!user || !newName.trim()) return;
     setCreating(true);
 
-    const supabase = createClient();
-    const shareSlug = newName.trim().toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, "")
-      .replace(/\s+/g, "-")
-      .slice(0, 30) + "-" + Math.random().toString(36).slice(2, 6);
+    try {
+      const supabase = createClient();
+      const shareSlug = newName.trim().toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, "")
+        .replace(/\s+/g, "-")
+        .slice(0, 30) + "-" + Math.random().toString(36).slice(2, 6);
 
-    const { data: newList } = await supabase
-      .from("hotlists")
-      .insert({
-        user_id: user.id,
-        name: newName.trim(),
-        is_public: false,
-        share_slug: shareSlug,
-      })
-      .select("id, name")
-      .single();
+      const { data: newList } = await supabase
+        .from("hotlists")
+        .insert({
+          user_id: user.id,
+          name: newName.trim(),
+          is_public: false,
+          share_slug: shareSlug,
+        })
+        .select("id, name")
+        .single();
 
-    if (newList) {
-      // Add book to the new list immediately
-      await supabase.from("hotlist_books").insert({
-        hotlist_id: newList.id,
-        book_id: bookId,
-        position: 1,
-      });
+      if (newList) {
+        // Add book to the new list immediately
+        await supabase.from("hotlist_books").insert({
+          hotlist_id: newList.id,
+          book_id: bookId,
+          position: 1,
+        });
 
-      setHotlists((prev) => [{ id: newList.id, name: newList.name, bookCount: 1 }, ...prev]);
-      setAddedTo((prev) => new Set([...Array.from(prev), newList.id]));
-      setNewName("");
-      setShowNewInput(false);
+        setHotlists((prev) => [{ id: newList.id, name: newList.name, shareSlug: shareSlug, bookCount: 1 }, ...prev]);
+        setAddedTo((prev) => new Set([...Array.from(prev), newList.id]));
+        setNewName("");
+        setShowNewInput(false);
 
-      // Trigger background enrichment for this book
-      triggerEnrichmentIfNeeded();
+        // Trigger background enrichment for this book
+        triggerEnrichmentIfNeeded();
+      }
+    } catch (err) {
+      console.error("[handleCreate] failed:", err);
+    } finally {
+      setCreating(false);
     }
-    setCreating(false);
   }
 
   const triggerButton = variant === "icon" ? (
@@ -241,87 +275,130 @@ export default function AddToHotlistPopover({
     </button>
   );
 
+  // Shared panel content (used in both desktop dropdown and mobile sheet)
+  const panelContent = (
+    <>
+      <div className="p-3 border-b border-border flex items-center justify-between">
+        <p className="text-xs font-mono text-muted uppercase tracking-wide">
+          Add to hotlist
+        </p>
+        {isMobile && (
+          <button onClick={() => setOpen(false)} className="text-muted hover:text-ink p-1">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="4" y1="4" x2="12" y2="12" />
+              <line x1="12" y1="4" x2="4" y2="12" />
+            </svg>
+          </button>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="py-6 flex justify-center">
+          <div className="w-5 h-5 border-2 border-fire border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : (
+        <>
+          <div className="max-h-48 sm:max-h-48 overflow-y-auto">
+            {hotlists.length === 0 && !showNewInput && (
+              <p className="px-3 py-4 text-sm font-body text-muted/60 text-center">
+                No hotlists yet. Create one below.
+              </p>
+            )}
+            {hotlists.map((hl) => {
+              const isIn = addedTo.has(hl.id);
+              return (
+                <div key={hl.id} className="flex items-center px-3 py-3 sm:py-2.5 transition-colors hover:bg-cream active:bg-cream">
+                  <button
+                    onClick={() => toggleBook(hl.id)}
+                    className="flex-1 text-left flex items-center gap-2 min-w-0"
+                  >
+                    <span className="text-sm font-body text-ink truncate">{hl.name}</span>
+                    <span className="text-[10px] font-mono text-muted shrink-0">
+                      {hl.bookCount} {hl.bookCount === 1 ? "book" : "books"}
+                    </span>
+                  </button>
+                  <div className="flex items-center gap-2 shrink-0 ml-2">
+                    {isIn && (
+                      <>
+                        <a
+                          href={`/lists/${hl.shareSlug}`}
+                          className="text-[10px] font-mono text-fire/70 hover:text-fire transition-colors"
+                          onClick={() => setOpen(false)}
+                        >
+                          View
+                        </a>
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#d4430e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 8 7 12 13 4" />
+                        </svg>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* New hotlist section */}
+          <div className="p-3 border-t border-border">
+            {showNewInput ? (
+              <div className="flex gap-2">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="List name..."
+                  className="flex-1 text-sm font-body border border-border rounded-md px-2 py-1.5 focus:outline-none focus:border-fire/50"
+                  onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+                />
+                <button
+                  onClick={handleCreate}
+                  disabled={creating || !newName.trim()}
+                  className="text-xs font-mono text-fire hover:text-fire/80 px-2 disabled:opacity-40"
+                >
+                  {creating ? "..." : "Create"}
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowNewInput(true)}
+                className="w-full text-left text-sm font-mono text-fire hover:text-fire/80 transition-colors py-1"
+              >
+                + New Hotlist
+              </button>
+            )}
+          </div>
+        </>
+      )}
+    </>
+  );
+
   return (
     <div className="relative" ref={popoverRef}>
       {triggerButton}
 
-      {open && (
+      {/* Desktop: dropdown popover */}
+      {open && !isMobile && (
         <div className="absolute top-full left-0 mt-2 w-72 bg-white rounded-lg border border-border shadow-lg z-40 overflow-hidden">
-          <div className="p-3 border-b border-border">
-            <p className="text-xs font-mono text-muted uppercase tracking-wide">
-              Add to hotlist
-            </p>
-          </div>
-
-          {loading ? (
-            <div className="py-6 flex justify-center">
-              <div className="w-5 h-5 border-2 border-fire border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : (
-            <>
-              <div className="max-h-48 overflow-y-auto">
-                {hotlists.length === 0 && !showNewInput && (
-                  <p className="px-3 py-4 text-sm font-body text-muted/60 text-center">
-                    No hotlists yet. Create one below.
-                  </p>
-                )}
-                {hotlists.map((hl) => {
-                  const isIn = addedTo.has(hl.id);
-                  return (
-                    <button
-                      key={hl.id}
-                      onClick={() => toggleBook(hl.id)}
-                      className="w-full text-left px-3 py-2.5 flex items-center justify-between transition-colors hover:bg-cream"
-                    >
-                      <div>
-                        <span className="text-sm font-body text-ink">{hl.name}</span>
-                        <span className="text-[10px] font-mono text-muted ml-2">
-                          {hl.bookCount} {hl.bookCount === 1 ? "book" : "books"}
-                        </span>
-                      </div>
-                      {isIn && (
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#d4430e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="3 8 7 12 13 4" />
-                        </svg>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* New hotlist section */}
-              <div className="p-3 border-t border-border">
-                {showNewInput ? (
-                  <div className="flex gap-2">
-                    <input
-                      ref={inputRef}
-                      type="text"
-                      value={newName}
-                      onChange={(e) => setNewName(e.target.value)}
-                      placeholder="List name..."
-                      className="flex-1 text-sm font-body border border-border rounded-md px-2 py-1.5 focus:outline-none focus:border-fire/50"
-                      onKeyDown={(e) => e.key === "Enter" && handleCreate()}
-                    />
-                    <button
-                      onClick={handleCreate}
-                      disabled={creating || !newName.trim()}
-                      className="text-xs font-mono text-fire hover:text-fire/80 px-2 disabled:opacity-40"
-                    >
-                      {creating ? "..." : "Create"}
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setShowNewInput(true)}
-                    className="w-full text-left text-sm font-mono text-fire hover:text-fire/80 transition-colors"
-                  >
-                    + New Hotlist
-                  </button>
-                )}
-              </div>
-            </>
-          )}
+          {panelContent}
         </div>
+      )}
+
+      {/* Mobile: bottom sheet via portal */}
+      {open && isMobile && createPortal(
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
+          onClick={handleBackdropClick}
+        >
+          <div className="w-full max-w-lg bg-white rounded-t-2xl shadow-xl overflow-hidden animate-slide-up pb-safe">
+            {/* Drag handle */}
+            <div className="flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 rounded-full bg-border" />
+            </div>
+            {panelContent}
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

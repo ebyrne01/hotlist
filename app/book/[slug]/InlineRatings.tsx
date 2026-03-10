@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import { Star, Check } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { useSignInModal } from "@/lib/auth/useSignInModal";
 import { clsx } from "clsx";
 
 // ── Inline Star Rating Badge ────────────────────────
@@ -17,7 +17,7 @@ export function InlineUserRating({ bookId }: { bookId: string }) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
-  const router = useRouter();
+  const { openSignIn } = useSignInModal();
   const supabase = createClient();
 
   useEffect(() => {
@@ -44,45 +44,52 @@ export function InlineUserRating({ bookId }: { bookId: string }) {
     async (value: number) => {
       if (!user || saving) return;
       setSaving(true);
+      const prevStarRating = starRating;
       // Optimistic update
       setStarRating(value);
       setEditing(false);
 
-      await supabase.from("user_ratings").upsert(
-        {
-          user_id: user.id,
-          book_id: bookId,
-          star_rating: value,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id,book_id" }
-      );
-
-      // Auto-set reading status to "read" if none set
-      const { data: currentStatus } = await supabase
-        .from("reading_status")
-        .select("status")
-        .eq("user_id", user.id)
-        .eq("book_id", bookId)
-        .single();
-
-      if (!currentStatus) {
-        await supabase.from("reading_status").upsert(
+      try {
+        await supabase.from("user_ratings").upsert(
           {
             user_id: user.id,
             book_id: bookId,
-            status: "read",
+            star_rating: value,
             updated_at: new Date().toISOString(),
           },
           { onConflict: "user_id,book_id" }
         );
-      }
 
-      setSaving(false);
-      setJustSaved(true);
-      setTimeout(() => setJustSaved(false), 1500);
+        // Auto-set reading status to "read" if none set
+        const { data: currentStatus } = await supabase
+          .from("reading_status")
+          .select("status")
+          .eq("user_id", user.id)
+          .eq("book_id", bookId)
+          .single();
+
+        if (!currentStatus) {
+          await supabase.from("reading_status").upsert(
+            {
+              user_id: user.id,
+              book_id: bookId,
+              status: "read",
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "user_id,book_id" }
+          );
+        }
+
+        setJustSaved(true);
+        setTimeout(() => setJustSaved(false), 1500);
+      } catch (err) {
+        console.error("[saveRating] failed:", err);
+        setStarRating(prevStarRating);
+      } finally {
+        setSaving(false);
+      }
     },
-    [user, saving, bookId, supabase]
+    [user, saving, starRating, bookId, supabase]
   );
 
   if (!authChecked) return null;
@@ -92,7 +99,7 @@ export function InlineUserRating({ bookId }: { bookId: string }) {
     return (
       <div className="flex flex-col items-center gap-0.5">
         <button
-          onClick={() => router.push("/?login=true")}
+          onClick={() => openSignIn()}
           className="text-xl font-display font-bold text-fire hover:text-fire/80 transition-colors"
         >
           + Rate
@@ -101,7 +108,7 @@ export function InlineUserRating({ bookId }: { bookId: string }) {
           Your Rating
         </span>
         <button
-          onClick={() => router.push("/?login=true")}
+          onClick={() => openSignIn()}
           className="text-[9px] font-mono text-fire/60 hover:text-fire transition-colors"
         >
           Sign in &rarr;

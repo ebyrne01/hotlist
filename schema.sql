@@ -30,6 +30,7 @@ create table books (
   amazon_asin     text unique,
   romance_io_slug text unique,
   romance_io_heat_label text,   -- e.g. 'Explicit open door', 'Behind closed doors'
+  quality_score   integer default 0, -- computed quality score (0-7) for filtering
   created_at      timestamptz default now(),
   updated_at      timestamptz default now(),
   data_refreshed_at timestamptz  -- when external data was last fetched
@@ -225,6 +226,8 @@ create policy "Service role can write book tropes" on book_tropes for all using 
 alter table profiles enable row level security;
 create policy "Profiles are public" on profiles for select using (true);
 create policy "Users can update own profile" on profiles for update using (auth.uid() = id);
+create policy "Users can insert own profile" on profiles for insert with check (auth.uid() = id);
+create policy "Users can delete own profile" on profiles for delete using (auth.uid() = id);
 
 -- Reading status: owner only
 alter table reading_status enable row level security;
@@ -258,6 +261,13 @@ create policy "Owner manages hotlist books" on hotlist_books for all
       where h.id = hotlist_id and h.user_id = auth.uid()
     )
   );
+
+-- Pro waitlist: owner only
+alter table pro_waitlist enable row level security;
+create policy "Users see own waitlist entry" on pro_waitlist for select using (auth.uid() = user_id);
+create policy "Authenticated users can join waitlist" on pro_waitlist for insert with check (auth.uid() = user_id);
+create policy "Users update own waitlist entry" on pro_waitlist for update using (auth.uid() = user_id);
+create policy "Users delete own waitlist entry" on pro_waitlist for delete using (auth.uid() = user_id);
 
 alter table homepage_cache enable row level security;
 create policy "Homepage cache is public read" on homepage_cache for select using (true);
