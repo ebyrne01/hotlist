@@ -8,7 +8,7 @@
 import { getAdminClient } from "@/lib/supabase/admin";
 import { getVideoDownloadUrl, detectPlatform } from "./downloader";
 import { transcribeAudio } from "./transcription";
-import { extractBooksFromTranscript } from "./book-extractor";
+import { extractBooksFromTranscript, correctExtractedBooks } from "./book-extractor";
 import { resolveExtractedBooks, type ResolvedBook } from "./book-resolver";
 
 export type GrabStatus =
@@ -170,9 +170,12 @@ export async function grabBooksFromVideo(
     };
   }
 
+  // Step 5b: Correct likely transcription errors in titles/authors
+  const corrected = await correctExtractedBooks(extracted);
+
   // Step 6: Resolve to our database
   onStatus?.("resolving");
-  const resolved = await resolveExtractedBooks(extracted);
+  const resolved = await resolveExtractedBooks(corrected);
 
   const result: GrabResultSuccess = {
     success: true,
