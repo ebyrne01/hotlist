@@ -90,17 +90,27 @@ function scoreBook(book: BookRow, ratingCount: number): number {
 async function main() {
   console.log("[merge] Starting duplicate book merge...\n");
 
-  // ── Step 1: Delete junk titles ──
-  const { data: allBooks, error: fetchError } = await supabase
-    .from("books")
-    .select("id, title, author, goodreads_id, cover_url, ai_synopsis, description, isbn, isbn13, amazon_asin, romance_io_slug, romance_io_heat_label");
+  // ── Step 1: Fetch ALL books (paginate past Supabase 1000-row default limit) ──
+  const allBooks: BookRow[] = [];
+  const PAGE_SIZE = 1000;
+  let offset = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from("books")
+      .select("id, title, author, goodreads_id, cover_url, ai_synopsis, description, isbn, isbn13, amazon_asin, romance_io_slug, romance_io_heat_label")
+      .range(offset, offset + PAGE_SIZE - 1);
 
-  if (fetchError || !allBooks) {
-    console.error("[merge] Failed to fetch books:", fetchError?.message);
-    process.exit(1);
+    if (error) {
+      console.error("[merge] Failed to fetch books:", error.message);
+      process.exit(1);
+    }
+    if (!data || data.length === 0) break;
+    allBooks.push(...(data as BookRow[]));
+    if (data.length < PAGE_SIZE) break;
+    offset += PAGE_SIZE;
   }
 
-  console.log(`[merge] Loaded ${allBooks.length} books from database`);
+  console.log(`[merge] Loaded ${allBooks.length} books from database (${Math.ceil(allBooks.length / PAGE_SIZE)} pages)`);
 
   // Delete junk titles
   const junkBooks = allBooks.filter((b) => isJunkTitle(b.title));
