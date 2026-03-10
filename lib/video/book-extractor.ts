@@ -15,12 +15,32 @@ export interface ExtractedBook {
   confidence: "high" | "medium" | "low";
 }
 
-const SYSTEM_PROMPT = `You are a book recommendation extractor. Given a transcript from a BookTok or BookStagram video, identify every book that is mentioned, recommended, reviewed, or discussed. For each book extract:
-- title (as clearly as you can determine from context)
-- author (if mentioned)
-- the creator's sentiment: "loved" | "liked" | "mixed" | "disliked" | "neutral"
-- a direct quote or close paraphrase of what the creator said about this book (max 2 sentences)
-- confidence: "high" (clearly named) | "medium" (probably this book) | "low" (might be this book)
+const SYSTEM_PROMPT = `You are a book recommendation extractor for BookTok/BookStagram videos. Given a transcript, identify books the creator is RECOMMENDING, REVIEWING, or DISCUSSING as a main topic.
+
+EXTRACT:
+- Books the creator recommends, reviews, rates, or discusses at length
+- Books in "books I read this month" or "book haul" style lists
+- Books the creator says they loved, hated, or have opinions about
+
+DO NOT EXTRACT:
+- Books mentioned only as brief comparisons ("if you liked X", "similar to X", "giving X vibes")
+- Planners, journals, workbooks, calendars, or non-book products
+- Podcast names, movie/TV titles, or song names
+- Anything that sounds like an ad, sponsor, or product placement
+- Items with product numbers, model numbers, or prices (e.g., "(119) Elite Planner")
+- Stationery, bookmarks, book accessories, or merchandise
+
+For each book extract:
+- title: The book title ONLY — do not include the author name in the title field
+- author: Author name if mentioned (null if not mentioned). Extract separately from title.
+- sentiment: "loved" | "liked" | "mixed" | "disliked" | "neutral"
+- creatorQuote: A direct quote or close paraphrase of what the creator said about this book (max 2 sentences). Only include quotes about THIS specific book.
+- confidence: "high" (creator clearly names and discusses this book) | "medium" (probably this book but title unclear) | "low" (brief mention, might be wrong)
+
+Mark as "low" confidence if:
+- The book is only mentioned as a comparison to another book
+- The title is unclear or you're guessing based on context
+- The mention is very brief (just a name drop with no opinion)
 
 Return ONLY a JSON array. No preamble, no explanation.
 Example:
@@ -34,8 +54,61 @@ Example:
   }
 ]
 
-If no books are mentioned, return an empty array [].
-Do not include movies, TV shows, or non-book media.`;
+If no books are being recommended or discussed, return an empty array [].`;
+
+/**
+ * Post-extraction validation.
+ * Catches obvious non-books that the model missed, and cleans up formatting.
+ */
+function validateAndClean(books: ExtractedBook[]): ExtractedBook[] {
+  return books
+    .map((book) => {
+      // Clean title: remove leading numbers in parens, trim
+      let title = book.title
+        .replace(/^\(\d+\)\s*/, "")     // Remove "(119) " prefixes
+        .replace(/^\d+\.\s*/, "")       // Remove "1. " numbering
+        .replace(/\s*[-–—]\s*$/, "")    // Remove trailing dashes
+        .trim();
+
+      let author = book.author;
+
+      // If title contains " - " or " by ", the author might be embedded
+      const dashSplit = title.match(/^(.+?)\s+[-–—]\s+(.+)$/);
+      if (dashSplit && !author) {
+        title = dashSplit[1].trim();
+        author = dashSplit[2].trim();
+      }
+      const bySplit = title.match(/^(.+?)\s+by\s+(.+)$/i);
+      if (bySplit && !author) {
+        title = bySplit[1].trim();
+        author = bySplit[2].trim();
+      }
+
+      return { ...book, title, author };
+    })
+    .filter((book) => {
+      const lower = book.title.toLowerCase();
+
+      // Reject non-book items
+      if (/\b(planner|journal|workbook|calendar|diary|notebook|bookmark|candle|merch)\b/i.test(book.title)) {
+        return false;
+      }
+
+      // Reject items that are clearly not titles (too short, all numbers, etc.)
+      if (book.title.length < 2) return false;
+      if (/^\d+$/.test(book.title)) return false;
+
+      // Reject if title looks like a product listing
+      if (/^\(?\d+\)?\s/.test(book.title)) return false;
+
+      // Reject common non-book media
+      if (/\b(podcast|episode|season|movie|film|album|song|playlist)\b/i.test(lower)) {
+        return false;
+      }
+
+      return true;
+    });
+}
 
 /**
  * Extract book mentions from a transcript using Claude Haiku.
@@ -83,8 +156,9 @@ export async function extractBooksFromTranscript(
       return [];
     }
 
-    // Filter out low-confidence results
-    return parsed.filter((book) => book.confidence !== "low");
+    // Validate, clean, and filter out low-confidence results
+    const validated = validateAndClean(parsed);
+    return validated.filter((book) => book.confidence !== "low");
   } catch (err) {
     console.error("[book-extractor] Failed:", err);
     return [];
