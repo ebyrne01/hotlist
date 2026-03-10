@@ -7,6 +7,12 @@ import { useRouter } from "next/navigation";
 import { clsx } from "clsx";
 import BookCover from "@/components/ui/BookCover";
 
+/** Detect if a string looks like a video URL (TikTok, Instagram, YouTube, etc.) */
+function isVideoUrl(text: string): boolean {
+  const trimmed = text.trim();
+  return /^https?:\/\/.*(tiktok\.com|instagram\.com|youtube\.com|youtu\.be|reels|shorts)/i.test(trimmed);
+}
+
 // API search result shape (lean — not the full BookDetail)
 export interface SearchResult {
   id: string;
@@ -108,9 +114,13 @@ export default function SearchBar({ variant = "navbar", className, onSelectBook 
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
-      if (query.trim()) {
-        setIsOpen(false);
-        router.push(`/search?q=${encodeURIComponent(query.trim())}`);
+      const trimmed = query.trim();
+      if (!trimmed) return;
+      setIsOpen(false);
+      if (isVideoUrl(trimmed)) {
+        router.push(`/booktok?url=${encodeURIComponent(trimmed)}`);
+      } else {
+        router.push(`/search?q=${encodeURIComponent(trimmed)}`);
       }
     },
     [query, router]
@@ -152,9 +162,16 @@ export default function SearchBar({ variant = "navbar", className, onSelectBook 
           <input
             ref={inputRef}
             type="text"
-            placeholder="Search books, authors, tropes..."
+            placeholder="Search books, authors, tropes... or paste a video link"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              setQuery(val);
+              if (isVideoUrl(val)) {
+                router.push(`/booktok?url=${encodeURIComponent(val.trim())}`);
+                return;
+              }
+            }}
             onFocus={() => (results.length > 0 || noResults) && setIsOpen(true)}
             onKeyDown={handleKeyDown}
             className={clsx(
@@ -203,13 +220,22 @@ export default function SearchBar({ variant = "navbar", className, onSelectBook 
                 <p className="text-sm font-body text-muted">
                   No results for &ldquo;{query}&rdquo;
                 </p>
-                <a
-                  href="/tropes"
-                  className="text-xs font-mono text-fire hover:underline mt-1 inline-block"
-                  onClick={() => setIsOpen(false)}
-                >
-                  Try browsing by trope instead &rarr;
-                </a>
+                <div className="flex flex-col gap-1 mt-1">
+                  <a
+                    href="/tropes"
+                    className="text-xs font-mono text-fire hover:underline inline-block"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    Browse by trope instead &rarr;
+                  </a>
+                  <a
+                    href="/booktok"
+                    className="text-xs font-mono text-fire hover:underline inline-block"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    📹 Or paste a BookTok link &rarr;
+                  </a>
+                </div>
               </div>
             )}
 

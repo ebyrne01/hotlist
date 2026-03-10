@@ -526,19 +526,19 @@ export default async function BookPage({ params }: PageProps) {
         )}
       </div>
 
-        {/* ── Grab from video CTA ── */}
+        {/* ── BookTok CTA ── */}
         <section className="mt-8 pt-6 border-t border-border">
           <div className="flex items-center gap-3">
             <span className="text-lg">📹</span>
             <div>
               <p className="text-sm font-body text-ink font-medium">
-                Seen this book on BookTok?
+                Saw this on BookTok?
               </p>
               <Link
-                href="/grab"
+                href="/booktok"
                 className="text-xs font-mono text-fire hover:text-fire/80 transition-colors"
               >
-                Grab books from that video &rarr;
+                Paste that video link and find every book &rarr;
               </Link>
             </div>
           </div>

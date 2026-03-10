@@ -105,7 +105,7 @@ See `schema.sql` for full schema. Key tables:
 - `/components` — React components
 - `/components/ui` — base UI primitives
 
-## Grab from Video feature
+## BookTok feature (formerly "Grab from Video")
 - Video download: RapidAPI (third-party TikTok/Instagram/YouTube downloader)
 - Transcription: OpenAI Whisper API (model: whisper-1) — NOT Claude
 - **Vision extraction: Claude Haiku (claude-haiku-4-5-20251001) — reads book covers and on-screen text from video thumbnail**
@@ -114,10 +114,11 @@ See `schema.sql` for full schema. Key tables:
 - Resolution: Fuzzy matching via PostgreSQL trigram search + Goodreads canonical lookup
 - Cache: `video_grabs` Supabase table — never process the same URL twice
 - Files: `/lib/video/` (downloader, transcription, vision-extractor, book-extractor, book-resolver, index)
-- UI: `/app/grab/page.tsx`
+- UI: `/app/booktok/page.tsx` (old `/app/grab/page.tsx` redirects here)
 - API: `/app/api/grab/route.ts` (streaming)
+- URL detection: SearchBar auto-detects video URLs and redirects to `/booktok?url=...`
 
-### Grab pipeline (in order):
+### BookTok pipeline (in order):
 1. Validate URL + check cache
 2. Download video/audio via RapidAPI
 3. Transcribe audio via Whisper (parallel with step 4)

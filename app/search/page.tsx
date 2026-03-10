@@ -36,6 +36,12 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           <p className="text-sm font-body text-muted/60 mt-2">
             Try a different title or author
           </p>
+          <a
+            href="/booktok"
+            className="inline-flex items-center gap-2 mt-4 text-sm font-mono text-fire hover:text-fire/80 transition-colors"
+          >
+            📹 Or paste a BookTok link to find books from a video &rarr;
+          </a>
         </div>
       )}
 

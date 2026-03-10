@@ -49,10 +49,10 @@ export default function Navbar() {
         {/* Desktop nav links */}
         <div className="hidden sm:flex items-center gap-4 ml-auto">
           <Link
-            href="/grab"
-            className="text-xs font-mono text-muted hover:text-ink transition-colors"
+            href="/booktok"
+            className="text-xs font-mono text-fire/80 font-medium hover:text-fire transition-colors"
           >
-            Grab
+            📹 BookTok
           </Link>
           {user && (
             <>
@@ -164,11 +164,11 @@ export default function Navbar() {
           <SearchBar variant="navbar" />
           <div className="flex flex-col gap-2">
             <Link
-              href="/grab"
-              className="text-sm font-mono text-muted hover:text-ink transition-colors"
+              href="/booktok"
+              className="text-sm font-mono text-fire/80 font-medium hover:text-fire transition-colors"
               onClick={() => setMenuOpen(false)}
             >
-              Grab from Video
+              📹 BookTok
             </Link>
             {user ? (
               <>

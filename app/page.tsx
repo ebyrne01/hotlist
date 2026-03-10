@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { getAdminClient } from "@/lib/supabase/admin";
 import HeroSection from "@/components/home/HeroSection";
+import BookTokBanner from "@/components/home/BookTokBanner";
 import TropeGrid from "@/components/home/TropeGrid";
 import BookRow from "@/components/books/BookRow";
 import { getNYTBestsellerRomance } from "@/lib/books/nyt-lists";
@@ -197,6 +198,8 @@ export default async function Home() {
     <>
       <HeroSection />
 
+      <BookTokBanner />
+
       <div className="max-w-6xl mx-auto px-4">
         {/* What's Hot — NYT Bestsellers */}
         {hotBooks.length > 0 && (
@@ -274,8 +277,8 @@ export default async function Home() {
               <div className="flex gap-3">
                 <span className="text-xl shrink-0">📹</span>
                 <p className="text-sm font-body text-muted">
-                  <strong className="text-ink">Grab from BookTok.</strong> Paste a TikTok or Instagram URL and we&apos;ll extract every book recommendation automatically.{" "}
-                  <a href="/grab" className="text-fire hover:text-fire/80 font-mono text-xs transition-colors">
+                  <strong className="text-ink">BookTok {"\u2192"} Hotlist.</strong> Paste a TikTok, Reels, or YouTube link and we&apos;ll pull every book rec automatically.{" "}
+                  <a href="/booktok" className="text-fire hover:text-fire/80 font-mono text-xs transition-colors">
                     Try it &rarr;
                   </a>
                 </p>
