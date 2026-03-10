@@ -230,8 +230,12 @@ async function searchCache(
     .ilike("title", `%${normalizedTitle}%`)
     .limit(5);
 
-  if (titleMatches && titleMatches.length > 0) {
-    const match = pickBestMatch(titleMatches, normalizedTitle, author);
+  const filteredTitleMatches = (titleMatches ?? []).filter(
+    (row) => !isJunkTitle(row.title as string)
+  );
+
+  if (filteredTitleMatches.length > 0) {
+    const match = pickBestMatch(filteredTitleMatches, normalizedTitle, author);
     if (match) {
       return hydrateBookDetail(supabase, match as Record<string, unknown>);
     }
