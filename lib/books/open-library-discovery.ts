@@ -132,7 +132,6 @@ export async function processOLWorks(
   };
 
   // Pre-fetch existing titles for fast dedup (rough check before expensive Goodreads calls)
-  const titles = works.map((w) => w.title.toLowerCase());
   const { data: existingRows } = await supabase
     .from("books")
     .select("title, goodreads_id")
