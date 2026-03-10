@@ -10,7 +10,8 @@
     "seed:books": "npx tsx scripts/seed-books.ts",
     "enrich:books": "npx tsx scripts/enrich-books.ts",
     "cron:weekly": "curl -s -H \"Authorization: Bearer $CRON_SECRET\" http://localhost:3000/api/cron/weekly-refresh | jq",
-    "cron:monthly": "curl -s -H \"Authorization: Bearer $CRON_SECRET\" http://localhost:3000/api/cron/monthly-enrichment | jq"
+    "cron:monthly": "curl -s -H \"Authorization: Bearer $CRON_SECRET\" http://localhost:3000/api/cron/monthly-enrichment | jq",
+    "seed:lists": "npx tsx scripts/seed-from-lists.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
