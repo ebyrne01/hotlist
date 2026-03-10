@@ -69,10 +69,10 @@ export async function searchBooksInCache(query: string): Promise<BookDetail[]> {
   const trimmed = query.trim();
   const lowerQuery = trimmed.toLowerCase();
 
-  // Run two searches in parallel: full-text and ILIKE title match
+  // Run searches in parallel: full-text, ILIKE title, and ILIKE author
   const tsQuery = trimmed.split(/\s+/).join(" & ");
 
-  const [ftsRes, ilikeRes] = await Promise.all([
+  const [ftsRes, ilikeTitleRes, ilikeAuthorRes] = await Promise.all([
     supabase
       .from("books")
       .select("*")
@@ -83,12 +83,21 @@ export async function searchBooksInCache(query: string): Promise<BookDetail[]> {
       .select("*")
       .ilike("title", `%${trimmed}%`)
       .limit(15),
+    supabase
+      .from("books")
+      .select("*")
+      .ilike("author", `%${trimmed}%`)
+      .limit(20),
   ]);
 
   // Merge and deduplicate
   const seen = new Set<string>();
   const allBooks: Record<string, unknown>[] = [];
-  for (const book of [...(ilikeRes.data ?? []), ...(ftsRes.data ?? [])]) {
+  for (const book of [
+    ...(ilikeTitleRes.data ?? []),
+    ...(ilikeAuthorRes.data ?? []),
+    ...(ftsRes.data ?? []),
+  ]) {
     const id = book.id as string;
     if (!seen.has(id)) {
       seen.add(id);
@@ -98,39 +107,56 @@ export async function searchBooksInCache(query: string): Promise<BookDetail[]> {
 
   if (allBooks.length === 0) return [];
 
-  // Score by title match quality
+  // Score by title AND author match quality
   const queryWords = lowerQuery.split(/\s+/);
 
-  function titleRelevanceScore(title: string): number {
+  function relevanceScore(title: string, author: string): number {
     const lowerTitle = title.toLowerCase();
-    // Exact match
-    if (lowerTitle === lowerQuery) return 100;
-    // Title starts with query
-    if (lowerTitle.startsWith(lowerQuery)) return 90;
-    // Title contains query as substring
-    if (lowerTitle.includes(lowerQuery)) return 80;
-    // All query words appear in title
-    const allWords = queryWords.every((w) => lowerTitle.includes(w));
-    if (allWords) return 70;
-    // Some query words appear
-    const matchCount = queryWords.filter((w) => lowerTitle.includes(w)).length;
-    return (matchCount / queryWords.length) * 50;
+    const lowerAuthor = author.toLowerCase();
+
+    // Title scoring
+    let titleScore = 0;
+    if (lowerTitle === lowerQuery) titleScore = 100;
+    else if (lowerTitle.startsWith(lowerQuery)) titleScore = 90;
+    else if (lowerTitle.includes(lowerQuery)) titleScore = 80;
+    else {
+      const allWords = queryWords.every((w) => lowerTitle.includes(w));
+      if (allWords) titleScore = 70;
+      else {
+        const matchCount = queryWords.filter((w) => lowerTitle.includes(w)).length;
+        titleScore = (matchCount / queryWords.length) * 50;
+      }
+    }
+
+    // Author scoring — if query matches an author, all their books score high
+    let authorScore = 0;
+    if (lowerAuthor === lowerQuery) authorScore = 95;
+    else if (lowerAuthor.includes(lowerQuery)) authorScore = 85;
+    else {
+      const authorMatchCount = queryWords.filter((w) => lowerAuthor.includes(w)).length;
+      if (authorMatchCount === queryWords.length) authorScore = 75;
+      else authorScore = (authorMatchCount / queryWords.length) * 40;
+    }
+
+    return Math.max(titleScore, authorScore);
   }
 
   // Sort by relevance score descending
   allBooks.sort((a, b) => {
-    const scoreA = titleRelevanceScore(a.title as string);
-    const scoreB = titleRelevanceScore(b.title as string);
+    const scoreA = relevanceScore(a.title as string, a.author as string);
+    const scoreB = relevanceScore(b.title as string, b.author as string);
     return scoreB - scoreA;
   });
 
-  const top = allBooks.slice(0, 10);
+  const top = allBooks.slice(0, 12);
   const results = await Promise.all(
     top.map((book) => hydrateBookDetail(supabase, book))
   );
 
-  // Filter out books without covers and junk titles
-  return results.filter((b) => b.coverUrl && !isJunkTitle(b.title));
+  // Filter out junk titles; sort books without covers to the bottom but still include them
+  return results
+    .filter((b) => !isJunkTitle(b.title))
+    .sort((a, b) => (a.coverUrl ? 0 : 1) - (b.coverUrl ? 0 : 1));
 }
 
 // ── Write to cache ───────────────────────────────────

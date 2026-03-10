@@ -56,10 +56,33 @@ export async function findBook(query: string): Promise<BookDetail[]> {
   const cached = await searchBooksInCache(query);
   const filteredCache = cached.filter((b) => !isJunkTitle(b.title));
 
-  // 2. If cache has results, return them immediately.
-  //    Kick off Goodreads search in background to discover new books for future searches.
+  // 2. If cache has results, return them — but check if this looks like an author search
+  //    with sparse results that would benefit from a foreground Goodreads search.
   if (filteredCache.length > 0) {
-    // Fire-and-forget: search Goodreads and save any new books to cache
+    const lowerQuery = query.trim().toLowerCase();
+    const authorMatches = filteredCache.filter(
+      (b) => b.author.toLowerCase().includes(lowerQuery) ||
+        lowerQuery.includes(b.author.toLowerCase().split(" ").pop() ?? "")
+    );
+    const isAuthorSearch =
+      authorMatches.length > 0 &&
+      authorMatches.length >= filteredCache.length * 0.5;
+
+    // If it looks like an author search with fewer than 8 results,
+    // search Goodreads in the foreground to discover more books by this author
+    if (isAuthorSearch && filteredCache.length < 8) {
+      try {
+        const goodreadsResults = await withTimeout(searchGoodreads(query), 10_000);
+        const newBooks = await foregroundSaveNewResults(goodreadsResults, filteredCache);
+        const merged = deduplicateBooks([...filteredCache, ...newBooks]);
+        return merged;
+      } catch {
+        // Goodreads search failed — return what we have from cache
+        return filteredCache;
+      }
+    }
+
+    // For non-author queries or well-populated caches, background search is fine
     backgroundGoodreadsSearch(query).catch(() => {});
     return filteredCache;
   }
@@ -201,6 +224,61 @@ async function backgroundSaveGoodreadsResults(results: Awaited<ReturnType<typeof
       scheduleEnrichment(book.id, book.title, book.author, book.isbn);
     }
   }
+}
+
+/**
+ * Save new Goodreads results not already in the cache (foreground, for author searches).
+ * Only processes books not already present in existingBooks.
+ */
+async function foregroundSaveNewResults(
+  goodreadsResults: Awaited<ReturnType<typeof searchGoodreads>>,
+  existingBooks: BookDetail[]
+): Promise<BookDetail[]> {
+  const existingIds = new Set(existingBooks.map((b) => b.goodreadsId));
+  const newBooks: BookDetail[] = [];
+
+  for (const result of goodreadsResults.slice(0, 8)) {
+    if (existingIds.has(result.goodreadsId)) continue;
+    if (isJunkTitle(result.title)) continue;
+
+    const detail = await withTimeout(
+      getGoodreadsBookById(result.goodreadsId),
+      5_000
+    ).catch(() => null);
+    if (!detail) continue;
+
+    const book = await saveGoodreadsBookToCache({
+      title: detail.title,
+      author: detail.author,
+      goodreadsId: detail.goodreadsId,
+      goodreadsUrl: detail.goodreadsUrl,
+      coverUrl: detail.coverUrl,
+      description: detail.description,
+      seriesName: detail.seriesName,
+      seriesPosition: detail.seriesPosition,
+      publishedYear: detail.publishedYear,
+      pageCount: detail.pageCount,
+      genres: detail.genres,
+    });
+
+    if (book) {
+      newBooks.push({ ...book, ratings: [], spice: [], tropes: [] });
+      scheduleMetadataEnrichment(book.id, book.title, book.author, book.isbn);
+      scheduleEnrichment(book.id, book.title, book.author, book.isbn);
+    }
+  }
+
+  return newBooks;
+}
+
+/** Deduplicate books by goodreads_id, keeping the first occurrence. */
+function deduplicateBooks(books: BookDetail[]): BookDetail[] {
+  const seen = new Set<string>();
+  return books.filter((b) => {
+    if (seen.has(b.goodreadsId)) return false;
+    seen.add(b.goodreadsId);
+    return true;
+  });
 }
 
 // ── Book detail ───────────────────────────────────────
