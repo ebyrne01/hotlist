@@ -9,6 +9,7 @@ import { getAdminClient } from "@/lib/supabase/admin";
 import { getVideoDownloadUrl, detectPlatform } from "./downloader";
 import { transcribeAudio } from "./transcription";
 import { extractBooksFromTranscript, correctExtractedBooks } from "./book-extractor";
+import { extractBooksFromFrames, mergeExtractedBooks } from "./vision-extractor";
 import { resolveExtractedBooks, type ResolvedBook } from "./book-resolver";
 
 export type GrabStatus =
@@ -153,16 +154,23 @@ export async function grabBooksFromVideo(
     return { success: false, error: "transcription_failed" };
   }
 
-  // Step 5: Extract book mentions
+  // Step 5: Extract book mentions (transcript + vision in parallel)
   onStatus?.("extracting");
   const creatorHandle =
     download.creatorHandle ?? null;
-  const extracted = await extractBooksFromTranscript(
-    transcription.text,
-    creatorHandle ?? undefined
-  );
 
-  if (extracted.length === 0) {
+  // Run transcript extraction and vision extraction in parallel
+  const [extracted, visionBooks] = await Promise.all([
+    extractBooksFromTranscript(
+      transcription.text,
+      creatorHandle ?? undefined
+    ),
+    download.thumbnailUrl
+      ? extractBooksFromFrames([download.thumbnailUrl], creatorHandle ?? undefined)
+      : Promise.resolve([]),
+  ]);
+
+  if (extracted.length === 0 && visionBooks.length === 0) {
     return {
       success: false,
       error: "no_books_found",
@@ -173,9 +181,12 @@ export async function grabBooksFromVideo(
   // Step 5b: Correct likely transcription errors in titles/authors
   const corrected = await correctExtractedBooks(extracted);
 
+  // Step 5c: Merge transcript-extracted and vision-extracted books
+  const merged = mergeExtractedBooks(corrected, visionBooks);
+
   // Step 6: Resolve to our database
   onStatus?.("resolving");
-  const resolved = await resolveExtractedBooks(corrected);
+  const resolved = await resolveExtractedBooks(merged);
 
   const result: GrabResultSuccess = {
     success: true,
