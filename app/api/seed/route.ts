@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { searchBooks } from "@/lib/search";
 import { findBook } from "@/lib/books";
 
 const SEED_TITLES = [
@@ -42,12 +41,10 @@ export async function GET(request: NextRequest) {
 
   for (const query of SEED_TITLES) {
     try {
-      const books = await searchBooks(query);
+      const books = await findBook(query);
       if (books.length > 0) {
         const top = books[0];
         results.push({ query, found: `${top.title} by ${top.author}` });
-        // Trigger enrichment
-        findBook(top.title + " " + top.author).catch(() => {});
       } else {
         results.push({ query, found: null });
       }

@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 
-import { searchBooks } from "@/lib/search";
+import { findBook } from "@/lib/books";
 import BookCard from "@/components/books/BookCard";
 
 
@@ -10,7 +10,7 @@ interface SearchPageProps {
 
 export default async function SearchPage({ searchParams }: SearchPageProps) {
   const query = searchParams.q ?? "";
-  const books = query ? await searchBooks(query) : [];
+  const books = query ? await findBook(query) : [];
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6">
