@@ -22,7 +22,6 @@ interface ReadingStatusButtonsProps {
 
 export default function ReadingStatusButtons({
   bookId,
-  bookTitle,
   onMarkedRead,
 }: ReadingStatusButtonsProps) {
   const [user, setUser] = useState<{ id: string } | null>(null);

@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
-import type { ReadingStatus, BookDetail } from "@/lib/types";
+import type { ReadingStatus } from "@/lib/types";
 
 /**
  * Get the current reading status for a user + book pair.

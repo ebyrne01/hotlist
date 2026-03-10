@@ -9,7 +9,7 @@ interface ReadingListActionsProps {
   tab: string;
 }
 
-export default function ReadingListActions({ bookId, tab }: ReadingListActionsProps) {
+export default function ReadingListActions({ bookId }: ReadingListActionsProps) {
   const [removing, setRemoving] = useState(false);
   const router = useRouter();
   const supabase = createClient();
