@@ -35,6 +35,7 @@ ANTHROPIC_API_KEY=
 GOOGLE_BOOKS_API_KEY=
 AMAZON_AFFILIATE_TAG=
 NEXT_PUBLIC_APP_URL=
+SERPER_API_KEY=              # from serper.dev (Google search API for romance.io spice lookup)
 RAPIDAPI_KEY=              # from rapidapi.com (video downloader)
 RAPIDAPI_VIDEO_HOST=       # specific host for chosen downloader API
 OPENAI_API_KEY=            # from platform.openai.com (Whisper transcription)

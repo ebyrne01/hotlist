@@ -344,11 +344,18 @@ export async function getBookDetail(identifier: string): Promise<BookDetail | nu
     }
   }
 
+  // Check if romance.io spice is missing (only Goodreads inference exists)
+  const hasRomanceIoSpice = detail.spice.some((s) => s.source === "romance_io");
+  const hasOnlyInferredSpice =
+    detail.spice.length > 0 &&
+    detail.spice.every((s) => s.source === "goodreads_inference" || s.source === "hotlist_community");
+
   // Schedule background enrichment if ratings are missing or stale
   const needsEnrichment =
     detail.ratings.length === 0 ||
     (detail.dataRefreshedAt &&
-      Date.now() - new Date(detail.dataRefreshedAt).getTime() > 24 * 60 * 60 * 1000);
+      Date.now() - new Date(detail.dataRefreshedAt).getTime() > 24 * 60 * 60 * 1000) ||
+    (!hasRomanceIoSpice && hasOnlyInferredSpice);
 
   if (needsEnrichment) {
     scheduleEnrichment(detail.id, detail.title, detail.author, detail.isbn);

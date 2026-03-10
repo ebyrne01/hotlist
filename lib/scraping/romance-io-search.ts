@@ -282,9 +282,11 @@ export async function getRomanceIoSpice(
   try {
     const apiKey = process.env.SERPER_API_KEY;
     if (!apiKey) {
-      console.log("[romance.io] No SERPER_API_KEY configured, skipping");
+      console.warn("[romance.io] SERPER_API_KEY is not set — romance.io spice lookups are disabled. Add the key to your environment variables.");
       return null;
     }
+
+    console.log(`[romance.io] Looking up spice for "${title}" by "${author}"`);
 
     // Step 1: Ambiguous title check
     if (existingTitleCount && existingTitleCount > 1) {
