@@ -11,6 +11,7 @@ interface SpiceIndicatorProps {
   source?: SpiceSource | null;
   confidence?: Confidence | null;
   ratingCount?: number;
+  showSource?: boolean;
   className?: string;
 }
 
@@ -32,6 +33,7 @@ export default function SpiceIndicator({
   source,
   confidence,
   ratingCount,
+  showSource = true,
   className,
 }: SpiceIndicatorProps) {
   const { openSignIn } = useSignInModal();
@@ -73,6 +75,12 @@ export default function SpiceIndicator({
           🌶️
         </span>
       ))}
+      {showSource && source === "goodreads_inference" && (
+        <span className="text-[9px] font-mono text-muted/40 ml-0.5">est.</span>
+      )}
+      {showSource && source === "hotlist_community" && ratingCount && ratingCount > 0 && (
+        <span className="text-[9px] font-mono text-muted/40 ml-0.5">{ratingCount} ratings</span>
+      )}
       <span className="sr-only">
         Spice level {clamped} of 5
         {tooltip && `, ${tooltip}`}

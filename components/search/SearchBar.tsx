@@ -18,6 +18,7 @@ export interface SearchResult {
   seriesName: string | null;
   seriesPosition: number | null;
   averageRating: number | null;
+  goodreadsRating: number | null;
   subgenre: string | null;
 }
 
@@ -237,9 +238,10 @@ export default function SearchBar({ variant = "navbar", className, onSelectBook 
                     </span>
                   )}
                 </div>
-                {book.averageRating && (
-                  <span className="text-xs font-mono text-fire shrink-0">
-                    {book.averageRating.toFixed(1)}
+                {book.goodreadsRating && (
+                  <span className="text-xs font-mono shrink-0 flex items-center gap-1">
+                    <span className="text-muted/60">GR</span>
+                    <span className="text-gold font-medium">{book.goodreadsRating.toFixed(1)}</span>
                   </span>
                 )}
               </button>
