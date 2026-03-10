@@ -44,6 +44,7 @@ import { generateSynopsis } from "./ai-synopsis";
 import { scheduleEnrichment } from "@/lib/scraping";
 import { scheduleMetadataEnrichment } from "./metadata-enrichment";
 import { isJunkTitle } from "./romance-filter";
+import { deduplicateBooks } from "./utils";
 import { scheduleAuthorCrawl } from "./author-crawl";
 
 // ── Search ────────────────────────────────────────────
@@ -85,7 +86,7 @@ export async function findBook(query: string): Promise<BookDetail[]> {
 
     // For non-author queries or well-populated caches, background search is fine
     backgroundGoodreadsSearch(query).catch(() => {});
-    return filteredCache;
+    return deduplicateBooks(filteredCache);
   }
 
   // 3. No cache results — search Goodreads with a 10s timeout
@@ -130,7 +131,7 @@ export async function findBook(query: string): Promise<BookDetail[]> {
         if (goodreadsResults.length > 3) {
           backgroundSaveGoodreadsResults(goodreadsResults.slice(3)).catch(() => {});
         }
-        return saved;
+        return deduplicateBooks(saved);
       }
     }
   } catch {
@@ -153,7 +154,7 @@ export async function findBook(query: string): Promise<BookDetail[]> {
       }
     }
 
-    return fallbackSaved;
+    return deduplicateBooks(fallbackSaved);
   } catch {
     return [];
   }
@@ -273,15 +274,7 @@ async function foregroundSaveNewResults(
   return newBooks;
 }
 
-/** Deduplicate books by goodreads_id, keeping the first occurrence. */
-function deduplicateBooks(books: BookDetail[]): BookDetail[] {
-  const seen = new Set<string>();
-  return books.filter((b) => {
-    if (seen.has(b.goodreadsId)) return false;
-    seen.add(b.goodreadsId);
-    return true;
-  });
-}
+// deduplicateBooks imported from ./utils — deduplicates by ID fields + normalized title+author
 
 // ── Book detail ───────────────────────────────────────
 

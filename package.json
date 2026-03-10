@@ -12,7 +12,8 @@
     "cron:weekly": "curl -s -H \"Authorization: Bearer $CRON_SECRET\" http://localhost:3000/api/cron/weekly-refresh | jq",
     "cron:monthly": "curl -s -H \"Authorization: Bearer $CRON_SECRET\" http://localhost:3000/api/cron/monthly-enrichment | jq",
     "seed:lists": "npx tsx scripts/seed-from-lists.ts",
-    "seed:openlibrary": "npx tsx scripts/seed-from-openlibrary.ts"
+    "seed:openlibrary": "npx tsx scripts/seed-from-openlibrary.ts",
+    "db:merge-dupes": "npx tsx scripts/merge-duplicate-books.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",

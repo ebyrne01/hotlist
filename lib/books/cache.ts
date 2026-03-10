@@ -2,6 +2,7 @@ import { getAdminClient } from "@/lib/supabase/admin";
 import type { Book, BookData, BookDetail, Rating, SpiceRating, Trope } from "@/lib/types";
 import { generateBookSlug } from "./goodreads-search";
 import { isJunkTitle } from "./romance-filter";
+import { deduplicateBooks } from "./utils";
 
 /** Returns null if the URL is a known placeholder image */
 function cleanCoverUrl(url: string | null | undefined): string | null {
@@ -166,10 +167,15 @@ export async function searchBooksInCache(query: string): Promise<BookDetail[]> {
     top.map((book) => hydrateBookDetail(supabase, book))
   );
 
-  // Filter out junk titles; sort books without covers to the bottom but still include them
-  return results
-    .filter((b) => !isJunkTitle(b.title))
-    .sort((a, b) => (a.coverUrl ? 0 : 1) - (b.coverUrl ? 0 : 1));
+  // Filter junk, then deduplicate (keeps edition with most reviews)
+  const filtered = results.filter((b) => !isJunkTitle(b.title));
+  const deduped = deduplicateBooks(filtered);
+  // Sort books without covers to the bottom but still return them
+  return deduped.sort((a, b) => {
+    if (a.coverUrl && !b.coverUrl) return -1;
+    if (!a.coverUrl && b.coverUrl) return 1;
+    return 0;
+  });
 }
 
 // ── Write to cache ───────────────────────────────────
@@ -185,6 +191,29 @@ export async function saveGoodreadsBookToCache(bookData: BookData): Promise<Book
   }
 
   const supabase = getAdminClient();
+
+  // Check for existing book with same title+author (prevents edition duplicates)
+  const normalizedTitle = bookData.title.toLowerCase().replace(/[^\w\s]/g, "").trim();
+  const authorLastName = bookData.author.split(" ").pop() ?? bookData.author;
+  const { data: existing } = await supabase
+    .from("books")
+    .select("id, goodreads_id, title, cover_url, ai_synopsis")
+    .ilike("title", `%${normalizedTitle}%`)
+    .ilike("author", `%${authorLastName}%`)
+    .limit(5);
+
+  if (existing && existing.length > 0) {
+    for (const row of existing) {
+      const rowTitle = ((row.title as string) || "").toLowerCase().replace(/[^\w\s]/g, "").trim();
+      if (rowTitle === normalizedTitle && row.goodreads_id !== bookData.goodreadsId) {
+        // Same book, different Goodreads ID — don't create a duplicate
+        console.log(`[cache] Skipping duplicate: "${bookData.title}" already exists as ${row.goodreads_id}`);
+        const { data: fullRow } = await supabase.from("books").select("*").eq("id", row.id).single();
+        return fullRow ? mapDbBook(fullRow as Record<string, unknown>) : null;
+      }
+    }
+  }
+
   const slug = generateBookSlug(bookData.title, bookData.goodreadsId);
 
   const row = {

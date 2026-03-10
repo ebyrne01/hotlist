@@ -54,6 +54,15 @@ export async function GET(request: NextRequest) {
       };
     });
 
+    // Deduplicate by normalized title+author (safety net)
+    const seenTitles = new Set<string>();
+    const uniqueResults = results.filter((r) => {
+      const key = `${r.title.toLowerCase().replace(/[^\w\s]/g, "").trim()}::${r.author.toLowerCase().trim()}`;
+      if (seenTitles.has(key)) return false;
+      seenTitles.add(key);
+      return true;
+    });
+
     // Determine the source for debugging
     const source = books.length > 0 && books[0].metadataSource === "goodreads"
       ? "goodreads"
@@ -64,8 +73,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       query,
       source,
-      total: results.length,
-      books: results,
+      total: uniqueResults.length,
+      books: uniqueResults,
     });
   } catch (err) {
     console.error("Book search failed:", err);

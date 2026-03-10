@@ -51,7 +51,7 @@ const ROMANCE_TROPE_SLUGS = new Set([
 ]);
 
 const JUNK_TITLE_PATTERNS =
-  /\b(box\s*set|boxed set|collection set|bundle|omnibus|books?\s+\d+-\d+|\d+-book|complete\s+series|the\s+complete|books?\s+\d+\s*[-–&]\s*\d+|volumes?\s+\d+\s*[-–]\s*\d+|study guide|summary of|trivia|journal|workbook|coloring book|conversation starters|supersummary|bookhabits|untitled|cliff\s*notes|hardcover box|paperback box|omnibus edition|deluxe\s+limited\s+edition|special\s+edition|collector'?s?\s+edition|anniversary\s+edition|illustrated\s+edition|how well do you know|quiz|test your knowledge|unofficial guide|companion guide|discussion questions|reading guide|reader.?s guide|book club questions|essay|analysis of|literary analysis|critical analysis|study companion)\b/i;
+  /\b(box\s*set|boxed set|collection set|bundle|omnibus|books?\s+\d+-\d+|\d+-book|complete\s+series|the\s+complete|books?\s+\d+\s*[-–&]\s*\d+|volumes?\s+\d+\s*[-–]\s*\d+|study guide|summary of|trivia|journal|workbook|coloring book|conversation starters|supersummary|bookhabits|untitled|cliff\s*notes|hardcover box|paperback box|omnibus edition|deluxe\s+limited\s+edition|special\s+edition|collector'?s?\s+edition|anniversary\s+edition|illustrated\s+edition|how well do you know|quiz|test your knowledge|unofficial guide|companion guide|discussion questions|reading guide|reader.?s guide|book club questions|essay|analysis of|literary analysis|critical analysis|study companion|bi-centenary|centenary|proceedings|symposium|conference|dissertation|thesis|municipal|township|genealogy|census)\b/i;
 
 /** Matches slash-separated compilation titles with 2+ separators */
 const MULTI_TITLE_PATTERN = /\s+\/\s+.+\s+\/\s+/;
