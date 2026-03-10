@@ -44,6 +44,7 @@ import { generateSynopsis } from "./ai-synopsis";
 import { scheduleEnrichment } from "@/lib/scraping";
 import { scheduleMetadataEnrichment } from "./metadata-enrichment";
 import { isJunkTitle } from "./romance-filter";
+import { scheduleAuthorCrawl } from "./author-crawl";
 
 // ── Search ────────────────────────────────────────────
 
@@ -120,6 +121,7 @@ export async function findBook(query: string): Promise<BookDetail[]> {
           saved.push({ ...book, ratings: [], spice: [], tropes: [] });
           scheduleMetadataEnrichment(book.id, book.title, book.author, book.isbn);
           scheduleEnrichment(book.id, book.title, book.author, book.isbn);
+          scheduleAuthorCrawl(book.goodreadsId, book.author);
         }
       }
 
@@ -325,6 +327,7 @@ export async function getBookDetail(identifier: string): Promise<BookDetail | nu
         });
         if (book) {
           detail = { ...book, ratings: [], spice: [], tropes: [] };
+          scheduleAuthorCrawl(book.goodreadsId, book.author);
         }
       }
     }
