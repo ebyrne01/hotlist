@@ -68,34 +68,43 @@ export async function searchBooksInCache(query: string): Promise<BookDetail[]> {
   const supabase = getAdminClient();
   const trimmed = query.trim();
   const lowerQuery = trimmed.toLowerCase();
+  const words = trimmed.split(/\s+/).filter((w) => w.length > 1);
 
-  // Run searches in parallel: full-text, ILIKE title, and ILIKE author
-  const tsQuery = trimmed.split(/\s+/).join(" & ");
+  if (words.length === 0) return [];
 
-  const [ftsRes, ilikeTitleRes, ilikeAuthorRes] = await Promise.all([
+  // Build word-based queries: each word must appear in the field
+  // This handles "danielle jensen" matching "Danielle L. Jensen"
+  // and "bridge kingdom" matching "The Bridge Kingdom"
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let titleWordQuery = supabase.from("books").select("*") as any;
+  for (const word of words) {
+    titleWordQuery = titleWordQuery.ilike("title", `%${word}%`);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let authorWordQuery = supabase.from("books").select("*") as any;
+  for (const word of words) {
+    authorWordQuery = authorWordQuery.ilike("author", `%${word}%`);
+  }
+
+  const tsQuery = words.join(" & ");
+
+  const [ftsRes, titleWordRes, authorWordRes] = await Promise.all([
     supabase
       .from("books")
       .select("*")
       .textSearch("title", tsQuery, { config: "english" })
       .limit(15),
-    supabase
-      .from("books")
-      .select("*")
-      .ilike("title", `%${trimmed}%`)
-      .limit(15),
-    supabase
-      .from("books")
-      .select("*")
-      .ilike("author", `%${trimmed}%`)
-      .limit(20),
+    titleWordQuery.limit(15),
+    authorWordQuery.limit(20),
   ]);
 
   // Merge and deduplicate
   const seen = new Set<string>();
   const allBooks: Record<string, unknown>[] = [];
   for (const book of [
-    ...(ilikeTitleRes.data ?? []),
-    ...(ilikeAuthorRes.data ?? []),
+    ...(titleWordRes.data ?? []),
+    ...(authorWordRes.data ?? []),
     ...(ftsRes.data ?? []),
   ]) {
     const id = book.id as string;
@@ -106,6 +115,11 @@ export async function searchBooksInCache(query: string): Promise<BookDetail[]> {
   }
 
   if (allBooks.length === 0) return [];
+
+  // Detect if the query looks like an author name (2-3 words, no common title words)
+  const TITLE_NOISE = new Set(["the", "of", "and", "a", "an", "in", "to", "for", "is", "on", "at", "by"]);
+  const meaningfulWords = words.filter((w) => !TITLE_NOISE.has(w.toLowerCase()));
+  const looksLikeAuthor = meaningfulWords.length >= 2 && meaningfulWords.length <= 3;
 
   // Score by title AND author match quality
   const queryWords = lowerQuery.split(/\s+/);
@@ -120,22 +134,21 @@ export async function searchBooksInCache(query: string): Promise<BookDetail[]> {
     else if (lowerTitle.startsWith(lowerQuery)) titleScore = 90;
     else if (lowerTitle.includes(lowerQuery)) titleScore = 80;
     else {
-      const allWords = queryWords.every((w) => lowerTitle.includes(w));
-      if (allWords) titleScore = 70;
-      else {
-        const matchCount = queryWords.filter((w) => lowerTitle.includes(w)).length;
-        titleScore = (matchCount / queryWords.length) * 50;
-      }
+      const matchCount = queryWords.filter((w) => lowerTitle.includes(w)).length;
+      if (matchCount === queryWords.length) titleScore = 70;
+      else titleScore = (matchCount / queryWords.length) * 50;
     }
 
-    // Author scoring — if query matches an author, all their books score high
+    // Author scoring — word-by-word so "danielle jensen" matches "Danielle L. Jensen"
     let authorScore = 0;
+    const authorMatchCount = queryWords.filter((w) => lowerAuthor.includes(w)).length;
     if (lowerAuthor === lowerQuery) authorScore = 95;
-    else if (lowerAuthor.includes(lowerQuery)) authorScore = 85;
-    else {
-      const authorMatchCount = queryWords.filter((w) => lowerAuthor.includes(w)).length;
-      if (authorMatchCount === queryWords.length) authorScore = 75;
-      else authorScore = (authorMatchCount / queryWords.length) * 40;
+    else if (authorMatchCount === queryWords.length) {
+      // All query words found in author — strong match
+      // Boost higher if query looks like a person's name
+      authorScore = looksLikeAuthor ? 90 : 75;
+    } else if (authorMatchCount > 0) {
+      authorScore = (authorMatchCount / queryWords.length) * 40;
     }
 
     return Math.max(titleScore, authorScore);
