@@ -15,7 +15,9 @@ import { resolveExtractedBooks, type ResolvedBook } from "./book-resolver";
 export type GrabStatus =
   | "downloading"
   | "transcribing"
+  | "scanning"
   | "extracting"
+  | "correcting"
   | "resolving"
   | "done";
 
@@ -160,14 +162,20 @@ export async function grabBooksFromVideo(
     download.creatorHandle ?? null;
 
   // Run transcript extraction and vision extraction in parallel
+  // Vision gets its own status update via scanning
+  const visionPromise = download.thumbnailUrl
+    ? (async () => {
+        onStatus?.("scanning");
+        return extractBooksFromFrames([download.thumbnailUrl!], creatorHandle ?? undefined);
+      })()
+    : Promise.resolve([]);
+
   const [extracted, visionBooks] = await Promise.all([
     extractBooksFromTranscript(
       transcription.text,
       creatorHandle ?? undefined
     ),
-    download.thumbnailUrl
-      ? extractBooksFromFrames([download.thumbnailUrl], creatorHandle ?? undefined)
-      : Promise.resolve([]),
+    visionPromise,
   ]);
 
   if (extracted.length === 0 && visionBooks.length === 0) {
@@ -179,6 +187,7 @@ export async function grabBooksFromVideo(
   }
 
   // Step 5b: Correct likely transcription errors in titles/authors
+  onStatus?.("correcting");
   const corrected = await correctExtractedBooks(extracted);
 
   // Step 5c: Merge transcript-extracted and vision-extracted books

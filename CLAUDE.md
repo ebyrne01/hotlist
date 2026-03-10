@@ -107,12 +107,25 @@ See `schema.sql` for full schema. Key tables:
 ## Grab from Video feature
 - Video download: RapidAPI (third-party TikTok/Instagram/YouTube downloader)
 - Transcription: OpenAI Whisper API (model: whisper-1) — NOT Claude
-- Book extraction: Claude Haiku (claude-haiku-4-5-20251001)
-- Resolution: Goodreads canonical lookup (same as search)
+- **Vision extraction: Claude Haiku (claude-haiku-4-5-20251001) — reads book covers and on-screen text from video thumbnail**
+- Book extraction: Claude Haiku (claude-haiku-4-5-20251001) — extracts titles from transcript
+- **Title correction: Claude Haiku — corrects Whisper transcription errors in book titles/author names**
+- Resolution: Fuzzy matching via PostgreSQL trigram search + Goodreads canonical lookup
 - Cache: `video_grabs` Supabase table — never process the same URL twice
-- Files: `/lib/video/` (downloader, transcription, book-extractor, book-resolver, index)
+- Files: `/lib/video/` (downloader, transcription, vision-extractor, book-extractor, book-resolver, index)
 - UI: `/app/grab/page.tsx`
 - API: `/app/api/grab/route.ts` (streaming)
+
+### Grab pipeline (in order):
+1. Validate URL + check cache
+2. Download video/audio via RapidAPI
+3. Transcribe audio via Whisper (parallel with step 4)
+4. Extract book covers from video thumbnail via Claude Haiku vision
+5. Extract book mentions from transcript via Claude Haiku
+6. Correct transcription errors via Claude Haiku
+7. Merge vision + transcript books, deduplicate
+8. Resolve each book: fuzzy trigram DB search → Goodreads search → unmatched
+9. Cache result in `video_grabs` table
 
 ## Coding style
 - TypeScript everywhere

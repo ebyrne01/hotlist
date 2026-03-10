@@ -15,7 +15,9 @@ import type { ResolvedBook } from "@/lib/video/book-resolver";
 const STATUS_MESSAGES: Record<GrabStatus, string> = {
   downloading: "Downloading video...",
   transcribing: "Transcribing audio...",
-  extracting: "Finding books...",
+  scanning: "Scanning for book covers...",
+  extracting: "Finding book mentions...",
+  correcting: "Double-checking titles...",
   resolving: "Matching to our database...",
   done: "Done!",
 };
