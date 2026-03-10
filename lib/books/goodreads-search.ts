@@ -310,8 +310,13 @@ export async function getGoodreadsBookById(
  */
 export async function resolveToGoodreadsId(
   title: string,
-  author: string
+  author: string,
+  options?: { fuzzy?: boolean }
 ): Promise<string | null> {
+  // Fuzzy mode (used by video resolver) relaxes the word overlap threshold
+  // to handle Whisper transcription errors like "Alchemized"→"Alchemised"
+  const titleThreshold = options?.fuzzy ? 0.6 : 0.8;
+
   // Attempt 1: search with full title + author
   const results = await searchGoodreads(`${title} ${author}`);
 
@@ -321,7 +326,7 @@ export async function resolveToGoodreadsId(
       .split(" ")
       .some((word) => normalize(result.author).includes(word));
 
-    if (titleSim >= 0.8 && authorMatch) {
+    if (titleSim >= titleThreshold && authorMatch) {
       return result.goodreadsId;
     }
   }
@@ -335,7 +340,7 @@ export async function resolveToGoodreadsId(
       .split(" ")
       .some((word) => normalize(result.author).includes(word));
 
-    if (titleSim >= 0.8 && authorMatch) {
+    if (titleSim >= titleThreshold && authorMatch) {
       return result.goodreadsId;
     }
   }
