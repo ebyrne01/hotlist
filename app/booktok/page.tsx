@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth/AuthProvider";
@@ -36,6 +36,14 @@ const SENTIMENT_EMOJI: Record<string, string> = {
 // ── Main Page Component ─────────────────────────────────
 
 export default function BookTokPage() {
+  return (
+    <Suspense fallback={<div className="max-w-2xl mx-auto px-4 py-16 text-center text-muted font-body">Loading...</div>}>
+      <BookTokPageInner />
+    </Suspense>
+  );
+}
+
+function BookTokPageInner() {
   const [url, setUrl] = useState("");
   const [processing, setProcessing] = useState(false);
   const [status, setStatus] = useState<GrabStatus | null>(null);
