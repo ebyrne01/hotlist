@@ -102,6 +102,8 @@ See `schema.sql` for full schema. Key tables:
   - `metadata-enrichment.ts` — supplementary metadata from Google/OL
   - `romance-filter.ts` — romance genre guard + junk title filter
   - `ai-synopsis.ts` — Claude-generated synopses
+- `/lib/enrichment/` — async enrichment queue system
+  - `queue.ts` — job queueing, fetching, status updates, retry logic with exponential backoff
 - `/lib/scraping/` — per-site scrapers (Goodreads ratings, Amazon via Serper, spice inference)
   - `amazon-search.ts` — Amazon ratings via Serper Google search (replaces broken direct scraping)
   - `amazon.ts` — DEPRECATED: direct Amazon scraping (returns 503)

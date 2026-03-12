@@ -336,45 +336,9 @@ export async function saveProvisionalBook(bookData: BookData): Promise<Book | nu
   return mapDbBook(data);
 }
 
-/**
- * Queue enrichment jobs for a book in the enrichment_queue table.
- * Each job type is independently tracked with retry logic.
- */
-export async function queueEnrichmentJobs(
-  bookId: string,
-  title: string,
-  author: string
-): Promise<void> {
-  const supabase = getAdminClient();
-
-  const jobTypes = [
-    "goodreads_detail",
-    "goodreads_rating",
-    "amazon_rating",
-    "romance_io_spice",
-    "metadata",
-    "ai_synopsis",
-    "trope_inference",
-  ];
-
-  const rows = jobTypes.map((jobType) => ({
-    book_id: bookId,
-    job_type: jobType,
-    status: "pending",
-    attempts: 0,
-    next_retry_at: new Date().toISOString(),
-  }));
-
-  const { error } = await supabase
-    .from("enrichment_queue")
-    .upsert(rows, { onConflict: "book_id,job_type" });
-
-  if (error) {
-    console.warn(`[enrichment-queue] Failed to queue jobs for "${title}":`, error.message);
-  } else {
-    console.log(`[enrichment-queue] Queued ${jobTypes.length} jobs for "${title}" by ${author}`);
-  }
-}
+// Import from the canonical enrichment queue module and re-export
+import { queueEnrichmentJobs } from "@/lib/enrichment/queue";
+export { queueEnrichmentJobs };
 
 export async function saveSynopsis(bookId: string, synopsis: string): Promise<void> {
   const supabase = getAdminClient();
