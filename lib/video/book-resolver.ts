@@ -156,7 +156,7 @@ function deduplicateResults(results: ResolvedBook[]): ResolvedBook[] {
       continue;
     }
 
-    const gid = result.book.goodreadsId;
+    const gid = result.book.goodreadsId ?? result.book.id;
 
     // Dedup by goodreads_id
     if (seen.has(gid)) {

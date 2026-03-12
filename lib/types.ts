@@ -17,7 +17,7 @@ export interface Book {
   publisher: string | null;
   description: string | null;
   aiSynopsis: string | null;
-  goodreadsId: string;
+  goodreadsId: string | null;
   goodreadsUrl: string | null;
   amazonAsin: string | null;
   romanceIoSlug: string | null;

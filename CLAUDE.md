@@ -70,12 +70,13 @@ OPENAI_API_KEY=            # from platform.openai.com (Whisper transcription)
 | **Hotlist community** | Spice ratings (primary) | User-submitted 1-5 spice ratings — our data moat |
 | **Goodreads shelf inference** | Spice ratings (fallback) | Inferred from shelf names. |
 
-**Golden rule:** A book does not exist in Hotlist's database without a valid Goodreads ID.
-If we can't resolve a title to a Goodreads ID, we don't store it.
+**Golden rule:** Goodreads ID is the canonical identity for fully enriched books.
+Provisional entries (from Google Books) can exist without a Goodreads ID — the enrichment queue will resolve them.
 
 ## Data model summary
 See `schema.sql` for full schema. Key tables:
-- `books` — canonical book records (goodreads_id is NOT NULL and unique)
+- `books` — canonical book records (goodreads_id is UNIQUE but nullable for provisional entries)
+- `enrichment_queue` — async enrichment jobs with retry logic (goodreads_detail, ratings, spice, etc.)
 - `book_ratings` — per-source ratings (goodreads, amazon, romance_io)
 - `book_spice` — spice ratings (hotlist_community, goodreads_inference)
 - `book_tropes` — trope tags per book

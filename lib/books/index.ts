@@ -1,15 +1,12 @@
 /**
  * BOOK SERVICE — Single import point for all book operations.
  *
- * DATA FLOW FOR SEARCH:
- * 1. Check Supabase cache (instant)
- * 2. If cache miss: search Goodreads
- * 3. Filter results to romance books only (isRomanceBook check)
- * 4. Save Goodreads results to Supabase cache
- * 5. Trigger background metadata enrichment (Google Books / Open Library)
- * 6. Trigger background ratings scraping (Goodreads rating, Amazon rating)
- * 7. Trigger background spice inference (Goodreads shelf inference)
- * 8. Return results immediately from step 4 — don't wait for steps 5-7
+ * DATA FLOW FOR SEARCH (fast path, never waits for Goodreads):
+ * 1. Check Supabase cache — FTS + trigram + author match (instant)
+ * 2. If < 3 results: supplement with Google Books API (fast, no rate limits)
+ * 3. Save Google Books results as "provisional" entries (no goodreads_id yet)
+ * 4. Queue Goodreads discovery in background (fills in data over time)
+ * 5. Return immediately — never block on external scraping
  *
  * DATA FLOW FOR BOOK DETAIL:
  * 1. Look up by goodreads_id (or slug, which embeds goodreads_id)
@@ -37,6 +34,8 @@ import {
   getBookBySlug,
   saveGoodreadsBookToCache,
   saveBookToCache,
+  saveProvisionalBook,
+  queueEnrichmentJobs,
   searchBooksInCache,
   mapDbBook,
 } from "./cache";
@@ -50,16 +49,64 @@ import { scheduleAuthorCrawl } from "./author-crawl";
 // ── Search ────────────────────────────────────────────
 
 /**
- * Search for books. Returns romance-only results.
- * Combines Supabase cache + Goodreads search.
+ * Search for books. Returns results from local DB + Google Books.
+ * NEVER waits for Goodreads scraping — that's handled by the enrichment queue.
+ *
+ * Fast path (< 200ms):
+ *   1. Supabase cache search (FTS + trigram + author match)
+ *   2. Return immediately
+ *
+ * Discovery path (if cache has < 3 results):
+ *   3. Google Books API search (fast, no rate limits)
+ *   4. For each Google Books result: save as provisional, queue enrichment
+ *   5. Return combined results
+ *
+ * Background: Queue Goodreads discovery for future searches.
  */
 export async function findBook(query: string): Promise<BookDetail[]> {
-  // 1. Check cache first (fast — local DB query)
+  // Step 1: Search local DB (always fast)
   const cached = await searchBooksInCache(query);
   const filteredCache = cached.filter((b) => !isJunkTitle(b.title));
 
-  // 2. If cache has results, return them — but check if this looks like an author search
-  //    with sparse results that would benefit from a foreground Goodreads search.
+  // Step 2: If good cache results, return immediately
+  if (filteredCache.length >= 3) {
+    // Queue Goodreads discovery in background to fill gaps for future searches
+    queueGoodreadsDiscovery(query).catch(() => {});
+    return deduplicateBooks(filteredCache);
+  }
+
+  // Step 3: Not enough cache results — supplement with Google Books
+  try {
+    const googleResults = await withTimeout(searchGoogleBooks(query), 3000);
+
+    for (const bookData of googleResults.slice(0, 5)) {
+      if (isJunkTitle(bookData.title)) continue;
+
+      // Save as provisional entry (no goodreads_id yet)
+      const book = await saveProvisionalBook(bookData);
+      if (book && !filteredCache.some((b) => b.id === book.id)) {
+        filteredCache.push({ ...book, ratings: [], spice: [], tropes: [] });
+      }
+    }
+  } catch {
+    console.log("[findBook] Google Books fallback timed out for:", query);
+  }
+
+  // Step 4: Queue Goodreads discovery for this query
+  queueGoodreadsDiscovery(query).catch(() => {});
+
+  return deduplicateBooks(filteredCache);
+}
+
+/**
+ * Legacy search — combines Supabase cache + foreground Goodreads scraping.
+ * Kept for reference during migration. Use findBook() instead.
+ * @deprecated Use findBook() which never blocks on Goodreads.
+ */
+export async function findBookLegacy(query: string): Promise<BookDetail[]> {
+  const cached = await searchBooksInCache(query);
+  const filteredCache = cached.filter((b) => !isJunkTitle(b.title));
+
   if (filteredCache.length > 0) {
     const lowerQuery = query.trim().toLowerCase();
     const authorMatches = filteredCache.filter(
@@ -70,8 +117,6 @@ export async function findBook(query: string): Promise<BookDetail[]> {
       authorMatches.length > 0 &&
       authorMatches.length >= filteredCache.length * 0.5;
 
-    // If it looks like an author search with fewer than 8 results,
-    // search Goodreads in the foreground to discover more books by this author
     if (isAuthorSearch && filteredCache.length < 8) {
       try {
         const goodreadsResults = await withTimeout(searchGoodreads(query), 10_000);
@@ -79,25 +124,20 @@ export async function findBook(query: string): Promise<BookDetail[]> {
         const merged = deduplicateBooks([...filteredCache, ...newBooks]);
         return merged;
       } catch {
-        // Goodreads search failed — return what we have from cache
         return filteredCache;
       }
     }
 
-    // For non-author queries or well-populated caches, background search is fine
     backgroundGoodreadsSearch(query).catch(() => {});
     return deduplicateBooks(filteredCache);
   }
 
-  // 3. No cache results — search Goodreads with a 10s timeout
-  //    This is the "slow path" for books we've never seen before.
   try {
     const goodreadsResults = await withTimeout(searchGoodreads(query), 10_000);
 
     if (goodreadsResults.length > 0) {
       const saved: BookDetail[] = [];
 
-      // Only fetch details for the first 3 results to stay fast
       for (const result of goodreadsResults.slice(0, 3)) {
         if (isJunkTitle(result.title)) continue;
 
@@ -122,12 +162,11 @@ export async function findBook(query: string): Promise<BookDetail[]> {
           saved.push({ ...book, ratings: [], spice: [], tropes: [] });
           scheduleMetadataEnrichment(book.id, book.title, book.author, book.isbn);
           scheduleEnrichment(book.id, book.title, book.author, book.isbn);
-          scheduleAuthorCrawl(book.goodreadsId, book.author);
+          if (book.goodreadsId) scheduleAuthorCrawl(book.goodreadsId, book.author);
         }
       }
 
       if (saved.length > 0) {
-        // Save remaining results in background (beyond the first 3)
         if (goodreadsResults.length > 3) {
           backgroundSaveGoodreadsResults(goodreadsResults.slice(3)).catch(() => {});
         }
@@ -135,10 +174,9 @@ export async function findBook(query: string): Promise<BookDetail[]> {
       }
     }
   } catch {
-    console.log("[findBook] Goodreads search timed out for:", query);
+    console.log("[findBookLegacy] Goodreads search timed out for:", query);
   }
 
-  // 4. Fallback: Google Books (for books Goodreads doesn't have)
   try {
     const googleResults = await withTimeout(searchGoogleBooks(query), 5_000);
     const fallbackSaved: BookDetail[] = [];
@@ -274,6 +312,53 @@ async function foregroundSaveNewResults(
   return newBooks;
 }
 
+/**
+ * Queue a background Goodreads search for a query.
+ * Discovers new books and saves them to the DB without blocking the user's search.
+ * Also queues enrichment jobs for each newly discovered book.
+ */
+async function queueGoodreadsDiscovery(query: string): Promise<void> {
+  try {
+    const results = await searchGoodreads(query);
+    for (const result of results.slice(0, 5)) {
+      if (isJunkTitle(result.title)) continue;
+
+      // Check if already in DB
+      const supabase = getAdminClient();
+      const { data: existing } = await supabase
+        .from("books")
+        .select("id")
+        .eq("goodreads_id", result.goodreadsId)
+        .single();
+      if (existing) continue;
+
+      // Fetch detail and save
+      const detail = await getGoodreadsBookById(result.goodreadsId).catch(() => null);
+      if (!detail) continue;
+
+      const book = await saveGoodreadsBookToCache({
+        title: detail.title,
+        author: detail.author,
+        goodreadsId: detail.goodreadsId,
+        goodreadsUrl: detail.goodreadsUrl,
+        coverUrl: detail.coverUrl,
+        description: detail.description,
+        seriesName: detail.seriesName,
+        seriesPosition: detail.seriesPosition,
+        publishedYear: detail.publishedYear,
+        pageCount: detail.pageCount,
+        genres: detail.genres,
+      });
+
+      if (book) {
+        await queueEnrichmentJobs(book.id, book.title, book.author);
+      }
+    }
+  } catch {
+    // Background — swallow errors
+  }
+}
+
 // deduplicateBooks imported from ./utils — deduplicates by ID fields + normalized title+author
 
 // ── Book detail ───────────────────────────────────────
@@ -320,7 +405,7 @@ export async function getBookDetail(identifier: string): Promise<BookDetail | nu
         });
         if (book) {
           detail = { ...book, ratings: [], spice: [], tropes: [] };
-          scheduleAuthorCrawl(book.goodreadsId, book.author);
+          if (book.goodreadsId) scheduleAuthorCrawl(book.goodreadsId, book.author);
         }
       }
     }

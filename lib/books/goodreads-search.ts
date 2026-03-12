@@ -389,7 +389,7 @@ export function isRomanceBook(genres: string[]): boolean {
  */
 export function generateBookSlug(
   title: string,
-  goodreadsId: string
+  goodreadsId: string | null
 ): string {
   const slug = title
     .toLowerCase()
@@ -399,7 +399,7 @@ export function generateBookSlug(
     .replace(/^-|-$/g, "")
     .substring(0, 60);
 
-  return `${slug}-${goodreadsId}`;
+  return goodreadsId ? `${slug}-${goodreadsId}` : `${slug}-provisional-${Date.now()}`;
 }
 
 /**

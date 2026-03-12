@@ -268,6 +268,114 @@ export async function saveBookToCache(bookData: BookData): Promise<Book | null> 
   return saveGoodreadsBookToCache(bookData);
 }
 
+/**
+ * Save a book from Google Books as a provisional entry.
+ * These books may not have a Goodreads ID yet — they'll get one
+ * when the enrichment queue processes their goodreads_detail job.
+ */
+export async function saveProvisionalBook(bookData: BookData): Promise<Book | null> {
+  const supabase = getAdminClient();
+
+  // Check if we already have this book by Google Books ID
+  if (bookData.googleBooksId) {
+    const { data: existing } = await supabase
+      .from("books")
+      .select("id")
+      .eq("google_books_id", bookData.googleBooksId)
+      .single();
+    if (existing) return null; // Already have it
+  }
+
+  // Check by normalized title + author to avoid duplicates
+  const normalizedTitle = bookData.title.toLowerCase().replace(/[^\w\s]/g, "").trim();
+  const authorLastName = bookData.author.split(" ").pop()?.toLowerCase() ?? "";
+  if (normalizedTitle && authorLastName) {
+    const { data: titleMatch } = await supabase
+      .from("books")
+      .select("id")
+      .ilike("title", `%${normalizedTitle}%`)
+      .ilike("author", `%${authorLastName}%`)
+      .limit(1)
+      .single();
+    if (titleMatch) return null;
+  }
+
+  const slug = `provisional-${bookData.googleBooksId || Date.now()}`;
+  const row = {
+    title: bookData.title,
+    author: bookData.author,
+    isbn: bookData.isbn ?? null,
+    isbn13: bookData.isbn13 ?? null,
+    google_books_id: bookData.googleBooksId ?? null,
+    cover_url: bookData.coverUrl ?? null,
+    page_count: bookData.pageCount ?? null,
+    published_year: bookData.publishedYear ?? null,
+    publisher: bookData.publisher ?? null,
+    description: bookData.description ?? null,
+    goodreads_id: null, // Will be resolved by enrichment queue
+    metadata_source: "google_books",
+    slug,
+    enrichment_status: "pending",
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabase
+    .from("books")
+    .insert(row)
+    .select()
+    .single();
+
+  if (error || !data) {
+    console.warn("[cache] Failed to save provisional book:", error?.message, bookData.title);
+    return null;
+  }
+
+  // Queue enrichment jobs for this book
+  await queueEnrichmentJobs(data.id as string, bookData.title, bookData.author);
+
+  return mapDbBook(data);
+}
+
+/**
+ * Queue enrichment jobs for a book in the enrichment_queue table.
+ * Each job type is independently tracked with retry logic.
+ */
+export async function queueEnrichmentJobs(
+  bookId: string,
+  title: string,
+  author: string
+): Promise<void> {
+  const supabase = getAdminClient();
+
+  const jobTypes = [
+    "goodreads_detail",
+    "goodreads_rating",
+    "amazon_rating",
+    "romance_io_spice",
+    "metadata",
+    "ai_synopsis",
+    "trope_inference",
+  ];
+
+  const rows = jobTypes.map((jobType) => ({
+    book_id: bookId,
+    job_type: jobType,
+    status: "pending",
+    attempts: 0,
+    next_retry_at: new Date().toISOString(),
+  }));
+
+  const { error } = await supabase
+    .from("enrichment_queue")
+    .upsert(rows, { onConflict: "book_id,job_type" });
+
+  if (error) {
+    console.warn(`[enrichment-queue] Failed to queue jobs for "${title}":`, error.message);
+  } else {
+    console.log(`[enrichment-queue] Queued ${jobTypes.length} jobs for "${title}" by ${author}`);
+  }
+}
+
 export async function saveSynopsis(bookId: string, synopsis: string): Promise<void> {
   const supabase = getAdminClient();
   await supabase
@@ -324,7 +432,7 @@ export async function hydrateBookDetail(
 }
 
 export function mapDbBook(row: Record<string, unknown>): Book {
-  const goodreadsId = (row.goodreads_id as string) ?? "";
+  const goodreadsId = (row.goodreads_id as string | null) ?? null;
   const title = row.title as string;
   return {
     id: row.id as string,
