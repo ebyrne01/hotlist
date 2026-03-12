@@ -23,8 +23,52 @@ import { generateSynopsis } from "@/lib/books/ai-synopsis";
 import { getGoodreadsBookById, resolveToGoodreadsId } from "@/lib/books/goodreads-search";
 import { saveGoodreadsBookToCache } from "@/lib/books/cache";
 import { getAdminClient } from "@/lib/supabase/admin";
+import { computeGenreBucketing } from "@/lib/spice/genre-bucketing";
+import { inferAndUpsertSpice } from "@/lib/spice/llm-inference";
+import { classifyReviews } from "@/lib/spice/review-classifier";
+import { fetchAllReviews } from "@/lib/spice/review-fetcher";
+
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 const JOB_DELAY_MS = 500; // Delay between jobs to respect rate limits
+
+/**
+ * Fetch genres for a book and upsert a genre_bucketing spice signal.
+ * Safe to call even if the book has no genres — it's a no-op in that case.
+ */
+async function upsertGenreBucketing(supabase: SupabaseClient, bookId: string) {
+  const { data: bookRow } = await supabase
+    .from("books")
+    .select("genres")
+    .eq("id", bookId)
+    .single();
+
+  const genres: string[] = bookRow?.genres ?? [];
+  if (genres.length === 0) return;
+
+  const result = computeGenreBucketing(genres);
+  if (!result) return;
+
+  await supabase.from("spice_signals").upsert(
+    {
+      book_id: bookId,
+      source: "genre_bucketing",
+      spice_value: result.spice,
+      confidence: result.confidence,
+      evidence: {
+        matched_tags: result.matchedTags,
+        total_genres: genres.length,
+        computed_at: new Date().toISOString(),
+      },
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "book_id,source" }
+  );
+
+  console.log(
+    `[enrichment-worker] Genre bucketing for book ${bookId}: spice=${result.spice}, confidence=${result.confidence}, tags=${result.matchedTags.join(", ")}`
+  );
+}
 
 /**
  * Process pending enrichment jobs.
@@ -98,6 +142,8 @@ async function processJob(job: QueuedJob): Promise<void> {
           }
         }
       }
+      // Run genre bucketing after Goodreads genres are saved
+      await upsertGenreBucketing(supabase, book_id);
       break;
     }
 
@@ -144,6 +190,7 @@ async function processJob(job: QueuedJob): Promise<void> {
       if (!book_title || !book_author) break;
       const spiceData = await getRomanceIoSpice(book_title, book_author);
       if (spiceData && spiceData.confidence === "high") {
+        // Store in legacy book_spice table
         await supabase.from("book_spice").upsert(
           {
             book_id,
@@ -154,11 +201,41 @@ async function processJob(job: QueuedJob): Promise<void> {
           },
           { onConflict: "book_id,source" }
         );
+        // Store in new spice_signals table
+        await supabase.from("spice_signals").upsert(
+          {
+            book_id,
+            source: "romance_io",
+            spice_value: spiceData.spiceLevel,
+            confidence: 0.85,
+            evidence: {
+              heat_label: spiceData.heatLabel,
+              scraped_at: new Date().toISOString(),
+            },
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "book_id,source" }
+        );
+        // Store the star rating if the scraper found one
+        if (spiceData.romanceIoRating && spiceData.romanceIoRating > 0) {
+          await supabase.from("book_ratings").upsert(
+            {
+              book_id,
+              source: "romance_io",
+              rating: spiceData.romanceIoRating,
+              rating_count: null,
+              scraped_at: new Date().toISOString(),
+            },
+            { onConflict: "book_id,source" }
+          );
+        }
         await supabase.from("books").update({
           romance_io_slug: spiceData.romanceIoSlug,
           romance_io_heat_label: spiceData.heatLabel,
         }).eq("id", book_id);
       }
+      // Always run genre bucketing as a fallback signal
+      await upsertGenreBucketing(supabase, book_id);
       break;
     }
 
@@ -190,8 +267,72 @@ async function processJob(job: QueuedJob): Promise<void> {
     }
 
     case "trope_inference": {
-      // Tropes are inferred during Goodreads detail scrape (from genres).
-      // This job type exists as a placeholder for future community trope tagging.
+      // Run genre bucketing as part of trope inference
+      await upsertGenreBucketing(supabase, book_id);
+      break;
+    }
+
+    case "review_classifier": {
+      // Classify spice from review text (Goodreads + Amazon snippets)
+      const { data: bookRow } = await supabase
+        .from("books")
+        .select("goodreads_url, amazon_asin")
+        .eq("id", book_id)
+        .single();
+
+      const reviews = await fetchAllReviews({
+        goodreadsUrl: bookRow?.goodreads_url,
+        title: book_title ?? "",
+        author: book_author ?? "",
+        amazonAsin: bookRow?.amazon_asin,
+      });
+
+      if (reviews.length >= 2) {
+        const result = await classifyReviews(
+          reviews,
+          book_title ?? "",
+          book_author ?? ""
+        );
+        if (result) {
+          await supabase.from("spice_signals").upsert(
+            {
+              book_id,
+              source: "review_classifier",
+              spice_value: result.spice,
+              confidence: result.confidence,
+              evidence: {
+                method: result.method,
+                reviews_analyzed: result.reviewsAnalyzed,
+                keyword_hits: result.keywordHits,
+                per_review_scores: result.perReviewScores,
+                reasoning: result.reasoning ?? null,
+                classified_at: new Date().toISOString(),
+              },
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "book_id,source" }
+          );
+        }
+      }
+      break;
+    }
+
+    case "llm_spice": {
+      // LLM inference — only runs if no higher-confidence signal exists
+      const { data: bookRow } = await supabase
+        .from("books")
+        .select("description, genres")
+        .eq("id", book_id)
+        .single();
+
+      if (bookRow?.description) {
+        await inferAndUpsertSpice(book_id, {
+          title: book_title ?? "",
+          author: book_author ?? "",
+          description: bookRow.description,
+          genres: bookRow.genres ?? [],
+        });
+      }
       break;
     }
 

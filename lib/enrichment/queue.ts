@@ -12,6 +12,8 @@
  * - metadata: Google Books + Open Library supplementary metadata
  * - ai_synopsis: Generate AI synopsis via Claude Haiku
  * - trope_inference: Infer tropes from genres + description
+ * - review_classifier: Classify spice from review text (medium confidence)
+ * - llm_spice: LLM-based spice inference from description (low confidence)
  * - author_crawl: Crawl author's full bibliography
  */
 
@@ -25,6 +27,8 @@ export type JobType =
   | "metadata"
   | "ai_synopsis"
   | "trope_inference"
+  | "review_classifier"
+  | "llm_spice"
   | "author_crawl";
 
 export interface QueuedJob {
@@ -56,8 +60,8 @@ export async function queueEnrichmentJobs(
   const supabase = getAdminClient();
 
   const jobs: JobType[] = options?.hasGoodreadsId
-    ? ["goodreads_rating", "amazon_rating", "romance_io_spice", "metadata", "ai_synopsis", "trope_inference"]
-    : ["goodreads_detail", "goodreads_rating", "amazon_rating", "romance_io_spice", "metadata", "ai_synopsis", "trope_inference"];
+    ? ["goodreads_rating", "amazon_rating", "romance_io_spice", "metadata", "ai_synopsis", "trope_inference", "review_classifier", "llm_spice"]
+    : ["goodreads_detail", "goodreads_rating", "amazon_rating", "romance_io_spice", "metadata", "ai_synopsis", "trope_inference", "review_classifier", "llm_spice"];
 
   const rows = jobs.map((jobType) => ({
     book_id: bookId,

@@ -134,6 +134,29 @@ See `schema.sql` for full schema. Key tables:
 8. Resolve each book: fuzzy trigram DB search → Goodreads search → unmatched
 9. Cache result in `video_grabs` table
 
+## Enrichment Architecture
+
+Book data flows through two independent systems:
+
+### Search (fast, always works)
+- Supabase full-text + trigram search on cached books
+- Google Books API as a fallback for undiscovered books
+- Never waits for Goodreads scraping
+- Returns results in < 500ms
+
+### Enrichment Queue (async, resilient)
+- `enrichment_queue` table tracks jobs per book per source
+- Job types: goodreads_detail, goodreads_rating, amazon_rating, romance_io_spice, metadata, ai_synopsis, trope_inference, author_crawl
+- Each job retries up to 3 times with exponential backoff (30s, 2min, 10min)
+- Cron worker runs every 5 minutes (`/api/cron/enrichment-worker`)
+- `enrichment_status` on books table: "pending" → "partial" → "complete"
+- Book detail pages poll for updates when enrichment is incomplete
+
+### Files
+- `/lib/enrichment/queue.ts` — queue management (add, fetch, complete, fail)
+- `/lib/enrichment/worker.ts` — job processor (dispatches to appropriate enrichment function)
+- `/app/api/cron/enrichment-worker/route.ts` — cron endpoint
+
 ## Coding style
 - TypeScript everywhere
 - Server components by default; use `'use client'` only when needed

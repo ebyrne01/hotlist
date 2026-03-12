@@ -206,6 +206,7 @@ export default async function BookPage({ params }: PageProps) {
     );
   }
 
+  const enrichmentStatus = book.enrichmentStatus ?? "pending";
   const relatedBooks = await getRelatedBooks(book);
 
   // Detect placeholder covers (Goodreads "no-cover" URLs are useless)
@@ -381,6 +382,17 @@ export default async function BookPage({ params }: PageProps) {
               bookId={book.id}
               bookTitle={book.title}
             />
+
+            {/* Enrichment poller — triggers enrichment + polls for new data */}
+            {enrichmentStatus !== "complete" && (
+              <BookDetailClient
+                section="enrichment-poller"
+                bookId={book.id}
+                bookTitle={book.title}
+                bookAuthor={book.author}
+                enrichmentStatus={enrichmentStatus}
+              />
+            )}
           </div>
 
           {/* ── Right column: title + ratings + spice + tropes + synopsis ── */}

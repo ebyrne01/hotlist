@@ -1,5 +1,6 @@
 import { getAdminClient } from "@/lib/supabase/admin";
-import type { Book, BookData, BookDetail, Rating, SpiceRating, Trope } from "@/lib/types";
+import type { Book, BookData, BookDetail, CompositeSpiceData, Rating, SpiceRating, Trope } from "@/lib/types";
+import { getCompositeSpice } from "@/lib/spice/compute-composite";
 import { generateBookSlug } from "./goodreads-search";
 import { isJunkTitle } from "./romance-filter";
 import { deduplicateBooks } from "./utils";
@@ -357,10 +358,11 @@ export async function hydrateBookDetail(
 ): Promise<BookDetail> {
   const book = mapDbBook(dbBook);
 
-  // Fetch ratings, spice, and tropes in parallel
-  const [ratingsRes, spiceRes, tropesRes] = await Promise.all([
+  // Fetch ratings, spice (legacy), composite spice, and tropes in parallel
+  const [ratingsRes, spiceRes, compositeSpice, tropesRes] = await Promise.all([
     supabase.from("book_ratings").select("*").eq("book_id", book.id),
     supabase.from("book_spice").select("*").eq("book_id", book.id),
+    getCompositeSpice(book.id),
     supabase
       .from("book_tropes")
       .select("trope_id, tropes(id, slug, name, description)")
@@ -392,7 +394,7 @@ export async function hydrateBookDetail(
     });
   }
 
-  return { ...book, ratings, spice, tropes };
+  return { ...book, ratings, spice, compositeSpice, tropes };
 }
 
 export function mapDbBook(row: Record<string, unknown>): Book {
@@ -425,5 +427,6 @@ export function mapDbBook(row: Record<string, unknown>): Book {
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
     dataRefreshedAt: (row.data_refreshed_at as string) ?? null,
+    enrichmentStatus: (row.enrichment_status as Book["enrichmentStatus"]) ?? null,
   };
 }

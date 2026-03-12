@@ -29,6 +29,7 @@ export interface Book {
   createdAt: string;
   updatedAt: string;
   dataRefreshedAt: string | null;
+  enrichmentStatus: "pending" | "partial" | "complete" | null;
 }
 
 export interface Rating {
@@ -51,9 +52,19 @@ export interface Trope {
   description: string | null;
 }
 
+export interface CompositeSpiceData {
+  score: number;
+  primarySource: string;
+  communityCount: number | null;
+  signalCount: number;
+  confidence: number;
+  attribution: string;
+}
+
 export interface BookDetail extends Book {
   ratings: Rating[];
   spice: SpiceRating[];
+  compositeSpice: CompositeSpiceData | null;
   tropes: Trope[];
 }
 

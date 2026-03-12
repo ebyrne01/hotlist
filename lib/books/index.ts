@@ -85,7 +85,7 @@ export async function findBook(query: string): Promise<BookDetail[]> {
       // Save as provisional entry (no goodreads_id yet)
       const book = await saveProvisionalBook(bookData);
       if (book && !filteredCache.some((b) => b.id === book.id)) {
-        filteredCache.push({ ...book, ratings: [], spice: [], tropes: [] });
+        filteredCache.push({ ...book, ratings: [], spice: [], compositeSpice: null, tropes: [] });
       }
     }
   } catch {
@@ -159,7 +159,7 @@ export async function findBookLegacy(query: string): Promise<BookDetail[]> {
         });
 
         if (book) {
-          saved.push({ ...book, ratings: [], spice: [], tropes: [] });
+          saved.push({ ...book, ratings: [], spice: [], compositeSpice: null, tropes: [] });
           scheduleMetadataEnrichment(book.id, book.title, book.author, book.isbn);
           scheduleEnrichment(book.id, book.title, book.author, book.isbn);
           if (book.goodreadsId) scheduleAuthorCrawl(book.goodreadsId, book.author);
@@ -187,7 +187,7 @@ export async function findBookLegacy(query: string): Promise<BookDetail[]> {
 
       const book = await saveBookToCache(bookData);
       if (book) {
-        fallbackSaved.push({ ...book, ratings: [], spice: [], tropes: [] });
+        fallbackSaved.push({ ...book, ratings: [], spice: [], compositeSpice: null, tropes: [] });
         scheduleEnrichment(book.id, book.title, book.author, book.isbn);
       }
     }
@@ -303,7 +303,7 @@ async function foregroundSaveNewResults(
     });
 
     if (book) {
-      newBooks.push({ ...book, ratings: [], spice: [], tropes: [] });
+      newBooks.push({ ...book, ratings: [], spice: [], compositeSpice: null, tropes: [] });
       scheduleMetadataEnrichment(book.id, book.title, book.author, book.isbn);
       scheduleEnrichment(book.id, book.title, book.author, book.isbn);
     }
@@ -404,7 +404,7 @@ export async function getBookDetail(identifier: string): Promise<BookDetail | nu
           genres: grDetail.genres,
         });
         if (book) {
-          detail = { ...book, ratings: [], spice: [], tropes: [] };
+          detail = { ...book, ratings: [], spice: [], compositeSpice: null, tropes: [] };
           if (book.goodreadsId) scheduleAuthorCrawl(book.goodreadsId, book.author);
         }
       }
@@ -559,6 +559,7 @@ export async function getBooksByTrope(
       ...mapped,
       ratings: ratingsMap.get(book.id) ?? [],
       spice: spiceMap.get(book.id) ?? [],
+      compositeSpice: null,
       tropes: tropeMap.get(book.id) ?? [],
     };
   });
