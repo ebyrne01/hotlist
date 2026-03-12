@@ -35,7 +35,7 @@ ANTHROPIC_API_KEY=
 GOOGLE_BOOKS_API_KEY=
 AMAZON_AFFILIATE_TAG=
 NEXT_PUBLIC_APP_URL=
-SERPER_API_KEY=              # from serper.dev (Google search API for romance.io spice lookup)
+SERPER_API_KEY=              # from serper.dev (Google search API for romance.io spice + Amazon ratings)
 RAPIDAPI_KEY=              # from rapidapi.com (video downloader)
 RAPIDAPI_VIDEO_HOST=       # specific host for chosen downloader API
 OPENAI_API_KEY=            # from platform.openai.com (Whisper transcription)
@@ -101,7 +101,9 @@ See `schema.sql` for full schema. Key tables:
   - `metadata-enrichment.ts` — supplementary metadata from Google/OL
   - `romance-filter.ts` — romance genre guard + junk title filter
   - `ai-synopsis.ts` — Claude-generated synopses
-- `/lib/scraping/` — per-site scrapers (Goodreads ratings, Amazon, spice inference)
+- `/lib/scraping/` — per-site scrapers (Goodreads ratings, Amazon via Serper, spice inference)
+  - `amazon-search.ts` — Amazon ratings via Serper Google search (replaces broken direct scraping)
+  - `amazon.ts` — DEPRECATED: direct Amazon scraping (returns 503)
 - `/components` — React components
 - `/components/ui` — base UI primitives
 

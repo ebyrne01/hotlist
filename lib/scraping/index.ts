@@ -1,6 +1,6 @@
 import { getAdminClient } from "@/lib/supabase/admin";
 import { scrapeGoodreadsRating, type GoodreadsData } from "./goodreads";
-import { scrapeAmazonRating, type AmazonData } from "./amazon";
+import { getAmazonRatingViaSerper, type AmazonData } from "./amazon-search";
 import { inferSpiceFromGoodreadsShelves } from "./goodreads-spice";
 import { getRomanceIoSpice } from "./romance-io-search";
 
@@ -98,7 +98,7 @@ export async function enrichBookWithExternalData(
 
   if (isStale("amazon", existingRatings)) {
     tasks.push(
-      scrapeAmazonRating(isbn ?? null, null, title, author).then(async (data) => {
+      getAmazonRatingViaSerper(title, author, isbn).then(async (data) => {
         result.amazon = data;
         if (data) {
           await supabase.from("book_ratings").upsert(

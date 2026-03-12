@@ -1,3 +1,9 @@
+/**
+ * @deprecated Direct Amazon scraping returns 503 errors.
+ * Use `amazon-search.ts` (Serper-based Google search) instead.
+ * This file is kept for reference only.
+ */
+
 import * as cheerio from "cheerio";
 
 const USER_AGENT =

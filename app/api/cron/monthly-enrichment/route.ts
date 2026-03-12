@@ -12,7 +12,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { scrapeGoodreadsRating } from "@/lib/scraping/goodreads";
-import { scrapeAmazonRating } from "@/lib/scraping/amazon";
+import { getAmazonRatingViaSerper } from "@/lib/scraping/amazon-search";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -102,11 +102,10 @@ export async function GET(request: NextRequest) {
 
         // Re-fetch Amazon ASIN if missing
         if (!book.amazon_asin && timeRemaining() > 5_000) {
-          const amazonData = await scrapeAmazonRating(
-            book.isbn,
-            null,
+          const amazonData = await getAmazonRatingViaSerper(
             book.title,
-            book.author
+            book.author,
+            book.isbn
           );
           if (amazonData) {
             await supabase.from("book_ratings").upsert(
