@@ -22,6 +22,9 @@ import type { ResolvedBook, ResolvedBookMatched, ResolvedBookUnmatched } from ".
 
 const MODEL = "claude-sonnet-4-5-20250514";
 
+/** Max frames to send to the agent — more frames = slower + more expensive */
+const MAX_AGENT_FRAMES = 8;
+
 const TOOLS: Anthropic.Messages.Tool[] = [
   {
     name: "search_goodreads",
@@ -102,12 +105,13 @@ YOUR PROCESS:
 1. WATCH: Look at the video frames for book covers. Read titles and authors directly from what's visible.
 2. LISTEN: Read the transcript to understand which books the creator is discussing and what they say about each one.
 3. CROSS-REFERENCE: Match what you see on covers with what you hear in the transcript. The creator may show Book 3 while recommending Book 1 of a series.
-4. VERIFY: Use search_goodreads to find each book. This is CRITICAL — do not guess at Goodreads IDs, always search.
-5. CONFIRM: Use confirm_book to verify you have the right edition (especially Book 1 for series recommendations).
+4. VERIFY: Use search_goodreads to find each book. This is CRITICAL — do not guess at Goodreads IDs, always search. Call search_goodreads for ALL books in a SINGLE turn to save time.
+5. CONFIRM: Use confirm_book to verify you have the right edition (especially Book 1 for series recommendations). Call confirm_book for ALL books in a SINGLE turn.
 6. SUBMIT: Call submit_books with your final verified list.
 
 CRITICAL RULES:
 - ALWAYS use search_goodreads to verify books. Never guess.
+- BATCH your tool calls: call search_goodreads for ALL books in one turn, then confirm_book for ALL in the next turn. Do NOT search one book at a time.
 - When the creator recommends a SERIES, find Book 1. Search for "[series name] [author]" and use confirm_book to verify series_position is 1.
 - When you see a book cover that shows a LATER book in a series (e.g., Book 3) but the creator is recommending the series from the start, search for Book 1.
 - Read book covers CHARACTER BY CHARACTER — do not substitute titles you think you recognize.
@@ -132,6 +136,22 @@ interface SubmittedBook {
 }
 
 /**
+ * Subsample frames evenly to stay under MAX_AGENT_FRAMES.
+ * Keeps first and last frame, evenly spaces the rest.
+ */
+function subsampleFrames(frames: (string | Buffer)[]): (string | Buffer)[] {
+  if (frames.length <= MAX_AGENT_FRAMES) return frames;
+
+  const result: (string | Buffer)[] = [frames[0]];
+  const step = (frames.length - 1) / (MAX_AGENT_FRAMES - 1);
+  for (let i = 1; i < MAX_AGENT_FRAMES - 1; i++) {
+    result.push(frames[Math.round(i * step)]);
+  }
+  result.push(frames[frames.length - 1]);
+  return result;
+}
+
+/**
  * Run the book identification agent.
  *
  * Sends video frames + transcript to Sonnet with tool access to Goodreads.
@@ -143,6 +163,7 @@ interface SubmittedBook {
 export async function identifyBooksWithAgent(
   input: BookAgentInput
 ): Promise<ResolvedBook[]> {
+  const agentStart = Date.now();
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     console.error("[book-agent] Missing ANTHROPIC_API_KEY");
@@ -152,11 +173,15 @@ export async function identifyBooksWithAgent(
   try {
     const client = new Anthropic({ apiKey });
 
+    // Subsample frames to keep request size manageable
+    const frames = subsampleFrames(input.frames);
+    console.log(`[book-agent] Using ${frames.length} frames (from ${input.frames.length} total)`);
+
     // Build the user message with frames + transcript
     const contentBlocks: Anthropic.Messages.ContentBlockParam[] = [];
 
     // Add video frames as images
-    for (const img of input.frames) {
+    for (const img of frames) {
       if (typeof img === "string") {
         contentBlocks.push({
           type: "image",
@@ -180,30 +205,31 @@ export async function identifyBooksWithAgent(
       : "";
     contentBlocks.push({
       type: "text",
-      text: `${handleNote}These are ${input.frames.length} sequential frames from a BookTok video. Below is the audio transcript.
+      text: `${handleNote}These are ${frames.length} sequential frames from a BookTok video. Below is the audio transcript.
 
 TRANSCRIPT:
 ${input.transcript.slice(0, 3000)}
 
-Identify every book the creator is recommending or discussing. Use search_goodreads to verify each one, then call submit_books with your final list.`,
+Identify every book the creator is recommending or discussing. Use search_goodreads to verify each one, then call submit_books with your final list. IMPORTANT: Batch all search_goodreads calls into a single turn for efficiency.`,
     });
 
     // Agentic loop — process tool calls until submit_books is called
     let messages: Anthropic.Messages.MessageParam[] = [{ role: "user", content: contentBlocks }];
     let submittedBooks: SubmittedBook[] | null = null;
-    const maxTurns = 15; // Safety limit
+    const maxTurns = 10; // Safety limit
     let turn = 0;
 
     while (turn < maxTurns && submittedBooks === null) {
       turn++;
+      const turnStart = Date.now();
 
-      console.log(`[book-agent] Turn ${turn}: sending ${messages.length} messages, ${contentBlocks.length} content blocks`);
+      console.log(`[book-agent] Turn ${turn}: sending request...`);
 
       let response: Anthropic.Messages.Message;
       try {
         response = await client.messages.create({
           model: MODEL,
-          max_tokens: 4096,
+          max_tokens: 2048,
           temperature: 0,
           system: SYSTEM_PROMPT,
           tools: TOOLS,
@@ -214,11 +240,18 @@ Identify every book the creator is recommending or discussing. Use search_goodre
         break;
       }
 
-      console.log(`[book-agent] Turn ${turn}: stop_reason=${response.stop_reason}, content_types=${response.content.map(b => b.type).join(",")}`);
+      const apiMs = Date.now() - turnStart;
+      console.log(`[book-agent] Turn ${turn}: stop_reason=${response.stop_reason}, blocks=${response.content.map(b => b.type).join(",")}, api_ms=${apiMs}`);
 
       // If the model stopped without tool use, we're done (or it failed)
       if (response.stop_reason === "end_turn") {
-        console.warn("[book-agent] Model stopped without calling submit_books");
+        // Check if there's text content we should log
+        const textBlocks = response.content.filter(b => b.type === "text");
+        if (textBlocks.length > 0) {
+          console.warn(`[book-agent] Model stopped with text: ${(textBlocks[0] as Anthropic.Messages.TextBlock).text.slice(0, 200)}`);
+        } else {
+          console.warn("[book-agent] Model stopped without calling submit_books");
+        }
         break;
       }
 
@@ -232,87 +265,92 @@ Identify every book the creator is recommending or discussing. Use search_goodre
         break;
       }
 
-      // Build tool results
-      const toolResults: Anthropic.Messages.ToolResultBlockParam[] = [];
+      console.log(`[book-agent] Turn ${turn}: processing ${toolUseBlocks.length} tool calls in parallel`);
 
-      for (const toolUse of toolUseBlocks) {
-        const toolInput = toolUse.input as Record<string, unknown>;
+      // Execute ALL tool calls in parallel for speed
+      const toolResults = await Promise.all(
+        toolUseBlocks.map(async (toolUse): Promise<Anthropic.Messages.ToolResultBlockParam> => {
+          const toolInput = toolUse.input as Record<string, unknown>;
 
-        try {
-          if (toolUse.name === "search_goodreads") {
-            const query = toolInput.query as string;
-            console.log(`[book-agent] Searching Goodreads: "${query}"`);
-            const results = await searchGoodreads(query);
-            const simplified = results.slice(0, 5).map((r: GoodreadsSearchResult) => ({
-              goodreads_id: r.goodreadsId,
-              title: r.title,
-              author: r.author,
-              rating: r.rating,
-              rating_count: r.ratingCount,
-            }));
-            console.log(`[book-agent] Goodreads returned ${simplified.length} results for "${query}"`);
-            toolResults.push({
-              type: "tool_result",
-              tool_use_id: toolUse.id,
-              content: JSON.stringify(simplified),
-            });
-          } else if (toolUse.name === "confirm_book") {
-            const goodreadsId = toolInput.goodreads_id as string;
-            console.log(`[book-agent] Confirming book: ${goodreadsId}`);
-            const detail = await getBookDetail(goodreadsId);
-            if (detail) {
-              console.log(`[book-agent] Confirmed: "${detail.title}" by ${detail.author} (series: ${detail.seriesName} #${detail.seriesPosition})`);
-              toolResults.push({
+          try {
+            if (toolUse.name === "search_goodreads") {
+              const query = toolInput.query as string;
+              console.log(`[book-agent] Searching Goodreads: "${query}"`);
+              const results = await searchGoodreads(query);
+              const simplified = results.slice(0, 5).map((r: GoodreadsSearchResult) => ({
+                goodreads_id: r.goodreadsId,
+                title: r.title,
+                author: r.author,
+                rating: r.rating,
+                rating_count: r.ratingCount,
+              }));
+              console.log(`[book-agent] Goodreads returned ${simplified.length} results for "${query}"`);
+              return {
                 type: "tool_result",
                 tool_use_id: toolUse.id,
-                content: JSON.stringify({
-                  goodreads_id: detail.goodreadsId,
-                  title: detail.title,
-                  author: detail.author,
-                  series_name: detail.seriesName,
-                  series_position: detail.seriesPosition,
-                  genres: detail.genres?.slice(0, 5),
-                  rating: detail.ratings?.[0]?.rating,
-                }),
-              });
+                content: JSON.stringify(simplified),
+              };
+            } else if (toolUse.name === "confirm_book") {
+              const goodreadsId = toolInput.goodreads_id as string;
+              console.log(`[book-agent] Confirming book: ${goodreadsId}`);
+              const detail = await getBookDetail(goodreadsId);
+              if (detail) {
+                console.log(`[book-agent] Confirmed: "${detail.title}" by ${detail.author} (series: ${detail.seriesName} #${detail.seriesPosition})`);
+                return {
+                  type: "tool_result",
+                  tool_use_id: toolUse.id,
+                  content: JSON.stringify({
+                    goodreads_id: detail.goodreadsId,
+                    title: detail.title,
+                    author: detail.author,
+                    series_name: detail.seriesName,
+                    series_position: detail.seriesPosition,
+                    genres: detail.genres?.slice(0, 5),
+                    rating: detail.ratings?.[0]?.rating,
+                  }),
+                };
+              } else {
+                console.log(`[book-agent] Book ${goodreadsId} not found`);
+                return {
+                  type: "tool_result",
+                  tool_use_id: toolUse.id,
+                  content: JSON.stringify({ error: "Book not found" }),
+                };
+              }
+            } else if (toolUse.name === "submit_books") {
+              const books = (toolInput.books as SubmittedBook[]) ?? [];
+              submittedBooks = books;
+              console.log(
+                `[book-agent] Submitted ${books.length} books:`,
+                JSON.stringify(books.map((b) => ({ title: b.title, author: b.author, gid: b.goodreads_id })))
+              );
+              return {
+                type: "tool_result",
+                tool_use_id: toolUse.id,
+                content: JSON.stringify({ status: "accepted", count: books.length }),
+              };
             } else {
-              console.log(`[book-agent] Book ${goodreadsId} not found`);
-              toolResults.push({
+              console.warn(`[book-agent] Unknown tool: ${toolUse.name}`);
+              return {
                 type: "tool_result",
                 tool_use_id: toolUse.id,
-                content: JSON.stringify({ error: "Book not found" }),
-              });
+                content: JSON.stringify({ error: `Unknown tool: ${toolUse.name}` }),
+              };
             }
-          } else if (toolUse.name === "submit_books") {
-            const books = (toolInput.books as SubmittedBook[]) ?? [];
-            submittedBooks = books;
-            console.log(
-              `[book-agent] Submitted ${books.length} books:`,
-              JSON.stringify(books.map((b) => ({ title: b.title, author: b.author, gid: b.goodreads_id })))
-            );
-            toolResults.push({
+          } catch (toolErr) {
+            console.error(`[book-agent] Tool ${toolUse.name} failed:`, toolErr);
+            return {
               type: "tool_result",
               tool_use_id: toolUse.id,
-              content: JSON.stringify({ status: "accepted", count: books.length }),
-            });
-          } else {
-            console.warn(`[book-agent] Unknown tool: ${toolUse.name}`);
-            toolResults.push({
-              type: "tool_result",
-              tool_use_id: toolUse.id,
-              content: JSON.stringify({ error: `Unknown tool: ${toolUse.name}` }),
-            });
+              content: JSON.stringify({ error: `Tool failed: ${String(toolErr)}` }),
+              is_error: true,
+            };
           }
-        } catch (toolErr) {
-          console.error(`[book-agent] Tool ${toolUse.name} failed:`, toolErr);
-          toolResults.push({
-            type: "tool_result",
-            tool_use_id: toolUse.id,
-            content: JSON.stringify({ error: `Tool failed: ${String(toolErr)}` }),
-            is_error: true,
-          });
-        }
-      }
+        })
+      );
+
+      const toolMs = Date.now() - turnStart - apiMs;
+      console.log(`[book-agent] Turn ${turn} complete: api=${apiMs}ms, tools=${toolMs}ms`);
 
       // Add assistant response + tool results to messages for next turn
       messages = [
@@ -321,6 +359,9 @@ Identify every book the creator is recommending or discussing. Use search_goodre
         { role: "user", content: toolResults },
       ];
     }
+
+    const totalMs = Date.now() - agentStart;
+    console.log(`[book-agent] Agent complete: ${turn} turns, ${totalMs}ms total`);
 
     if (!submittedBooks || submittedBooks.length === 0) {
       console.warn("[book-agent] No books submitted after", turn, "turns");
