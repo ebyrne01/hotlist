@@ -53,9 +53,21 @@ export async function extractFrames(
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     ffmpegPath = require("ffmpeg-static");
     if (!ffmpegPath) throw new Error("ffmpeg-static returned null");
+    // Verify the binary actually exists at that path
+    if (!fs.existsSync(ffmpegPath)) {
+      throw new Error(`ffmpeg binary not found at ${ffmpegPath}`);
+    }
   } catch (err) {
-    console.error("[frame-extractor] ffmpeg-static not available:", err);
-    return [];
+    console.warn("[frame-extractor] ffmpeg-static not available:", err);
+    // Fallback: try system ffmpeg (available in some Vercel runtimes)
+    try {
+      await execFileAsync("ffmpeg", ["-version"], { timeout: 5000 });
+      ffmpegPath = "ffmpeg";
+      console.log("[frame-extractor] Using system ffmpeg");
+    } catch {
+      console.error("[frame-extractor] No ffmpeg available — frame extraction disabled");
+      return [];
+    }
   }
 
   const jobId = crypto.randomBytes(4).toString("hex");
