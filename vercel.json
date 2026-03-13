@@ -1,7 +1,7 @@
 {
   "functions": {
     "app/api/grab/route.ts": {
-      "maxDuration": 60
+      "maxDuration": 120
     },
     "app/api/cron/enrichment-worker/route.ts": {
       "maxDuration": 60

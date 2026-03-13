@@ -5,7 +5,6 @@
 import { getAdminClient } from "@/lib/supabase/admin";
 import { resolveToGoodreadsId, searchGoodreads } from "@/lib/books/goodreads-search";
 import { getBookDetail } from "@/lib/books";
-import { searchGoogleBooks } from "@/lib/books/google-books";
 import { isJunkTitle } from "@/lib/books/romance-filter";
 import type { BookDetail } from "@/lib/types";
 import type { ExtractedBook } from "./book-extractor";
@@ -179,8 +178,8 @@ async function preferSeriesBook1(results: ResolvedBook[]): Promise<ResolvedBook[
 
     const book = result.book;
     // Only swap if: book has a series, is NOT Book 1, and we know the series name
+    // DB-only lookup to avoid slow Goodreads calls that cause timeouts
     if (book.seriesName && book.seriesPosition && book.seriesPosition > 1) {
-      // Try to find Book 1 in the same series in our DB
       const { data: book1Rows } = await supabase
         .from("books")
         .select("*")
@@ -193,17 +192,6 @@ async function preferSeriesBook1(results: ResolvedBook[]): Promise<ResolvedBook[
         if (book1) {
           console.log(`[book-resolver] Swapping "${book.title}" (Book ${book.seriesPosition}) → "${book1.title}" (Book 1)`);
           corrected.push({ ...result, book: book1 });
-          continue;
-        }
-      }
-
-      // Book 1 not in our DB — try Goodreads
-      const searchResults = await searchGoodreads(`${book.seriesName} book 1`);
-      for (const sr of searchResults.slice(0, 3)) {
-        const detail = await getBookDetail(sr.goodreadsId);
-        if (detail && detail.seriesPosition === 1 && detail.seriesName === book.seriesName) {
-          console.log(`[book-resolver] Goodreads swap "${book.title}" → "${detail.title}" (Book 1)`);
-          corrected.push({ ...result, book: detail });
           continue;
         }
       }
@@ -444,62 +432,32 @@ async function resolveSeriesName(
     }
   }
 
-  // ── Strategy 2: Goodreads search with multiple queries ──
-  const searchQueries = [
-    author ? `${cleanedTitle} ${author}` : cleanedTitle,
-    cleanedTitle,
-    `${cleanedTitle} book 1`,
-  ];
+  // ── Strategy 2: Single Goodreads search (avoid multiple slow queries) ──
+  const searchQuery = author ? `${cleanedTitle} ${author}` : cleanedTitle;
+  const results = await searchGoodreads(searchQuery);
 
-  for (const searchQuery of searchQueries) {
-    const results = await searchGoodreads(searchQuery);
+  for (const result of results.slice(0, 5)) {
+    const bookDetail = await getBookDetail(result.goodreadsId);
+    if (!bookDetail) continue;
 
-    for (const result of results.slice(0, 5)) {
-      const bookDetail = await getBookDetail(result.goodreadsId);
-      if (!bookDetail) continue;
-
-      if (bookDetail.seriesPosition === 1) {
-        console.log(`[book-resolver] Goodreads Book 1 for "${seriesTitle}": "${bookDetail.title}"`);
-        return bookDetail;
-      }
-    }
-
-    // Accept first result with matching author if no Book 1 found
-    if (author && results.length > 0) {
-      const authorWords = author.toLowerCase().split(/\s+/).filter((w) => w.length > 1);
-      for (const result of results.slice(0, 3)) {
-        if (authorWords.some((w) => result.author.toLowerCase().includes(w))) {
-          const bookDetail = await getBookDetail(result.goodreadsId);
-          if (bookDetail) {
-            console.log(`[book-resolver] Goodreads author-match for "${seriesTitle}": "${bookDetail.title}"`);
-            return bookDetail;
-          }
-        }
-      }
+    if (bookDetail.seriesPosition === 1) {
+      console.log(`[book-resolver] Goodreads Book 1 for "${seriesTitle}": "${bookDetail.title}"`);
+      return bookDetail;
     }
   }
 
-  // ── Strategy 3: Google Books fallback ──
-  try {
-    const googleQuery = author ? `${cleanedTitle} ${author}` : cleanedTitle;
-    const googleResults = await searchGoogleBooks(googleQuery);
-    if (googleResults.length > 0) {
-      const firstResult = googleResults[0];
-      const goodreadsId = await resolveToGoodreadsId(
-        firstResult.title,
-        firstResult.author,
-        { fuzzy: true }
-      );
-      if (goodreadsId) {
-        const bookDetail = await getBookDetail(goodreadsId);
+  // Accept first result with matching author if no explicit Book 1
+  if (author && results.length > 0) {
+    const authorWords = author.toLowerCase().split(/\s+/).filter((w) => w.length > 1);
+    for (const result of results.slice(0, 3)) {
+      if (authorWords.some((w) => result.author.toLowerCase().includes(w))) {
+        const bookDetail = await getBookDetail(result.goodreadsId);
         if (bookDetail) {
-          console.log(`[book-resolver] Google Books for "${seriesTitle}": "${bookDetail.title}"`);
+          console.log(`[book-resolver] Goodreads author-match for "${seriesTitle}": "${bookDetail.title}"`);
           return bookDetail;
         }
       }
     }
-  } catch (err) {
-    console.warn(`[book-resolver] Google Books fallback failed for "${seriesTitle}":`, err);
   }
 
   return null;
