@@ -52,7 +52,13 @@ export default function Navbar() {
             href="/booktok"
             className="text-xs font-mono text-fire/80 font-medium hover:text-fire transition-colors"
           >
-            📹 BookTok
+            BookTok
+          </Link>
+          <Link
+            href="/discover"
+            className="text-xs font-mono text-muted hover:text-ink transition-colors"
+          >
+            Discover
           </Link>
           {user && (
             <>
@@ -168,7 +174,14 @@ export default function Navbar() {
               className="text-sm font-mono text-fire/80 font-medium hover:text-fire transition-colors"
               onClick={() => setMenuOpen(false)}
             >
-              📹 BookTok
+              BookTok
+            </Link>
+            <Link
+              href="/discover"
+              className="text-sm font-mono text-muted hover:text-ink transition-colors"
+              onClick={() => setMenuOpen(false)}
+            >
+              Discover Creators
             </Link>
             {user ? (
               <>

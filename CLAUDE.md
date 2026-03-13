@@ -120,6 +120,9 @@ All tables in the public schema:
 | `video_grabs` | BookTok pipeline cache — never process the same URL twice |
 | `grab_feedback` | User feedback on BookTok results (wrong_book, wrong_edition, missing_book). Anonymous inserts via RLS. |
 | `agent_debug_logs` | Debug traces from BookTok agent runs (url, log_entries JSONB) |
+| `creator_handles` | Auto-populated from video grabs. Tracks every BookTok creator. Unique on (handle, platform). |
+| `creator_book_mentions` | Junction: creators ↔ books. Denormalized from video_grabs for fast queries. Includes sentiment + quote. |
+| `user_follows` | Readers follow creator handles. RLS: users manage own follows. |
 | `cron_logs` | Cron job execution logs |
 | `pro_waitlist` | Email capture for future Pro tier |
 
@@ -133,6 +136,8 @@ All tables in the public schema:
 /app/api/grab/                — BookTok video grab (streaming)
 /app/book/[slug]/             — Book detail page + SpiceSection
 /app/booktok/                 — BookTok UI
+/app/discover/                — Creator discovery index (trending + all creators)
+/app/discover/[handle]/       — Auto-generated creator page (books, follow, claim)
 /app/search/                  — Search results page
 
 /lib/books/                   — Book service modules
@@ -146,6 +151,9 @@ All tables in the public schema:
   metadata-enrichment.ts      — supplementary metadata from Google/OL
   romance-filter.ts           — romance genre guard + junk title filter
   ai-synopsis.ts              — Claude-generated synopses
+
+/lib/creators/                — Creator discovery system
+  register.ts                 — Upsert creator handle + book mentions after each grab
 
 /lib/enrichment/              — Async enrichment queue
   queue.ts                    — job queueing, fetching, status, retry with exponential backoff
@@ -195,6 +203,18 @@ All tables in the public schema:
    → Agent reads covers, understands transcript, searches Goodreads, confirms editions, returns verified canonical results
 5. Queue enrichment for all matched books (fire-and-forget via `queueEnrichmentJobs`)
 6. Cache result in `video_grabs` table
+7. Register creator handle + book mentions in `creator_handles` / `creator_book_mentions` (fire-and-forget)
+
+## Creator Discovery
+
+- `creator_handles` table: auto-populated from video grabs, tracks every BookTok creator whose videos have been processed
+- `creator_book_mentions`: denormalized junction table — which creators recommended which books, with sentiment + quotes
+- `user_follows`: readers can follow creator handles
+- `/discover` — browseable index of all discovered creators, with trending section
+- `/discover/[handle]` — auto-generated page showing all books recommended by a creator, with follow button
+- "Seen on BookTok" section on book detail pages shows which creators recommended each book
+- Hotlists created from BookTok grabs store `source_creator_handle`, `source_video_url`, `source_platform`
+- Creators can claim their handle (future: upgrade to full creator profile)
 
 ## Enrichment Architecture
 

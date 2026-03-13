@@ -22,6 +22,7 @@ import { extractFrames } from "./frame-extractor";
 import { identifyBooksWithAgent } from "./book-agent";
 import type { ResolvedBook } from "./book-resolver";
 import { queueEnrichmentJobs } from "@/lib/enrichment/queue";
+import { registerCreatorMentions } from "@/lib/creators/register";
 
 export type GrabStatus =
   | "downloading"
@@ -88,9 +89,9 @@ async function cacheGrabResult(
   url: string,
   result: GrabResultSuccess,
   userId?: string
-): Promise<void> {
+): Promise<string | null> {
   const supabase = getAdminClient();
-  await supabase.from("video_grabs").upsert(
+  const { data } = await supabase.from("video_grabs").upsert(
     {
       url: normalizeUrl(url),
       platform: result.platform,
@@ -101,7 +102,8 @@ async function cacheGrabResult(
       user_id: userId ?? null,
     },
     { onConflict: "url" }
-  );
+  ).select("id").single();
+  return data?.id ?? null;
 }
 
 /**
@@ -236,7 +238,20 @@ export async function grabBooksFromVideo(
   };
 
   // Step 7: Cache result
-  await cacheGrabResult(url, result, userId);
+  const grabId = await cacheGrabResult(url, result, userId);
+
+  // Step 8: Register creator handle and book mentions (fire-and-forget)
+  if (result.creatorHandle && grabId) {
+    registerCreatorMentions({
+      handle: result.creatorHandle,
+      platform,
+      videoUrl: url,
+      videoGrabId: grabId,
+      books: resolved,
+    }).catch((err) => {
+      console.warn("[grab] Failed to register creator mentions:", err);
+    });
+  }
 
   onStatus?.("done");
   return result;

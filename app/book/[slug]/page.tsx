@@ -16,6 +16,7 @@ import type { BookDetail } from "@/lib/types";
 import BookDetailClient from "./BookDetailClient";
 import { InlineUserRating } from "./InlineRatings";
 import SpiceSection from "./SpiceSection";
+import BookTokMentions from "@/components/books/BookTokMentions";
 
 // ── Helpers ──────────────────────────────────────────
 
@@ -208,6 +209,32 @@ export default async function BookPage({ params }: PageProps) {
 
   const enrichmentStatus = book.enrichmentStatus ?? "pending";
   const relatedBooks = await getRelatedBooks(book);
+
+  // Fetch BookTok creator mentions for this book
+  const supabase = getAdminClient();
+  const { data: mentionRows } = await supabase
+    .from("creator_book_mentions")
+    .select("sentiment, quote, platform, creator_handle_id, creator_handles(handle)")
+    .eq("book_id", book.id)
+    .order("mentioned_at", { ascending: false })
+    .limit(10);
+
+  const seenHandles = new Set<string>();
+  const creatorMentions = (mentionRows || [])
+    .map((row: Record<string, unknown>) => {
+      const ch = row.creator_handles as Record<string, unknown> | null;
+      return {
+        creatorHandle: (ch?.handle as string) || "Unknown",
+        platform: (row.platform as string) || "tiktok",
+        sentiment: row.sentiment as string | null,
+        quote: row.quote as string | null,
+      };
+    })
+    .filter((m) => {
+      if (seenHandles.has(m.creatorHandle)) return false;
+      seenHandles.add(m.creatorHandle);
+      return true;
+    });
 
   // Detect placeholder covers (Goodreads "no-cover" URLs are useless)
   const isPlaceholderCover =
@@ -527,6 +554,9 @@ export default async function BookPage({ params }: PageProps) {
 
           </div>
         </div>
+
+        {/* ── Seen on BookTok ── */}
+        <BookTokMentions mentions={creatorMentions} />
 
         {/* ── Readers also loved ── */}
         {relatedBooks.length > 0 && (

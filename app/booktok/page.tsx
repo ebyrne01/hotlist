@@ -211,6 +211,10 @@ function BookTokPageInner() {
           name: listName,
           is_public: false,
           share_slug: shareSlug,
+          source_creator_handle: result.creatorHandle || null,
+          source_video_url: url || null,
+          source_video_thumbnail: result.thumbnailUrl || null,
+          source_platform: result.platform || null,
         })
         .select("id, share_slug")
         .single();
