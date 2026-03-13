@@ -211,7 +211,7 @@ export default function ProfilePage() {
           className="flex items-center justify-between px-4 py-3 bg-white border border-fire/15 rounded-lg hover:border-fire/30 transition-colors group"
         >
           <span className="font-mono text-sm text-ink">
-            {(profile as unknown as Record<string, unknown>)?.is_creator ? "Creator Settings" : "Become a Creator"}
+            {profile?.isCreator ? "Creator Settings" : "Become a Creator"}
           </span>
           <svg
             width="16"

@@ -62,8 +62,7 @@ export default function CreatorSettingsPage() {
   const [slugError, setSlugError] = useState("");
   const [slugChecking, setSlugChecking] = useState(false);
 
-  // Profile type doesn't include creator fields — safe to cast
-  const isCreator = (profile as unknown as Record<string, unknown>)?.is_creator === true;
+  const isCreator = profile?.isCreator === true;
 
   // Fetch existing application (non-creator)
   useEffect(() => {

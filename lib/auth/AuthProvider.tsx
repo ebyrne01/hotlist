@@ -17,6 +17,7 @@ interface Profile {
   displayName: string | null;
   avatarUrl: string | null;
   createdAt: string;
+  isCreator: boolean;
 }
 
 interface AuthContextValue {
@@ -41,7 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (userId: string) => {
       const { data } = await supabase
         .from("profiles")
-        .select("id, username, display_name, avatar_url, created_at")
+        .select("id, username, display_name, avatar_url, created_at, is_creator")
         .eq("id", userId)
         .single();
 
@@ -52,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           displayName: data.display_name,
           avatarUrl: data.avatar_url,
           createdAt: data.created_at,
+          isCreator: data.is_creator ?? false,
         });
       }
     },
