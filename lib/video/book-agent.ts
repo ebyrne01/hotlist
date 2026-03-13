@@ -219,7 +219,7 @@ Identify every book the creator is recommending or discussing. Use search_goodre
     const maxTurns = 10; // Safety limit
     let turn = 0;
 
-    while (turn < maxTurns && submittedBooks === null) {
+    while (turn < maxTurns && !submittedBooks) {
       turn++;
       const turnStart = Date.now();
 
@@ -363,13 +363,13 @@ Identify every book the creator is recommending or discussing. Use search_goodre
     const totalMs = Date.now() - agentStart;
     console.log(`[book-agent] Agent complete: ${turn} turns, ${totalMs}ms total`);
 
-    if (!submittedBooks || submittedBooks.length === 0) {
+    if (!submittedBooks || (submittedBooks as SubmittedBook[]).length === 0) {
       console.warn("[book-agent] No books submitted after", turn, "turns");
       return [];
     }
 
     // Convert submitted books to ResolvedBook format
-    return await resolveSubmittedBooks(submittedBooks);
+    return await resolveSubmittedBooks(submittedBooks as SubmittedBook[]);
   } catch (err) {
     console.error("[book-agent] Failed:", err);
     return [];
