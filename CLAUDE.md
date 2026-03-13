@@ -114,7 +114,9 @@ All tables in the public schema:
 | `reading_status` | want_to_read / reading / read per user per book |
 | `hotlists` | User-created comparison lists |
 | `hotlist_books` | Books within a hotlist (position, added_at) |
-| `profiles` | Extended user data |
+| `profiles` | Extended user data. Creator fields: `is_creator`, `creator_verified_at`, `vanity_slug` (UNIQUE), `bio`, `tiktok_handle`, `instagram_handle`, `youtube_handle`, `blog_url`, `amazon_affiliate_tag`, `bookshop_affiliate_id` |
+| `creator_applications` | Self-serve creator verification requests. Status: pending → approved / rejected |
+| `analytics_events` | Lightweight event tracking (profile_view, affiliate_click, etc.) |
 | `homepage_cache` | Cached book ID lists for homepage rows (24h TTL) |
 | `nyt_trending` | NYT bestseller entries with rank + weeks_on_list |
 | `video_grabs` | BookTok pipeline cache — never process the same URL twice |
@@ -138,6 +140,10 @@ All tables in the public schema:
 /app/booktok/                 — BookTok UI
 /app/discover/                — Creator discovery index (trending + all creators)
 /app/discover/[handle]/       — Auto-generated creator page (books, follow, claim)
+/app/profile/creator/         — Creator settings page (application form or settings)
+/app/[vanitySlug]/            — Public creator profile (vanity URL, reserved word guard)
+/app/api/analytics/event/     — Analytics event tracking endpoint
+/app/api/books/lookup/        — Book lookup for Chrome extension (multi-identifier, CORS)
 /app/search/                  — Search results page
 
 /lib/books/                   — Book service modules
@@ -215,6 +221,29 @@ All tables in the public schema:
 - "Seen on BookTok" section on book detail pages shows which creators recommended each book
 - Hotlists created from BookTok grabs store `source_creator_handle`, `source_video_url`, `source_platform`
 - Creators can claim their handle (future: upgrade to full creator profile)
+
+## Creator Platform
+
+Verified creators get a public profile and affiliate monetization:
+
+- **Self-serve application**: `/profile/creator` — non-creators fill out application form → `creator_applications` table (status: pending → approved/rejected)
+- **Creator settings**: Verified creators manage vanity URL, bio, social handles, Amazon affiliate tag, Bookshop.org affiliate ID
+- **Public profile**: `/{vanitySlug}` — server-rendered page with avatar, bio, verified badge, social links, public hotlists with mini book covers, reading stats. Reserved word guard prevents conflicts with app routes.
+- **Affiliate tag threading**: Creator's `amazon_affiliate_tag` flows through `getHotlistWithBooks()` → `HotlistDetail.ownerAffiliateTag` → `HotlistTable.affiliateTag` → Buy links. Default tag (`NEXT_PUBLIC_AMAZON_AFFILIATE_TAG`) used when no creator tag is set.
+- **Auto-Hotlist creator mode**: When verified creators use BookTok grab, hotlists are auto-set to public (`is_public: true`)
+- **Analytics**: `analytics_events` table tracks profile_view, affiliate_click, etc. API: `POST /api/analytics/event`
+
+## Chrome Extension
+
+Browser extension that meets users on Goodreads, Amazon, and video sites:
+
+- **Manifest V3**: `extension/manifest.json`
+- **Goodreads overlay** (`content-goodreads.js`): Injects spice, tropes, Amazon rating comparison below the Goodreads rating section. Auto-provisions books not in DB via lookup API.
+- **Amazon overlay** (`content-amazon.js`): Injects Goodreads rating, spice, tropes on book product pages. SPA-aware via MutationObserver.
+- **Video detection** (`content-video.js`): Detects TikTok/Instagram/YouTube video pages, activates popup grab.
+- **Popup** (`popup.html/js`): BookTok grab UI with streaming progress, results display.
+- **Backend**: `/api/books/lookup` — multi-identifier lookup (goodreads_id, isbn, asin, title+author), CORS-enabled, auto-provisioning.
+- **CORS**: `lib/api/cors.ts` shared utility. All data is public, no auth needed.
 
 ## Enrichment Architecture
 

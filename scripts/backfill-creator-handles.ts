@@ -8,6 +8,9 @@
  * Run once: npx tsx scripts/backfill-creator-handles.ts
  */
 
+import { config } from "dotenv";
+config({ path: ".env.local" });
+
 import { getAdminClient } from "@/lib/supabase/admin";
 
 async function backfill() {

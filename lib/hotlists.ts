@@ -96,10 +96,10 @@ export async function getHotlistWithBooks(
     .eq("hotlist_id", hotlistRow.id as string)
     .order("position", { ascending: true });
 
-  // Fetch owner name
+  // Fetch owner name + affiliate tag
   const { data: ownerProfile } = await supabase
     .from("profiles")
-    .select("display_name")
+    .select("display_name, amazon_affiliate_tag, is_creator")
     .eq("id", hotlistRow.user_id as string)
     .single();
 
@@ -149,6 +149,7 @@ export async function getHotlistWithBooks(
     createdAt: hotlistRow.created_at as string,
     updatedAt: hotlistRow.updated_at as string,
     ownerName: ownerProfile?.display_name ?? null,
+    ownerAffiliateTag: (ownerProfile?.is_creator && ownerProfile?.amazon_affiliate_tag) || null,
     books,
   };
 }

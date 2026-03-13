@@ -106,6 +106,7 @@ export interface HotlistDetail {
   createdAt: string;
   updatedAt: string;
   ownerName: string | null;
+  ownerAffiliateTag: string | null;
   books: HotlistBookDetail[];
 }
 

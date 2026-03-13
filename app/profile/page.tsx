@@ -206,6 +206,26 @@ export default function ProfilePage() {
             <path d="M6 4l4 4-4 4" />
           </svg>
         </Link>
+        <Link
+          href="/profile/creator"
+          className="flex items-center justify-between px-4 py-3 bg-white border border-fire/15 rounded-lg hover:border-fire/30 transition-colors group"
+        >
+          <span className="font-mono text-sm text-ink">
+            {(profile as unknown as Record<string, unknown>)?.is_creator ? "Creator Settings" : "Become a Creator"}
+          </span>
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            className="text-fire group-hover:text-fire transition-colors"
+          >
+            <path d="M6 4l4 4-4 4" />
+          </svg>
+        </Link>
       </div>
 
       {/* Pro waitlist */}

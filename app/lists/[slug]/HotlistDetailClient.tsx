@@ -389,6 +389,7 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
         isOwner={isOwner}
         onRemoveBook={isOwner ? handleRemoveBook : undefined}
         onRateBook={isOwner ? handleRateBook : undefined}
+        affiliateTag={hotlist.ownerAffiliateTag ?? undefined}
         enrichingBookIds={enrichingBookIds}
       />
 

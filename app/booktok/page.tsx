@@ -191,6 +191,15 @@ function BookTokPageInner() {
     try {
       const supabase = createClient();
 
+      // Check if this user is a verified creator (auto-public mode)
+      const { data: creatorProfile } = await supabase
+        .from("profiles")
+        .select("is_creator, vanity_slug")
+        .eq("id", user.id)
+        .single();
+
+      const isCreator = creatorProfile?.is_creator === true;
+
       // Create a new hotlist named after the creator
       const listName = result.creatorHandle
         ? `${result.creatorHandle} picks`
@@ -209,7 +218,7 @@ function BookTokPageInner() {
         .insert({
           user_id: user.id,
           name: listName,
-          is_public: false,
+          is_public: isCreator, // Auto-public for verified creators
           share_slug: shareSlug,
           source_creator_handle: result.creatorHandle || null,
           source_video_url: url || null,
