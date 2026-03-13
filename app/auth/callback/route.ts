@@ -4,14 +4,20 @@ import { NextResponse, type NextRequest } from "next/server";
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl;
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/";
+
+  // Read return URL from cookie (set by AuthProvider before OAuth redirect)
+  const returnCookie = request.cookies.get("auth_return_url")?.value;
+  const returnUrl = returnCookie ? decodeURIComponent(returnCookie) : "/";
 
   if (code) {
     const supabase = createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
-      return NextResponse.redirect(`${origin}${next}`);
+      const response = NextResponse.redirect(`${origin}${returnUrl}`);
+      // Clear the cookie
+      response.cookies.set("auth_return_url", "", { path: "/", maxAge: 0 });
+      return response;
     }
   }
 

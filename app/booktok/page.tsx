@@ -85,6 +85,12 @@ function BookTokPageInner() {
     setResult(null);
     setError(null);
 
+    // Update browser URL so auth redirects and bookmarks preserve the video URL
+    const urlParam = new URLSearchParams(window.location.search).get("url");
+    if (!urlParam) {
+      window.history.replaceState({}, "", `/booktok?url=${encodeURIComponent(targetUrl.trim())}`);
+    }
+
     try {
       abortRef.current = new AbortController();
 
