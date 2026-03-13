@@ -24,6 +24,23 @@ const STATUS_MESSAGES: Record<GrabStatus, string> = {
   done: "Done!",
 };
 
+const PROGRESS_STEPS: GrabStatus[] = [
+  "downloading",
+  "transcribing",
+  "scanning",
+  "extracting",
+  "identifying",
+];
+
+const PROGRESS_LABELS: Record<GrabStatus, string> = {
+  downloading: "Download",
+  transcribing: "Transcribe",
+  scanning: "Scan",
+  extracting: "Extract",
+  identifying: "Identify",
+  done: "Done",
+};
+
 // ── Sentiment labels ────────────────────────────────────
 
 const SENTIMENT_EMOJI: Record<string, string> = {
@@ -276,14 +293,47 @@ function BookTokPageInner() {
 
       {/* Processing state */}
       {processing && status && (
-        <div className="mt-8 text-center py-8">
-          <div className="text-3xl mb-3 animate-pulse">🔥</div>
-          <p className="text-sm font-mono text-ink font-medium">
+        <div className="mt-8 py-8">
+          <div className="text-3xl mb-3 text-center animate-pulse">🔥</div>
+          <p className="text-sm font-mono text-ink font-medium text-center">
             {STATUS_MESSAGES[status]}
           </p>
-          <p className="text-xs font-mono text-muted/50 mt-2">
-            This usually takes 15-30 seconds
+          <p className="text-xs font-body text-muted/50 mt-1 text-center italic">
+            Extracting the magic — this takes about a minute
           </p>
+
+          {/* Progress steps */}
+          <div className="mt-6 flex items-center justify-center gap-1 max-w-sm mx-auto">
+            {PROGRESS_STEPS.map((step, i) => {
+              const currentIdx = PROGRESS_STEPS.indexOf(status);
+              const isComplete = i < currentIdx;
+              const isActive = i === currentIdx;
+              return (
+                <div key={step} className="flex-1 flex flex-col items-center gap-1.5">
+                  <div
+                    className={`h-1.5 w-full rounded-full transition-all duration-500 ${
+                      isComplete
+                        ? "bg-fire"
+                        : isActive
+                          ? "bg-fire/60 animate-pulse"
+                          : "bg-border/40"
+                    }`}
+                  />
+                  <span
+                    className={`text-[9px] font-mono transition-colors duration-300 ${
+                      isComplete
+                        ? "text-fire/70"
+                        : isActive
+                          ? "text-ink/70"
+                          : "text-muted/30"
+                    }`}
+                  >
+                    {PROGRESS_LABELS[step]}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
