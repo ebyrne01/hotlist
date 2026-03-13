@@ -48,7 +48,7 @@ class AgentDebugLog {
   }
 }
 
-const MODEL = "claude-sonnet-4-6-20250514";
+const MODEL = "claude-sonnet-4-6";
 
 /** Max frames to send to the agent — more frames = slower + more expensive */
 const MAX_AGENT_FRAMES = 8;
