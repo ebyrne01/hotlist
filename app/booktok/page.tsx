@@ -8,6 +8,8 @@ import { useSignInModal } from "@/lib/auth/useSignInModal";
 import { createClient } from "@/lib/supabase/client";
 import BookCover from "@/components/ui/BookCover";
 import RatingBadge from "@/components/ui/RatingBadge";
+import GrabFeedbackButton from "@/components/booktok/GrabFeedbackButton";
+import MissingBookFeedback from "@/components/booktok/MissingBookFeedback";
 import type { GrabResult, GrabStatus } from "@/lib/video";
 import type { ResolvedBook } from "@/lib/video/book-resolver";
 
@@ -363,12 +365,15 @@ function BookTokPageInner() {
           <div className="grid gap-3">
             {result.books.map((book, i) =>
               book.matched ? (
-                <MatchedBookCard key={i} book={book} />
+                <MatchedBookCard key={i} book={book} videoUrl={url} />
               ) : (
-                <UnmatchedBookCard key={i} book={book} />
+                <UnmatchedBookCard key={i} book={book} videoUrl={url} />
               )
             )}
           </div>
+
+          {/* Missing book feedback */}
+          <MissingBookFeedback videoUrl={url} />
 
           {/* Transcript section */}
           <div className="mt-8 border-t border-border pt-4">
@@ -398,8 +403,10 @@ function BookTokPageInner() {
 
 function MatchedBookCard({
   book,
+  videoUrl,
 }: {
   book: Extract<ResolvedBook, { matched: true }>;
+  videoUrl: string;
 }) {
   const detail = book.book;
   const grRating = detail.ratings.find((r) => r.source === "goodreads");
@@ -460,6 +467,12 @@ function MatchedBookCard({
         <p className="text-[10px] font-mono text-muted/40 mt-0.5">
           {SENTIMENT_EMOJI[book.creatorSentiment] ?? "mentioned"}
         </p>
+        <GrabFeedbackButton
+          videoUrl={videoUrl}
+          bookId={detail.id}
+          bookTitle={detail.title}
+          feedbackOptions={["wrong_book", "wrong_edition"]}
+        />
       </div>
       <div className="shrink-0 flex flex-col items-end gap-1">
         <Link
@@ -477,8 +490,10 @@ function MatchedBookCard({
 
 function UnmatchedBookCard({
   book,
+  videoUrl,
 }: {
   book: Extract<ResolvedBook, { matched: false }>;
+  videoUrl: string;
 }) {
   return (
     <div className="flex gap-3 p-3 bg-white border border-border rounded-lg opacity-70">
@@ -508,6 +523,11 @@ function UnmatchedBookCard({
         >
           Search for this book &rarr;
         </Link>
+        <GrabFeedbackButton
+          videoUrl={videoUrl}
+          bookTitle={book.rawTitle}
+          feedbackOptions={["wrong_book"]}
+        />
       </div>
     </div>
   );

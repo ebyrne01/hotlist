@@ -13,7 +13,7 @@ Romance and romantasy readers. Mobile-first. Non-technical users. The tone is wa
 - **Deployment**: Vercel
 - **AI**: Anthropic Claude API (tiered approach):
   - `claude-haiku-4-5-20251001` for transcript extraction, synopsis generation, trope normalization, sentiment tagging, spice inference (high volume, cost-sensitive)
-  - `claude-sonnet-4-5-20250514` for BookTok title correction and vision-based book cover reading (accuracy-critical, low volume)
+  - `claude-sonnet-4-6` for BookTok agent (vision + tool use for book identification, accuracy-critical, low volume)
 - **Book metadata**: Google Books API + Open Library API
 - **Data enrichment**: Web scraping via cheerio + node-fetch (Goodreads, Amazon). romance.io via Serper Google search (romance.io blocks direct scraping).
 - **State/data fetching**: SWR
@@ -118,6 +118,8 @@ All tables in the public schema:
 | `homepage_cache` | Cached book ID lists for homepage rows (24h TTL) |
 | `nyt_trending` | NYT bestseller entries with rank + weeks_on_list |
 | `video_grabs` | BookTok pipeline cache — never process the same URL twice |
+| `grab_feedback` | User feedback on BookTok results (wrong_book, wrong_edition, missing_book). Anonymous inserts via RLS. |
+| `agent_debug_logs` | Debug traces from BookTok agent runs (url, log_entries JSONB) |
 | `cron_logs` | Cron job execution logs |
 | `pro_waitlist` | Email capture for future Pro tier |
 
@@ -160,10 +162,13 @@ All tables in the public schema:
 /lib/video/                   — BookTok pipeline
   downloader.ts               — RapidAPI video downloader
   transcription.ts            — OpenAI Whisper
-  vision-extractor.ts         — Claude Sonnet vision (book covers)
-  book-extractor.ts           — Claude Haiku (transcript) + Sonnet (title correction)
-  book-resolver.ts            — Fuzzy match + Goodreads lookup
+  frame-extractor.ts          — ffmpeg frame extraction from video
+  book-agent.ts               — Single Sonnet agent (vision + transcript + Goodreads tool use)
+  book-resolver.ts            — Types only (ResolvedBook, etc.)
   index.ts                    — Pipeline orchestrator
+  vision-extractor.ts         — DEPRECATED (replaced by book-agent.ts)
+  book-extractor.ts           — DEPRECATED (replaced by book-agent.ts)
+  reconciler.ts               — DEPRECATED (replaced by book-agent.ts)
 
 /components/books/            — Book-specific components (BookCard, SpiceDisplay, SpiceAttribution)
 /components/ui/               — Base UI primitives (Badge, BookCover, SpiceIndicator)
@@ -174,27 +179,22 @@ All tables in the public schema:
 ## BookTok feature (formerly "Grab from Video")
 - Video download: RapidAPI (third-party TikTok/Instagram/YouTube downloader)
 - Transcription: OpenAI Whisper API (model: whisper-1) — NOT Claude
-- **Vision extraction: Claude Sonnet (`claude-sonnet-4-5-20250514`) — reads book covers from video thumbnail**
-- Book extraction: Claude Haiku (`claude-haiku-4-5-20251001`) — extracts titles from transcript
-- **Title correction: Claude Sonnet (`claude-sonnet-4-5-20250514`) — fixes Whisper transcription errors**
-- Resolution: Fuzzy matching via PostgreSQL trigram search + Goodreads canonical lookup
+- Frame extraction: ffmpeg via ffmpeg-static (up to 20 frames, subsampled to 8 for agent)
+- **Book identification: Single Claude Sonnet (`claude-sonnet-4-6`) agent with tool use — sees video frames, reads transcript, searches & confirms books on Goodreads in real time**
 - Cache: `video_grabs` Supabase table — never process the same URL twice
 - UI: `/app/booktok/page.tsx` (old `/app/grab/page.tsx` redirects here)
 - API: `/app/api/grab/route.ts` (streaming)
 - URL detection: SearchBar auto-detects video URLs and redirects to `/booktok?url=...`
-- Cost: ~$0.018 per grab ($18/month at 1K grabs)
+- Cost: ~$0.05-0.10 per grab (vision + tool use, but only ONE Sonnet call)
 
 ### BookTok pipeline (in order):
 1. Validate URL + check cache
 2. Download video/audio via RapidAPI
-3. Transcribe audio via Whisper (parallel with step 4)
-4. Extract book covers from video thumbnail via Claude Sonnet vision
-5. Extract book mentions from transcript via Claude Haiku
-6. Correct transcription errors via Claude Sonnet
-7. Merge vision + transcript books, deduplicate
-8. Resolve each book: fuzzy trigram DB search → Goodreads search → unmatched
-9. Queue enrichment for all matched books (fire-and-forget via `queueEnrichmentJobs`)
-10. Cache result in `video_grabs` table
+3. Transcribe audio via Whisper + extract frames via ffmpeg (parallel)
+4. Single Sonnet agent call: vision + transcript + Goodreads tool use
+   → Agent reads covers, understands transcript, searches Goodreads, confirms editions, returns verified canonical results
+5. Queue enrichment for all matched books (fire-and-forget via `queueEnrichmentJobs`)
+6. Cache result in `video_grabs` table
 
 ## Enrichment Architecture
 
