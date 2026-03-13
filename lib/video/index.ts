@@ -229,6 +229,10 @@ export async function grabBooksFromVideo(
     creatorHandle ?? undefined
   );
 
+  // Pipeline debug logging — log what each stage produces
+  console.log(`[grab] VISION BOOKS (${visionBooks.length}):`, JSON.stringify(visionBooks.map(b => ({ title: b.title, author: b.author, confidence: b.confidence }))));
+  console.log(`[grab] TRANSCRIPT BOOKS (${extracted.length}):`, JSON.stringify(extracted.map(b => ({ title: b.title, author: b.author, descriptionOnly: b.descriptionOnly, confidence: b.confidence }))));
+
   if (extracted.length === 0 && visionBooks.length === 0) {
     return {
       success: false,
@@ -240,6 +244,7 @@ export async function grabBooksFromVideo(
   // Step 7: Correct transcription errors in titles/authors
   onStatus?.("correcting");
   const corrected = await correctExtractedBooks(extracted);
+  console.log(`[grab] CORRECTED BOOKS (${corrected.length}):`, JSON.stringify(corrected.map(b => ({ title: b.title, author: b.author }))));
 
   // Step 8: Reconcile vision + transcript books
   // This replaces the old naive word-overlap merge with an intelligent
@@ -250,10 +255,12 @@ export async function grabBooksFromVideo(
     transcriptBooks: corrected,
     transcript: transcription.text,
   });
+  console.log(`[grab] RECONCILED BOOKS (${reconciled.length}):`, JSON.stringify(reconciled.map(b => ({ title: b.title, author: b.author, descriptionOnly: b.descriptionOnly }))));
 
   // Step 9: Resolve to our database
   onStatus?.("resolving");
   const resolved = await resolveExtractedBooks(reconciled);
+  console.log(`[grab] RESOLVED BOOKS (${resolved.length}):`, JSON.stringify(resolved.map(b => b.matched ? { matched: true, title: b.book.title } : { matched: false, rawTitle: b.rawTitle })));
 
   // Step 10: Queue enrichment for all matched books (fire-and-forget)
   queueEnrichmentForResolved(resolved);

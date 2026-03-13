@@ -30,8 +30,8 @@ const MAX_FRAMES = 20;
 /** Extract 1 frame every N seconds */
 const FRAME_INTERVAL_SECONDS = 2;
 
-/** Resize frames to this width (pixels) — keeps vision tokens down */
-const FRAME_WIDTH = 512;
+/** Resize frames to this width (pixels) — higher res = better OCR on book covers */
+const FRAME_WIDTH = 768;
 
 /**
  * Extract frames from a video URL at regular intervals.

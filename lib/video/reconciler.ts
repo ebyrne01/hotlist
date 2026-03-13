@@ -20,31 +20,31 @@ import type { ExtractedBook } from "./book-extractor";
 /** Model for accuracy-critical tasks */
 const MODEL_ACCURATE = "claude-sonnet-4-5-20250514";
 
-const RECONCILIATION_SYSTEM_PROMPT = `You are a book identification expert. You will receive two lists of books detected from a BookTok video:
+const RECONCILIATION_SYSTEM_PROMPT = `You are a book identification expert for a BookTok video analysis tool. You will receive:
 
-1. VISION BOOKS: Titles and authors read directly from book covers shown in video frames. Vision can misread covers — titles may be from the wrong book in a series (e.g., reading Book 5's cover when the creator is discussing Book 1).
-2. TRANSCRIPT BOOKS: Books mentioned in the audio transcript. Some have exact titles (descriptionOnly: false), others have descriptions instead of titles (descriptionOnly: true) because the creator described the book without naming it.
+1. VISION BOOKS: Titles/authors read from book covers in video frames. These are the most reliable signal for exact book titles.
+2. TRANSCRIPT BOOKS: Books mentioned in the audio. Some have exact titles (descriptionOnly: false), others are descriptions (descriptionOnly: true).
 
-Your job is to produce the FINAL, reconciled list of books by cross-referencing these two signals.
+Your job: produce the FINAL reconciled list by cross-referencing these two signals.
 
 RULES:
-1. SERIES AWARENESS IS CRITICAL: When the transcript says "starting book", "first in the series", "where you first meet [character]", or implies Book 1, but the vision shows a different book in the same series, USE BOOK 1's TITLE — not the vision title. The creator is recommending the entry point, not whichever book happened to be face-up.
-2. When a transcript description matches a vision-detected book and there's no series conflict, use the vision title. Carry over the transcript's sentiment, quote, and author.
-3. SERIES NAMES ARE NOT TITLES: If the transcript mentions a series name (e.g., "the Monsters of Faerie series" or "the Brides of Karadoc series"), you MUST resolve it to a specific book title. Use context clues: if the creator recommends the series as a whole, use Book 1. If they mention a specific book, use that title. Use your knowledge of book series to identify the correct title and author. NEVER output a series name as a title — always output the specific book.
-4. Vision-only books (shown but never discussed): include them with sentiment "neutral".
-5. Transcript-only books with exact titles (not shown on screen): include them as-is.
-6. Transcript-only descriptions that don't match any vision book: include them but mark as descriptionOnly.
-7. USE YOUR BOOK KNOWLEDGE: You know romance, romantasy, and fantasy series. When the transcript or vision gives you a series name, an incorrect book in a series, or a description, use your knowledge to identify the SPECIFIC correct book title and author. For example, if vision reads "Ancient Vengeance" but the transcript describes "a dystopian future where evil dragons have taken over" and talks about the series as a whole, the correct entry point is likely the FIRST book in that series — use your knowledge to name it.
-8. DO NOT invent books that appear in neither list. But DO correct series misidentifications using your knowledge.
+1. VISION TITLES ARE THE GROUND TRUTH for book identification. When vision reads a title from a cover, USE THAT EXACT TITLE even if you think it might be wrong. The downstream resolver will handle matching.
+2. When a transcript description matches a vision book (same author or same topic), merge them: use the VISION title, carry over transcript's sentiment, quote, and author.
+3. When vision and transcript both have the same book, use vision's title spelling.
+4. SERIES NAMES from transcript (e.g., "the Brides of Karadoc series"): Keep the series name as the title with descriptionOnly: false — the downstream resolver handles series-to-book-1 mapping. Include the author if mentioned.
+5. Vision-only books (shown but never discussed): include with sentiment "neutral".
+6. Transcript-only books with exact titles: include as-is.
+7. Transcript-only descriptions that don't match any vision book: include with descriptionOnly: true.
+8. DO NOT change vision titles to different books. DO NOT guess at book titles that weren't in either list.
 9. Deduplicate: each real book should appear exactly once.
 
-For each book in the final list, return:
-- title: The CORRECT book title — use your knowledge of book series to pick the right entry when transcript context and vision disagree
+For each book return:
+- title: The book title (prefer vision title when available)
 - author: Author name (prefer vision if available, fall back to transcript)
 - sentiment: From transcript if available, otherwise "neutral"
 - creatorQuote: From transcript if available, otherwise ""
-- confidence: "high" if confirmed by both vision + transcript, "high" if vision clearly read it, "medium" if only one signal
-- descriptionOnly: false if we have a real title (including ones you identified from series context), true if still just a description
+- confidence: "high" if confirmed by both signals or vision clearly read, "medium" if only one signal
+- descriptionOnly: false for real titles and series names, true only for vague descriptions
 
 Return ONLY a JSON array. No preamble.`;
 

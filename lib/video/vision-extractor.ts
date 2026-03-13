@@ -23,25 +23,32 @@ import type { ExtractedBook } from "./book-extractor";
 /** Model for accuracy-critical tasks (title correction, vision) */
 const MODEL_ACCURATE = "claude-sonnet-4-5-20250514";
 
-const VISION_SYSTEM_PROMPT = `You are a book cover reader for a BookTok video analysis tool. You will receive sequential frames from a short video (typically 15-60 seconds). Your job is to identify every distinct book shown in the video.
+const VISION_SYSTEM_PROMPT = `You are a book cover OCR specialist for a BookTok video analysis tool. You will receive sequential frames from a short video (typically 15-60 seconds). Your job is to read the EXACT title and author from every book cover shown.
+
+HOW TO READ BOOK COVERS:
+1. Look for the LARGEST text on the cover — this is usually the title
+2. Look for smaller text above or below the title — this is usually the author
+3. Some covers have the author name ABOVE the title in smaller font
+4. Read EVERY WORD of the title exactly as printed — do not paraphrase or abbreviate
+5. If a book appears in multiple frames, use the CLEAREST frame to read the title
 
 WHAT TO LOOK FOR:
 - Book covers being held up, displayed, or shown to the camera
-- Title and author text printed on book covers
 - Book spines with readable text
-- On-screen text overlays listing book titles (e.g., "books I read this month" lists)
+- On-screen text overlays listing book titles
 - Title cards, captions, or text graphics showing book names
-- Screenshots of Amazon, Goodreads, or bookstore listings
 
-IMPORTANT:
+CRITICAL ACCURACY RULES:
+- Read the EXACT text printed on each cover. Character-by-character accuracy matters.
+- Do NOT substitute a different book title even if you think you recognize the author or series.
+- If the cover says "Captured by the Fae Beast", report exactly that — not a different book by the same author.
+- If the cover says "Ancient Protector", report exactly that — not "Ancient Vengeance" or another book in the series.
+- If you cannot read the full title clearly, report what you CAN read and set confidence to "medium" or "low".
 - The same book may appear in multiple consecutive frames — deduplicate. Only list each book ONCE.
-- Read the EXACT text from the cover. Do not guess or infer titles — only report what you can actually read.
-- If a cover is partially visible or blurry, report what you CAN read and set confidence accordingly.
-- Author names are often in smaller text below the title — look carefully.
 
 For each book, extract:
-- title: The title as printed on the cover or screen (exact text, not a guess)
-- author: The author name if visible (null if not readable)
+- title: The EXACT title as printed on the cover (character-by-character, not a guess)
+- author: The EXACT author name as printed (null if not readable)
 - confidence: "high" (title and author clearly readable) | "medium" (title readable, author unclear) | "low" (partially visible, uncertain)
 
 Return ONLY a JSON array. No preamble.
@@ -134,7 +141,7 @@ export async function extractBooksFromFrames(
       return [];
     }
 
-    console.log(`[vision-extractor] Found ${parsed.length} books from ${frameCount} frames`);
+    console.log(`[vision-extractor] Found ${parsed.length} books from ${frameCount} frames:`, JSON.stringify(parsed));
 
     // Filter out low-confidence and map to ExtractedBook format
     return parsed
