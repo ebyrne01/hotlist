@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import HotlistTable from "@/components/hotlists/HotlistTable";
 import SearchBar, { type SearchResult } from "@/components/search/SearchBar";
-import type { HotlistDetail } from "@/lib/types";
+import type { HotlistDetail, BookDetail } from "@/lib/types";
 
 interface Props {
   hotlist: HotlistDetail;
@@ -31,6 +31,63 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
       .filter((b) => !b.book.ratings.some((r) => r.rating !== null))
       .map((b) => b.bookId)
   );
+  const hasEnrichingBooks = enrichingBookIds.size > 0;
+
+  // Poll for enrichment updates when books are missing data
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const pollForUpdates = useCallback(async () => {
+    const idsToRefresh = Array.from(enrichingBookIds);
+    if (idsToRefresh.length === 0) return;
+
+    try {
+      const res = await fetch("/api/books/refresh-batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookIds: idsToRefresh }),
+      });
+      if (!res.ok) return;
+
+      const { books: freshBooks } = await res.json() as {
+        books: Record<string, BookDetail>;
+      };
+
+      setBooks((prev) =>
+        prev.map((b) => {
+          const fresh = freshBooks[b.bookId];
+          if (!fresh) return b;
+          // Only update if we got new data (has at least one rating)
+          if (fresh.ratings?.some((r: { rating: number | null }) => r.rating !== null)) {
+            return { ...b, book: fresh };
+          }
+          return b;
+        })
+      );
+    } catch {
+      // Polling failure is non-fatal — will retry next interval
+    }
+  }, [enrichingBookIds]);
+
+  useEffect(() => {
+    if (!hasEnrichingBooks) {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+      return;
+    }
+
+    // Start polling every 8 seconds
+    pollRef.current = setInterval(pollForUpdates, 8_000);
+
+    // Also fire one immediate poll after 2s (enrichment may already be done)
+    const immediateTimeout = setTimeout(pollForUpdates, 2_000);
+
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+      clearTimeout(immediateTimeout);
+    };
+  }, [hasEnrichingBooks, pollForUpdates]);
 
   async function handleNameSave() {
     if (!name.trim() || name.trim() === hotlist.name) {
@@ -314,6 +371,17 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
           </div>
         )}
       </div>
+
+      {/* Enrichment banner */}
+      {hasEnrichingBooks && (
+        <div className="mb-3 px-4 py-2.5 bg-fire/5 border border-fire/15 rounded-lg flex items-center gap-2.5">
+          <span className="inline-block w-2 h-2 rounded-full bg-fire/70 animate-pulse shrink-0" />
+          <p className="text-xs font-mono text-fire/80">
+            Fetching ratings and spice data for {enrichingBookIds.size}{" "}
+            {enrichingBookIds.size === 1 ? "book" : "books"}...
+          </p>
+        </div>
+      )}
 
       {/* Comparison table */}
       <HotlistTable

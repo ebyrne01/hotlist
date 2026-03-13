@@ -1,4 +1,3 @@
-import { scheduleEnrichment } from "@/lib/scraping";
 import { queueEnrichmentJobs } from "@/lib/enrichment/queue";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { NextRequest, NextResponse } from "next/server";
@@ -53,7 +52,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { bookId, title, author, isbn } = parsed.data;
+    const { bookId, title, author } = parsed.data;
 
     // Check if this book already has enrichment queue jobs
     const supabase = getAdminClient();
@@ -75,9 +74,6 @@ export async function POST(request: NextRequest) {
       const hasGoodreadsId = !!bookRow?.goodreads_id;
       await queueEnrichmentJobs(bookId, title, author, { hasGoodreadsId });
     }
-
-    // Also run the legacy inline enrichment for immediate results
-    scheduleEnrichment(bookId, title, author, isbn);
 
     return NextResponse.json({ status: "enrichment_started", bookId });
   } catch {

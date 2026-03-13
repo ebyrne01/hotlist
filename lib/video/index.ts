@@ -11,6 +11,7 @@ import { transcribeAudio } from "./transcription";
 import { extractBooksFromTranscript, correctExtractedBooks } from "./book-extractor";
 import { extractBooksFromFrames, mergeExtractedBooks } from "./vision-extractor";
 import { resolveExtractedBooks, type ResolvedBook } from "./book-resolver";
+import { queueEnrichmentJobs } from "@/lib/enrichment/queue";
 
 export type GrabStatus =
   | "downloading"
@@ -196,6 +197,19 @@ export async function grabBooksFromVideo(
   // Step 6: Resolve to our database
   onStatus?.("resolving");
   const resolved = await resolveExtractedBooks(merged);
+
+  // Step 6b: Queue enrichment for all matched books (fire-and-forget)
+  // Uses the user's wait time productively — enrichment starts immediately
+  // so data is ready (or nearly ready) when books land in a hotlist.
+  for (const book of resolved) {
+    if (book.matched) {
+      queueEnrichmentJobs(book.book.id, book.book.title, book.book.author, {
+        hasGoodreadsId: !!book.book.goodreadsId,
+      }).catch((err) =>
+        console.warn(`[grab] Failed to queue enrichment for "${book.book.title}":`, err)
+      );
+    }
+  }
 
   const result: GrabResultSuccess = {
     success: true,
