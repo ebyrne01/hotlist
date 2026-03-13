@@ -296,20 +296,24 @@ async function searchCache(
   const normalizedTitle = title.toLowerCase().trim();
 
   // ── Step 1: Exact ILIKE match (fast path) ──
-  const { data: titleMatches } = await supabase
-    .from("books")
-    .select("*")
-    .ilike("title", `%${normalizedTitle}%`)
-    .limit(5);
+  // Only search if the title is long enough to be meaningful (avoid matching
+  // short strings like author first names against unrelated book titles)
+  if (normalizedTitle.length >= 4) {
+    const { data: titleMatches } = await supabase
+      .from("books")
+      .select("*")
+      .ilike("title", `%${normalizedTitle}%`)
+      .limit(5);
 
-  const filteredTitleMatches = (titleMatches ?? []).filter(
-    (row) => !isJunkTitle(row.title as string)
-  );
+    const filteredTitleMatches = (titleMatches ?? []).filter(
+      (row) => !isJunkTitle(row.title as string)
+    );
 
-  if (filteredTitleMatches.length > 0) {
-    const match = pickBestMatch(filteredTitleMatches, normalizedTitle, author);
-    if (match) {
-      return hydrateBookDetail(supabase, match as Record<string, unknown>);
+    if (filteredTitleMatches.length > 0) {
+      const match = pickBestMatch(filteredTitleMatches, normalizedTitle, author);
+      if (match) {
+        return hydrateBookDetail(supabase, match as Record<string, unknown>);
+      }
     }
   }
 
@@ -344,7 +348,7 @@ function pickBestMatch(
   normalizedTitle: string,
   author: string | null
 ): Record<string, unknown> | null {
-  // If we have an author, prefer rows with author overlap
+  // If we have an author, prefer rows with BOTH title + author overlap
   if (author) {
     const authorWords = author
       .toLowerCase()
@@ -352,20 +356,40 @@ function pickBestMatch(
       .filter((w) => w.length > 1);
 
     for (const row of rows) {
-      const dbAuthor = (row.author as string).toLowerCase();
-      if (authorWords.some((w) => dbAuthor.includes(w))) {
+      const dbAuthor = ((row.author as string) ?? "").toLowerCase();
+      const dbTitle = ((row.title as string) ?? "").toLowerCase();
+      const hasAuthorMatch = authorWords.some((w) => dbAuthor.includes(w));
+      // Verify the title is actually relevant (not just a substring coincidence)
+      const titleRelevant =
+        dbTitle === normalizedTitle ||
+        dbTitle.startsWith(normalizedTitle) ||
+        normalizedTitle.startsWith(dbTitle) ||
+        // Allow ILIKE substring match only if titles are similar length (within 2x)
+        (dbTitle.includes(normalizedTitle) && dbTitle.length <= normalizedTitle.length * 2);
+      if (hasAuthorMatch && titleRelevant) {
+        return row;
+      }
+    }
+
+    // Fallback: author match alone, but only if the title ILIKE is a very close match
+    for (const row of rows) {
+      const dbAuthor = ((row.author as string) ?? "").toLowerCase();
+      const dbTitle = ((row.title as string) ?? "").toLowerCase();
+      const hasAuthorMatch = authorWords.some((w) => dbAuthor.includes(w));
+      if (hasAuthorMatch && (dbTitle === normalizedTitle || dbTitle.startsWith(normalizedTitle))) {
         return row;
       }
     }
   }
 
-  // No author match — accept first row only if title is a strong match
+  // No author match — accept first row only if title is a very strong match
   const first = rows[0];
-  const dbTitle = (first.title as string).toLowerCase();
+  const dbTitle = ((first.title as string) ?? "").toLowerCase();
   if (
     dbTitle === normalizedTitle ||
-    dbTitle.startsWith(normalizedTitle) ||
-    normalizedTitle.startsWith(dbTitle)
+    // Only accept prefix match if the DB title isn't much longer (avoid "Mallory" matching "Mallory, Mallory: the revenge...")
+    (dbTitle.startsWith(normalizedTitle) && dbTitle.length <= normalizedTitle.length * 1.5) ||
+    (normalizedTitle.startsWith(dbTitle) && normalizedTitle.length <= dbTitle.length * 1.5)
   ) {
     return first;
   }

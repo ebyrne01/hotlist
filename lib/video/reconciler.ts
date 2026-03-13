@@ -96,6 +96,7 @@ Produce the final reconciled book list.`;
     const response = await client.messages.create({
       model: MODEL_ACCURATE,
       max_tokens: 2048,
+      temperature: 0,
       system: RECONCILIATION_SYSTEM_PROMPT,
       messages: [{ role: "user", content: userMessage }],
     });

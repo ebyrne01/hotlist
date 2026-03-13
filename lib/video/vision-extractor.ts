@@ -123,6 +123,7 @@ export async function extractBooksFromFrames(
     const response = await client.messages.create({
       model: MODEL_ACCURATE,
       max_tokens: 2048,
+      temperature: 0,
       system: VISION_SYSTEM_PROMPT,
       messages: [{ role: "user", content: userContent }],
     });

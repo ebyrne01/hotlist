@@ -220,6 +220,7 @@ export async function correctExtractedBooks(
     const response = await client.messages.create({
       model: MODEL_ACCURATE,
       max_tokens: 1024,
+      temperature: 0,
       system: `You are a book title and author name corrector. You receive a list of book titles and authors extracted from speech-to-text transcription of BookTok/BookStagram videos. Speech-to-text often garbles:
 - Fantasy/unusual proper nouns (e.g., "Alchemized" should be "Alchemised", "Manicold" should be "Manacled")
 - Author names, especially non-Western or unusual ones (e.g., "Cinlan Yu" should be "SenLinYu")
