@@ -18,9 +18,7 @@ const STATUS_MESSAGES: Record<GrabStatus, string> = {
   transcribing: "Transcribing audio...",
   scanning: "Scanning for book covers...",
   extracting: "Finding book mentions...",
-  correcting: "Double-checking titles...",
-  reconciling: "Cross-referencing covers with audio...",
-  resolving: "Matching to our database...",
+  identifying: "Identifying books & verifying on Goodreads...",
   done: "Done!",
 };
 
