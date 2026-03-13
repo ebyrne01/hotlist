@@ -88,8 +88,12 @@ export async function resolveExtractedBooks(
     }
   }
 
-  // Step 3: Post-resolution dedup
-  return deduplicateResults(results);
+  // Step 3: Prefer Book 1 — if we resolved to a later book in a series,
+  // swap to Book 1 (BookTok creators typically recommend entry points)
+  const corrected = await preferSeriesBook1(results);
+
+  // Step 4: Post-resolution dedup
+  return deduplicateResults(corrected);
 }
 
 async function resolveOneBook(
@@ -155,6 +159,60 @@ async function resolveOneBook(
     rawAuthor: extracted.author,
     ...base,
   };
+}
+
+/**
+ * Post-resolution: if a resolved book is NOT Book 1 in its series,
+ * try to find Book 1 and swap it in. BookTok creators almost always
+ * recommend the series starting from Book 1, even if they show a later cover.
+ */
+async function preferSeriesBook1(results: ResolvedBook[]): Promise<ResolvedBook[]> {
+  const { hydrateBookDetail } = await import("@/lib/books/cache");
+  const supabase = getAdminClient();
+  const corrected: ResolvedBook[] = [];
+
+  for (const result of results) {
+    if (!result.matched) {
+      corrected.push(result);
+      continue;
+    }
+
+    const book = result.book;
+    // Only swap if: book has a series, is NOT Book 1, and we know the series name
+    if (book.seriesName && book.seriesPosition && book.seriesPosition > 1) {
+      // Try to find Book 1 in the same series in our DB
+      const { data: book1Rows } = await supabase
+        .from("books")
+        .select("*")
+        .ilike("series_name", book.seriesName)
+        .eq("series_position", 1)
+        .limit(1);
+
+      if (book1Rows && book1Rows.length > 0) {
+        const book1 = await hydrateBookDetail(supabase, book1Rows[0] as Record<string, unknown>);
+        if (book1) {
+          console.log(`[book-resolver] Swapping "${book.title}" (Book ${book.seriesPosition}) → "${book1.title}" (Book 1)`);
+          corrected.push({ ...result, book: book1 });
+          continue;
+        }
+      }
+
+      // Book 1 not in our DB — try Goodreads
+      const searchResults = await searchGoodreads(`${book.seriesName} book 1`);
+      for (const sr of searchResults.slice(0, 3)) {
+        const detail = await getBookDetail(sr.goodreadsId);
+        if (detail && detail.seriesPosition === 1 && detail.seriesName === book.seriesName) {
+          console.log(`[book-resolver] Goodreads swap "${book.title}" → "${detail.title}" (Book 1)`);
+          corrected.push({ ...result, book: detail });
+          continue;
+        }
+      }
+    }
+
+    corrected.push(result);
+  }
+
+  return corrected;
 }
 
 /** Normalize text for comparison: lowercase, strip punctuation, collapse spaces */
@@ -342,34 +400,66 @@ function looksLikeSeriesName(title: string): boolean {
 
 /**
  * Try to resolve a series name to its first book.
- * Strips "series" suffix and searches Goodreads + Google Books, preferring Book 1.
+ * Strategy: DB series_name search → Goodreads search → Google Books fallback.
  */
 async function resolveSeriesName(
   seriesTitle: string,
   author: string | null
 ): Promise<BookDetail | null> {
-  // Strip "series" and similar suffixes for cleaner search
   const cleanedTitle = seriesTitle
     .replace(/\b(series|trilogy|saga|chronicles|collection)\b/gi, "")
     .trim();
 
-  // Try multiple search strategies
+  const { hydrateBookDetail } = await import("@/lib/books/cache");
+
+  // ── Strategy 1: Search our DB by series_name column (fastest, most reliable) ──
+  const supabase = getAdminClient();
+  const { data: seriesMatches } = await supabase
+    .from("books")
+    .select("*")
+    .ilike("series_name", `%${cleanedTitle}%`)
+    .eq("series_position", 1)
+    .limit(3);
+
+  if (seriesMatches && seriesMatches.length > 0) {
+    // If we have an author, prefer matching author
+    if (author) {
+      const authorWords = author.toLowerCase().split(/\s+/).filter((w) => w.length > 1);
+      for (const row of seriesMatches) {
+        const dbAuthor = ((row.author as string) ?? "").toLowerCase();
+        if (authorWords.some((w) => dbAuthor.includes(w))) {
+          const book = await hydrateBookDetail(supabase, row as Record<string, unknown>);
+          if (book) {
+            console.log(`[book-resolver] DB series match for "${seriesTitle}": "${book.title}"`);
+            return book;
+          }
+        }
+      }
+    }
+    // No author or no author match — use first Book 1 result
+    const book = await hydrateBookDetail(supabase, seriesMatches[0] as Record<string, unknown>);
+    if (book) {
+      console.log(`[book-resolver] DB series match (no author) for "${seriesTitle}": "${book.title}"`);
+      return book;
+    }
+  }
+
+  // ── Strategy 2: Goodreads search with multiple queries ──
   const searchQueries = [
     author ? `${cleanedTitle} ${author}` : cleanedTitle,
-    cleanedTitle, // Without author (author might be misspelled)
-    `${cleanedTitle} book 1`, // Explicitly ask for Book 1
+    cleanedTitle,
+    `${cleanedTitle} book 1`,
   ];
 
   for (const searchQuery of searchQueries) {
     const results = await searchGoodreads(searchQuery);
 
-    // Look for Book 1 among results
     for (const result of results.slice(0, 5)) {
       const bookDetail = await getBookDetail(result.goodreadsId);
       if (!bookDetail) continue;
 
       if (bookDetail.seriesPosition === 1) {
-        console.log(`[book-resolver] Found Book 1 for series "${seriesTitle}": "${bookDetail.title}"`);
+        console.log(`[book-resolver] Goodreads Book 1 for "${seriesTitle}": "${bookDetail.title}"`);
         return bookDetail;
       }
     }
@@ -378,11 +468,10 @@ async function resolveSeriesName(
     if (author && results.length > 0) {
       const authorWords = author.toLowerCase().split(/\s+/).filter((w) => w.length > 1);
       for (const result of results.slice(0, 3)) {
-        const resultAuthorLower = result.author.toLowerCase();
-        if (authorWords.some((w) => resultAuthorLower.includes(w))) {
+        if (authorWords.some((w) => result.author.toLowerCase().includes(w))) {
           const bookDetail = await getBookDetail(result.goodreadsId);
           if (bookDetail) {
-            console.log(`[book-resolver] Author-matched for series "${seriesTitle}": "${bookDetail.title}"`);
+            console.log(`[book-resolver] Goodreads author-match for "${seriesTitle}": "${bookDetail.title}"`);
             return bookDetail;
           }
         }
@@ -390,12 +479,11 @@ async function resolveSeriesName(
     }
   }
 
-  // Fallback: try Google Books (broader coverage for niche titles)
+  // ── Strategy 3: Google Books fallback ──
   try {
     const googleQuery = author ? `${cleanedTitle} ${author}` : cleanedTitle;
     const googleResults = await searchGoogleBooks(googleQuery);
     if (googleResults.length > 0) {
-      // Try to resolve the first Google result through our normal pipeline
       const firstResult = googleResults[0];
       const goodreadsId = await resolveToGoodreadsId(
         firstResult.title,
@@ -405,7 +493,7 @@ async function resolveSeriesName(
       if (goodreadsId) {
         const bookDetail = await getBookDetail(goodreadsId);
         if (bookDetail) {
-          console.log(`[book-resolver] Google Books → Goodreads for series "${seriesTitle}": "${bookDetail.title}"`);
+          console.log(`[book-resolver] Google Books for "${seriesTitle}": "${bookDetail.title}"`);
           return bookDetail;
         }
       }

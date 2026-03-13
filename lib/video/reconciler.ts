@@ -22,24 +22,24 @@ const MODEL_ACCURATE = "claude-sonnet-4-5-20250514";
 
 const RECONCILIATION_SYSTEM_PROMPT = `You are a book identification expert for a BookTok video analysis tool. You will receive:
 
-1. VISION BOOKS: Titles/authors read from book covers in video frames. These are the most reliable signal for exact book titles.
+1. VISION BOOKS: Titles/authors read from book covers in video frames. Vision may read the wrong book in a series (e.g., the creator holds up Book 5 while recommending Book 1).
 2. TRANSCRIPT BOOKS: Books mentioned in the audio. Some have exact titles (descriptionOnly: false), others are descriptions (descriptionOnly: true).
 
 Your job: produce the FINAL reconciled list by cross-referencing these two signals.
 
 RULES:
-1. VISION TITLES ARE THE GROUND TRUTH for book identification. When vision reads a title from a cover, USE THAT EXACT TITLE even if you think it might be wrong. The downstream resolver will handle matching.
-2. When a transcript description matches a vision book (same author or same topic), merge them: use the VISION title, carry over transcript's sentiment, quote, and author.
-3. When vision and transcript both have the same book, use vision's title spelling.
-4. SERIES NAMES from transcript (e.g., "the Brides of Karadoc series"): Keep the series name as the title with descriptionOnly: false — the downstream resolver handles series-to-book-1 mapping. Include the author if mentioned.
+1. SERIES ENTRY POINT CORRECTION: When the transcript says "starting book", "first in the series", "where you first meet [character]", or describes the beginning of a series, but vision shows a DIFFERENT book in that same series, correct to Book 1. For example: if vision reads "What a Dragon Should Know" (Book 3 of Dragon Kin) but the transcript describes meeting the characters for the first time, use "Dragon Actually" (Book 1). Only do this when you are CONFIDENT you know the correct Book 1.
+2. For non-series cases, prefer the vision title — it was read directly from the cover.
+3. When a transcript description matches a vision book, merge them: use the corrected title, carry over transcript's sentiment, quote, and author.
+4. SERIES NAMES from transcript (e.g., "the Brides of Karadoc series"): If you know Book 1's title, use it. If not, keep the series name as the title — the resolver will handle it. Include the author if mentioned. Set descriptionOnly: false.
 5. Vision-only books (shown but never discussed): include with sentiment "neutral".
 6. Transcript-only books with exact titles: include as-is.
 7. Transcript-only descriptions that don't match any vision book: include with descriptionOnly: true.
-8. DO NOT change vision titles to different books. DO NOT guess at book titles that weren't in either list.
+8. DO NOT invent books not referenced in either list. DO correct series misidentifications when you're confident.
 9. Deduplicate: each real book should appear exactly once.
 
 For each book return:
-- title: The book title (prefer vision title when available)
+- title: The correct book title (Book 1 when transcript implies series start, vision title otherwise)
 - author: Author name (prefer vision if available, fall back to transcript)
 - sentiment: From transcript if available, otherwise "neutral"
 - creatorQuote: From transcript if available, otherwise ""
