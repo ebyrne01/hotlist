@@ -27,21 +27,20 @@ import {
   getGoodreadsBookById,
   extractGoodreadsIdFromSlug,
 } from "./goodreads-search";
+import { getCompositeSpiceBatch } from "@/lib/spice/compute-composite";
 import { searchGoogleBooks } from "./google-books";
 import {
   getBookFromCache,
   getBookByGoodreadsId,
   getBookBySlug,
   saveGoodreadsBookToCache,
-  saveBookToCache,
   saveProvisionalBook,
   queueEnrichmentJobs,
   searchBooksInCache,
   mapDbBook,
+  hydrateBookDetail,
 } from "./cache";
 import { generateSynopsis } from "./ai-synopsis";
-import { scheduleEnrichment } from "@/lib/scraping";
-import { scheduleMetadataEnrichment } from "./metadata-enrichment";
 import { isJunkTitle } from "./romance-filter";
 import { deduplicateBooks } from "./utils";
 import { scheduleAuthorCrawl } from "./author-crawl";
@@ -98,106 +97,6 @@ export async function findBook(query: string): Promise<BookDetail[]> {
   return deduplicateBooks(filteredCache);
 }
 
-/**
- * Legacy search — combines Supabase cache + foreground Goodreads scraping.
- * Kept for reference during migration. Use findBook() instead.
- * @deprecated Use findBook() which never blocks on Goodreads.
- */
-export async function findBookLegacy(query: string): Promise<BookDetail[]> {
-  const cached = await searchBooksInCache(query);
-  const filteredCache = cached.filter((b) => !isJunkTitle(b.title));
-
-  if (filteredCache.length > 0) {
-    const lowerQuery = query.trim().toLowerCase();
-    const authorMatches = filteredCache.filter(
-      (b) => b.author.toLowerCase().includes(lowerQuery) ||
-        lowerQuery.includes(b.author.toLowerCase().split(" ").pop() ?? "")
-    );
-    const isAuthorSearch =
-      authorMatches.length > 0 &&
-      authorMatches.length >= filteredCache.length * 0.5;
-
-    if (isAuthorSearch && filteredCache.length < 8) {
-      try {
-        const goodreadsResults = await withTimeout(searchGoodreads(query), 10_000);
-        const newBooks = await foregroundSaveNewResults(goodreadsResults, filteredCache);
-        const merged = deduplicateBooks([...filteredCache, ...newBooks]);
-        return merged;
-      } catch {
-        return filteredCache;
-      }
-    }
-
-    backgroundGoodreadsSearch(query).catch(() => {});
-    return deduplicateBooks(filteredCache);
-  }
-
-  try {
-    const goodreadsResults = await withTimeout(searchGoodreads(query), 10_000);
-
-    if (goodreadsResults.length > 0) {
-      const saved: BookDetail[] = [];
-
-      for (const result of goodreadsResults.slice(0, 3)) {
-        if (isJunkTitle(result.title)) continue;
-
-        const detail = await withTimeout(getGoodreadsBookById(result.goodreadsId), 5_000).catch(() => null);
-        if (!detail) continue;
-
-        const book = await saveGoodreadsBookToCache({
-          title: detail.title,
-          author: detail.author,
-          goodreadsId: detail.goodreadsId,
-          goodreadsUrl: detail.goodreadsUrl,
-          coverUrl: detail.coverUrl,
-          description: detail.description,
-          seriesName: detail.seriesName,
-          seriesPosition: detail.seriesPosition,
-          publishedYear: detail.publishedYear,
-          pageCount: detail.pageCount,
-          genres: detail.genres,
-        });
-
-        if (book) {
-          saved.push({ ...book, ratings: [], spice: [], compositeSpice: null, tropes: [] });
-          scheduleMetadataEnrichment(book.id, book.title, book.author, book.isbn);
-          scheduleEnrichment(book.id, book.title, book.author, book.isbn);
-          if (book.goodreadsId) scheduleAuthorCrawl(book.goodreadsId, book.author);
-        }
-      }
-
-      if (saved.length > 0) {
-        if (goodreadsResults.length > 3) {
-          backgroundSaveGoodreadsResults(goodreadsResults.slice(3)).catch(() => {});
-        }
-        return deduplicateBooks(saved);
-      }
-    }
-  } catch {
-    console.log("[findBookLegacy] Goodreads search timed out for:", query);
-  }
-
-  try {
-    const googleResults = await withTimeout(searchGoogleBooks(query), 5_000);
-    const fallbackSaved: BookDetail[] = [];
-
-    for (const bookData of googleResults) {
-      if (isJunkTitle(bookData.title)) continue;
-      if (!bookData.goodreadsId || bookData.goodreadsId.startsWith("unknown-")) continue;
-
-      const book = await saveBookToCache(bookData);
-      if (book) {
-        fallbackSaved.push({ ...book, ratings: [], spice: [], compositeSpice: null, tropes: [] });
-        scheduleEnrichment(book.id, book.title, book.author, book.isbn);
-      }
-    }
-
-    return deduplicateBooks(fallbackSaved);
-  } catch {
-    return [];
-  }
-}
-
 // ── Helpers for search performance ───────────────────
 
 /** Wraps a promise with a timeout. Rejects if the promise doesn't resolve in time. */
@@ -208,108 +107,6 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
       .then((val) => { clearTimeout(timer); resolve(val); })
       .catch((err) => { clearTimeout(timer); reject(err); });
   });
-}
-
-/** Search Goodreads in the background and save any new books to cache for future searches. */
-async function backgroundGoodreadsSearch(query: string): Promise<void> {
-  try {
-    const results = await searchGoodreads(query);
-    for (const result of results.slice(0, 5)) {
-      if (isJunkTitle(result.title)) continue;
-      const detail = await getGoodreadsBookById(result.goodreadsId).catch(() => null);
-      if (!detail) continue;
-      const book = await saveGoodreadsBookToCache({
-        title: detail.title,
-        author: detail.author,
-        goodreadsId: detail.goodreadsId,
-        goodreadsUrl: detail.goodreadsUrl,
-        coverUrl: detail.coverUrl,
-        description: detail.description,
-        seriesName: detail.seriesName,
-        seriesPosition: detail.seriesPosition,
-        publishedYear: detail.publishedYear,
-        pageCount: detail.pageCount,
-        genres: detail.genres,
-      });
-      if (book) {
-        scheduleMetadataEnrichment(book.id, book.title, book.author, book.isbn);
-        scheduleEnrichment(book.id, book.title, book.author, book.isbn);
-      }
-    }
-  } catch {
-    // Background — swallow errors
-  }
-}
-
-/** Save remaining Goodreads results in background after returning the first batch. */
-async function backgroundSaveGoodreadsResults(results: Awaited<ReturnType<typeof searchGoodreads>>): Promise<void> {
-  for (const result of results) {
-    if (isJunkTitle(result.title)) continue;
-    const detail = await getGoodreadsBookById(result.goodreadsId).catch(() => null);
-    if (!detail) continue;
-    const book = await saveGoodreadsBookToCache({
-      title: detail.title,
-      author: detail.author,
-      goodreadsId: detail.goodreadsId,
-      goodreadsUrl: detail.goodreadsUrl,
-      coverUrl: detail.coverUrl,
-      description: detail.description,
-      seriesName: detail.seriesName,
-      seriesPosition: detail.seriesPosition,
-      publishedYear: detail.publishedYear,
-      pageCount: detail.pageCount,
-      genres: detail.genres,
-    });
-    if (book) {
-      scheduleMetadataEnrichment(book.id, book.title, book.author, book.isbn);
-      scheduleEnrichment(book.id, book.title, book.author, book.isbn);
-    }
-  }
-}
-
-/**
- * Save new Goodreads results not already in the cache (foreground, for author searches).
- * Only processes books not already present in existingBooks.
- */
-async function foregroundSaveNewResults(
-  goodreadsResults: Awaited<ReturnType<typeof searchGoodreads>>,
-  existingBooks: BookDetail[]
-): Promise<BookDetail[]> {
-  const existingIds = new Set(existingBooks.map((b) => b.goodreadsId));
-  const newBooks: BookDetail[] = [];
-
-  for (const result of goodreadsResults.slice(0, 8)) {
-    if (existingIds.has(result.goodreadsId)) continue;
-    if (isJunkTitle(result.title)) continue;
-
-    const detail = await withTimeout(
-      getGoodreadsBookById(result.goodreadsId),
-      5_000
-    ).catch(() => null);
-    if (!detail) continue;
-
-    const book = await saveGoodreadsBookToCache({
-      title: detail.title,
-      author: detail.author,
-      goodreadsId: detail.goodreadsId,
-      goodreadsUrl: detail.goodreadsUrl,
-      coverUrl: detail.coverUrl,
-      description: detail.description,
-      seriesName: detail.seriesName,
-      seriesPosition: detail.seriesPosition,
-      publishedYear: detail.publishedYear,
-      pageCount: detail.pageCount,
-      genres: detail.genres,
-    });
-
-    if (book) {
-      newBooks.push({ ...book, ratings: [], spice: [], compositeSpice: null, tropes: [] });
-      scheduleMetadataEnrichment(book.id, book.title, book.author, book.isbn);
-      scheduleEnrichment(book.id, book.title, book.author, book.isbn);
-    }
-  }
-
-  return newBooks;
 }
 
 /**
@@ -404,7 +201,12 @@ export async function getBookDetail(identifier: string): Promise<BookDetail | nu
           genres: grDetail.genres,
         });
         if (book) {
-          detail = { ...book, ratings: [], spice: [], compositeSpice: null, tropes: [] };
+          // Hydrate with ratings, spice, composite spice, and tropes from DB
+          const supabase = getAdminClient();
+          const { data: dbRow } = await supabase.from("books").select("*").eq("id", book.id).single();
+          detail = dbRow
+            ? await hydrateBookDetail(supabase, dbRow)
+            : { ...book, ratings: [], spice: [], compositeSpice: null, tropes: [] };
           if (book.goodreadsId) scheduleAuthorCrawl(book.goodreadsId, book.author);
         }
       }
@@ -443,8 +245,10 @@ export async function getBookDetail(identifier: string): Promise<BookDetail | nu
     (!hasRomanceIoSpice && hasOnlyInferredSpice);
 
   if (needsEnrichment) {
-    scheduleEnrichment(detail.id, detail.title, detail.author, detail.isbn);
-    scheduleMetadataEnrichment(detail.id, detail.title, detail.author, detail.isbn);
+    // Queue via the enrichment system (retryable, tracked) instead of legacy fire-and-forget
+    queueEnrichmentJobs(detail.id, detail.title, detail.author, {
+      hasGoodreadsId: !!detail.goodreadsId,
+    }).catch(() => {});
   }
 
   return detail;
@@ -506,9 +310,10 @@ export async function getBooksByTrope(
 
   // Batch hydrate
   const ids = books.map((b) => b.id);
-  const [ratingsRes, spiceRes, tropesRes] = await Promise.all([
+  const [ratingsRes, spiceRes, compositeMap, tropesRes] = await Promise.all([
     supabase.from("book_ratings").select("*").in("book_id", ids),
     supabase.from("book_spice").select("*").in("book_id", ids),
+    getCompositeSpiceBatch(ids),
     supabase
       .from("book_tropes")
       .select("book_id, trope_id, tropes(id, slug, name, description)")
@@ -559,7 +364,7 @@ export async function getBooksByTrope(
       ...mapped,
       ratings: ratingsMap.get(book.id) ?? [],
       spice: spiceMap.get(book.id) ?? [],
-      compositeSpice: null,
+      compositeSpice: compositeMap.get(book.id) ?? null,
       tropes: tropeMap.get(book.id) ?? [],
     };
   });

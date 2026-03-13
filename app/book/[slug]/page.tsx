@@ -446,6 +446,7 @@ export default async function BookPage({ params }: PageProps) {
             {/* Spice level */}
             <SpiceSection
               bookId={book.id}
+              compositeSpice={book.compositeSpice}
               romanceIoSpice={romanceIoSpice ? {
                 spiceLevel: romanceIoSpice.spiceLevel,
                 source: "romance_io",

@@ -52,13 +52,21 @@ export interface Trope {
   description: string | null;
 }
 
+export type SpiceSource =
+  | "community"
+  | "romance_io"
+  | "review_classifier"
+  | "llm_inference"
+  | "genre_bucketing";
+
 export interface CompositeSpiceData {
   score: number;
-  primarySource: string;
+  primarySource: SpiceSource;
   communityCount: number | null;
   signalCount: number;
   confidence: number;
   attribution: string;
+  conflictFlag: boolean;
 }
 
 export interface BookDetail extends Book {

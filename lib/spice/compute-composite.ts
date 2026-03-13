@@ -11,6 +11,10 @@
  */
 
 import { getAdminClient } from "@/lib/supabase/admin";
+import type { SpiceSource } from "@/lib/types";
+
+// Re-export so existing consumers don't break
+export type { SpiceSource } from "@/lib/types";
 
 const SOURCE_WEIGHTS: Record<string, number> = {
   community: 1.0,
@@ -20,13 +24,6 @@ const SOURCE_WEIGHTS: Record<string, number> = {
   genre_bucketing: 0.2,
 };
 
-export type SpiceSource =
-  | "community"
-  | "romance_io"
-  | "review_classifier"
-  | "llm_inference"
-  | "genre_bucketing";
-
 export interface CompositeSpice {
   score: number;
   primarySource: SpiceSource;
@@ -34,6 +31,7 @@ export interface CompositeSpice {
   signalCount: number;
   confidence: number;
   attribution: string;
+  conflictFlag: boolean;
 }
 
 export interface SpiceSignal {
@@ -77,13 +75,32 @@ export function computeFromSignals(signals: SpiceSignal[]): CompositeSpice | nul
 
   const score = Math.round((weightedSum / weightSum) * 10) / 10;
 
+  // Detect conflicting signals: any two disagree by more than 2.0 peppers
+  let conflictFlag = false;
+  if (signals.length >= 2) {
+    for (let i = 0; i < signals.length; i++) {
+      for (let j = i + 1; j < signals.length; j++) {
+        if (Math.abs(signals[i].spiceValue - signals[j].spiceValue) > 2.0) {
+          conflictFlag = true;
+          break;
+        }
+      }
+      if (conflictFlag) break;
+    }
+  }
+
+  const attribution = conflictFlag
+    ? "Spice estimates vary — community ratings help!"
+    : getAttribution(bestSource, communityCount);
+
   return {
     score,
     primarySource: bestSource,
     communityCount,
     signalCount: signals.length,
     confidence: Math.round(maxWeightedConfidence * 100) / 100,
-    attribution: getAttribution(bestSource, communityCount),
+    attribution,
+    conflictFlag,
   };
 }
 

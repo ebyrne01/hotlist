@@ -1,5 +1,5 @@
 import { getAdminClient } from "@/lib/supabase/admin";
-import type { Book, BookData, BookDetail, CompositeSpiceData, Rating, SpiceRating, Trope } from "@/lib/types";
+import type { Book, BookData, BookDetail, Rating, SpiceRating, Trope } from "@/lib/types";
 import { getCompositeSpice } from "@/lib/spice/compute-composite";
 import { generateBookSlug } from "./goodreads-search";
 import { isJunkTitle } from "./romance-filter";
@@ -258,13 +258,13 @@ export async function saveGoodreadsBookToCache(bookData: BookData): Promise<Book
 }
 
 /**
- * Save a book to cache. Requires a valid goodreads_id.
- * Books from Google Books without a Goodreads match are discarded.
+ * Save a book to cache. Routes to the appropriate save function:
+ * - Books with a Goodreads ID → full upsert via saveGoodreadsBookToCache
+ * - Books without → provisional entry via saveProvisionalBook (enrichment queue resolves later)
  */
 export async function saveBookToCache(bookData: BookData): Promise<Book | null> {
   if (!bookData.goodreadsId || bookData.goodreadsId.startsWith("unknown-")) {
-    console.warn("[cache] Discarding book without real goodreads_id:", bookData.title);
-    return null;
+    return saveProvisionalBook(bookData);
   }
   return saveGoodreadsBookToCache(bookData);
 }
@@ -275,6 +275,9 @@ export async function saveBookToCache(bookData: BookData): Promise<Book | null> 
  * when the enrichment queue processes their goodreads_detail job.
  */
 export async function saveProvisionalBook(bookData: BookData): Promise<Book | null> {
+  // Reject junk titles (study guides, workbooks, etc.) from Google Books
+  if (isJunkTitle(bookData.title)) return null;
+
   const supabase = getAdminClient();
 
   // Check if we already have this book by Google Books ID

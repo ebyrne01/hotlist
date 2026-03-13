@@ -1,5 +1,4 @@
 import type { BookDetail } from "@/lib/types";
-import { isJunkTitle } from "@/lib/books/romance-filter";
 
 /**
  * Normalize a title for deduplication.
@@ -69,25 +68,4 @@ export function deduplicateBooks(books: BookDetail[]): BookDetail[] {
   }
 
   return Array.from(seen.values());
-}
-
-/**
- * Validates that a book meets minimum quality requirements for storage.
- * Prevents junk from Google Books API from polluting the database.
- */
-export function isValidBookForStorage(book: {
-  title: string;
-  author: string;
-  goodreadsId?: string | null;
-}): boolean {
-  // Must have a real Goodreads ID (not a placeholder)
-  if (!book.goodreadsId || book.goodreadsId.startsWith("unknown-")) return false;
-
-  // Must not match junk title patterns
-  if (isJunkTitle(book.title)) return false;
-
-  // Must have a real author
-  if (!book.author || book.author === "Unknown Author") return false;
-
-  return true;
 }

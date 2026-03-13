@@ -20,13 +20,14 @@ import { getAmazonRatingViaSerper } from "@/lib/scraping/amazon-search";
 import { getRomanceIoSpice } from "@/lib/scraping/romance-io-search";
 import { enrichBookMetadata } from "@/lib/books/metadata-enrichment";
 import { generateSynopsis } from "@/lib/books/ai-synopsis";
-import { getGoodreadsBookById, resolveToGoodreadsId } from "@/lib/books/goodreads-search";
+import { getGoodreadsBookById, resolveToGoodreadsId, generateBookSlug } from "@/lib/books/goodreads-search";
 import { saveGoodreadsBookToCache } from "@/lib/books/cache";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { computeGenreBucketing } from "@/lib/spice/genre-bucketing";
 import { inferAndUpsertSpice } from "@/lib/spice/llm-inference";
 import { classifyReviews } from "@/lib/spice/review-classifier";
 import { fetchAllReviews } from "@/lib/spice/review-fetcher";
+import { runAuthorCrawl } from "@/lib/books/author-crawl";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -120,26 +121,56 @@ async function processJob(job: QueuedJob): Promise<void> {
 
   switch (job_type) {
     case "goodreads_detail": {
-      // Resolve Goodreads ID if missing, then scrape detail
+      // Resolve Goodreads ID if missing, then update the existing book row in-place
       if (!book_goodreads_id && book_title && book_author) {
         const grId = await resolveToGoodreadsId(book_title, book_author);
         if (grId) {
           const detail = await getGoodreadsBookById(grId);
           if (detail) {
-            await saveGoodreadsBookToCache({
-              title: detail.title,
-              author: detail.author,
-              goodreadsId: detail.goodreadsId,
-              goodreadsUrl: detail.goodreadsUrl,
-              coverUrl: detail.coverUrl,
-              description: detail.description,
-              seriesName: detail.seriesName,
-              seriesPosition: detail.seriesPosition,
-              publishedYear: detail.publishedYear,
-              pageCount: detail.pageCount,
-              genres: detail.genres,
-            });
+            // Update the EXISTING provisional book row instead of creating a new one.
+            // saveGoodreadsBookToCache upserts on goodreads_id, which would orphan
+            // the provisional row (it has goodreads_id: null). So we update by book_id.
+            const slug = generateBookSlug(detail.title, detail.goodreadsId);
+            await supabase
+              .from("books")
+              .update({
+                title: detail.title,
+                author: detail.author,
+                goodreads_id: detail.goodreadsId,
+                goodreads_url: detail.goodreadsUrl ?? null,
+                cover_url: detail.coverUrl ?? null,
+                description: detail.description ?? null,
+                series_name: detail.seriesName ?? null,
+                series_position: detail.seriesPosition ?? null,
+                published_year: detail.publishedYear ?? null,
+                page_count: detail.pageCount ?? null,
+                genres: detail.genres ?? [],
+                slug,
+                metadata_source: "goodreads",
+                enrichment_status: "partial",
+                data_refreshed_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", book_id);
           }
+        }
+      } else if (book_goodreads_id) {
+        // Already has a Goodreads ID — re-scrape for updated data
+        const detail = await getGoodreadsBookById(book_goodreads_id);
+        if (detail) {
+          await saveGoodreadsBookToCache({
+            title: detail.title,
+            author: detail.author,
+            goodreadsId: detail.goodreadsId,
+            goodreadsUrl: detail.goodreadsUrl,
+            coverUrl: detail.coverUrl,
+            description: detail.description,
+            seriesName: detail.seriesName,
+            seriesPosition: detail.seriesPosition,
+            publishedYear: detail.publishedYear,
+            pageCount: detail.pageCount,
+            genres: detail.genres,
+          });
         }
       }
       // Run genre bucketing after Goodreads genres are saved
@@ -332,6 +363,14 @@ async function processJob(job: QueuedJob): Promise<void> {
           description: bookRow.description,
           genres: bookRow.genres ?? [],
         });
+      }
+      break;
+    }
+
+    case "author_crawl": {
+      // Crawl author's bibliography to discover more books
+      if (book_goodreads_id) {
+        await runAuthorCrawl(book_goodreads_id, book_author ?? "");
       }
       break;
     }

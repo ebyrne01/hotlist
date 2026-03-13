@@ -1,21 +1,26 @@
 /**
  * VISION-BASED BOOK EXTRACTION
  *
- * Extracts book titles from video frames using Claude Haiku's vision.
+ * Extracts book titles from video frames using Claude Sonnet's vision.
  * Most BookTok videos show book covers, "books I read this month" overlays,
  * or on-screen text listing titles. This catches books the creator
  * shows but doesn't say aloud.
  *
+ * Uses Sonnet (not Haiku) for better OCR and cover reading accuracy.
+ *
  * Approach (Option B — thumbnail-based, zero new dependencies):
  * 1. Use the video thumbnail URL from the RapidAPI downloader
- * 2. Send to Claude Haiku vision to read book covers and on-screen text
+ * 2. Send to Claude Sonnet vision to read book covers and on-screen text
  * 3. Return as ExtractedBook[] to merge with transcript extraction
  *
- * Cost: ~$0.002-0.005 per call (one image + small output).
+ * Cost: ~$0.008-0.015 per call (one image + small output).
  */
 
 import Anthropic from "@anthropic-ai/sdk";
 import type { ExtractedBook } from "./book-extractor";
+
+/** Model for accuracy-critical tasks (title correction, vision) */
+const MODEL_ACCURATE = "claude-sonnet-4-5-20250514";
 
 const VISION_SYSTEM_PROMPT = `You are a book title extractor. Look at these frames from a BookTok/BookStagram video and identify every book that is visible. Look for:
 - Book covers being held up or displayed
@@ -40,7 +45,7 @@ interface VisionBook {
 }
 
 /**
- * Extract book titles from video frames/thumbnails using Claude Haiku vision.
+ * Extract book titles from video frames/thumbnails using Claude Sonnet vision.
  *
  * Accepts either image URLs (thumbnail URLs) or base64 Buffers.
  * Returns empty array on failure — never throws.
@@ -98,7 +103,7 @@ export async function extractBooksFromFrames(
     ];
 
     const response = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
+      model: MODEL_ACCURATE,
       max_tokens: 1024,
       system: VISION_SYSTEM_PROMPT,
       messages: [{ role: "user", content: userContent }],

@@ -17,8 +17,7 @@ import {
   type GoodreadsSearchResult,
 } from "./goodreads-search";
 import { saveGoodreadsBookToCache } from "./cache";
-import { scheduleMetadataEnrichment } from "./metadata-enrichment";
-import { scheduleEnrichment } from "@/lib/scraping";
+import { queueEnrichmentJobs } from "@/lib/enrichment/queue";
 import { isJunkTitle } from "./romance-filter";
 
 const GOODREADS_DELAY_MS = 1500;
@@ -168,7 +167,7 @@ export function scheduleAuthorCrawl(
   });
 }
 
-async function runAuthorCrawl(
+export async function runAuthorCrawl(
   goodreadsBookId: string,
   authorName: string
 ): Promise<void> {
@@ -241,13 +240,9 @@ async function runAuthorCrawl(
 
       if (book) {
         discovered++;
-        scheduleMetadataEnrichment(
-          book.id,
-          book.title,
-          book.author,
-          book.isbn
-        );
-        scheduleEnrichment(book.id, book.title, book.author, book.isbn);
+        await queueEnrichmentJobs(book.id, book.title, book.author, {
+          hasGoodreadsId: true,
+        });
       }
     } catch {
       // Continue with remaining books if one fails

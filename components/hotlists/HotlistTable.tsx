@@ -24,6 +24,8 @@ function getRating(ratings: Rating[], source: string): number | null {
 }
 
 function getSpiceLevel(book: HotlistBookDetail): number {
+  // Prefer composite score
+  if (book.book.compositeSpice) return book.book.compositeSpice.score;
   if (book.book.spice.length === 0) return 0;
   const community = book.book.spice.find((s) => s.source === "hotlist_community");
   if (community) return community.spiceLevel;
@@ -177,8 +179,27 @@ export default function HotlistTable({
                   {/* Spice + My Rating + Buy */}
                   <div className="flex items-center gap-3 mt-1.5">
                     {spice > 0 && (
-                      <span className="text-sm" title={`${spice}/5 spice`}>
-                        {"🌶️".repeat(spice)}
+                      <span
+                        className="text-sm"
+                        title={hb.book.compositeSpice
+                          ? hb.book.compositeSpice.conflictFlag
+                            ? `${hb.book.compositeSpice.score.toFixed(1)}/5 spice · ${hb.book.compositeSpice.attribution}`
+                            : `${hb.book.compositeSpice.score.toFixed(1)}/5 spice · ${hb.book.compositeSpice.attribution}`
+                          : `${spice}/5 spice`}
+                      >
+                        {Array.from({ length: Math.min(5, Math.max(1, Math.round(spice))) }, (_, i) => (
+                          <span
+                            key={i}
+                            className={hb.book.compositeSpice?.conflictFlag
+                              ? "opacity-50"
+                              : hb.book.compositeSpice && !["community", "romance_io"].includes(hb.book.compositeSpice.primarySource)
+                                ? "opacity-60"
+                                : ""}
+                          >🌶️</span>
+                        ))}
+                        {hb.book.compositeSpice?.conflictFlag && (
+                          <span className="text-[9px] font-mono text-fire/50 italic ml-1">varies</span>
+                        )}
                       </span>
                     )}
                     <InlineStarRating
@@ -270,8 +291,25 @@ export default function HotlistTable({
                   </td>
                   <td className="px-3 py-3 text-center">
                     {spice > 0 ? (
-                      <span className="text-sm" title={`${spice}/5 spice`}>
-                        {"🌶️".repeat(spice)}
+                      <span
+                        className="text-sm cursor-default"
+                        title={hb.book.compositeSpice
+                          ? `${hb.book.compositeSpice.score.toFixed(1)}/5 spice · ${hb.book.compositeSpice.attribution}`
+                          : `${spice}/5 spice`}
+                      >
+                        {Array.from({ length: Math.min(5, Math.max(1, Math.round(spice))) }, (_, i) => (
+                          <span
+                            key={i}
+                            className={hb.book.compositeSpice?.conflictFlag
+                              ? "opacity-50"
+                              : hb.book.compositeSpice && !["community", "romance_io"].includes(hb.book.compositeSpice.primarySource)
+                                ? "opacity-60"
+                                : ""}
+                          >🌶️</span>
+                        ))}
+                        {hb.book.compositeSpice?.conflictFlag && (
+                          <span className="block text-[9px] font-mono text-fire/50 italic">varies</span>
+                        )}
                       </span>
                     ) : (
                       <span className="text-muted/40 font-mono text-sm">{"\u2014"}</span>

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { clsx } from "clsx";
 import BookCover from "@/components/ui/BookCover";
 import Badge from "@/components/ui/Badge";
+import SpiceDisplay from "@/components/books/SpiceDisplay";
 import SpiceIndicator from "@/components/ui/SpiceIndicator";
 import type { BookDetail } from "@/lib/types";
 
@@ -61,14 +62,22 @@ export default function BookCard({ book, layout = "grid", className }: BookCardP
                 <span className="text-gold font-medium">{amzRating.toFixed(1)}</span>
               </span>
             )}
-            {spice && (
+            {book.compositeSpice ? (
+              <SpiceDisplay
+                composite={book.compositeSpice}
+                compact
+                showNudge
+                bookSlug={slug}
+                romanceIoSlug={book.romanceIoSlug}
+              />
+            ) : spice ? (
               <SpiceIndicator
                 level={spice.spiceLevel}
                 source={spice.source}
                 confidence={spice.confidence}
                 ratingCount={spice.ratingCount}
               />
-            )}
+            ) : null}
           </div>
           {topTropes.length > 0 && (
             <div className="flex gap-1 mt-1">
@@ -119,7 +128,14 @@ export default function BookCard({ book, layout = "grid", className }: BookCardP
               <span className="text-gold font-medium">{amzRating.toFixed(1)}</span>
             </span>
           )}
-          {spice && (
+          {book.compositeSpice ? (
+            <SpiceDisplay
+              composite={book.compositeSpice}
+              compact
+              romanceIoSlug={book.romanceIoSlug}
+              className="[&_span]:text-xs"
+            />
+          ) : spice ? (
             <SpiceIndicator
               level={spice.spiceLevel}
               source={spice.source}
@@ -127,7 +143,7 @@ export default function BookCard({ book, layout = "grid", className }: BookCardP
               ratingCount={spice.ratingCount}
               className="[&_span]:text-xs"
             />
-          )}
+          ) : null}
         </div>
         {topTropes.length > 0 && (
           <div className="flex gap-1 mt-0.5 flex-wrap">

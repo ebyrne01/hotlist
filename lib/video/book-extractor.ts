@@ -1,11 +1,18 @@
 /**
- * Book Extraction from video transcripts using Claude Haiku.
+ * Book Extraction from video transcripts using Claude.
  *
  * Takes a transcript and extracts structured book recommendations
- * from natural speech.
+ * from natural speech. Uses Haiku for structured extraction (fast/cheap)
+ * and Sonnet for title correction (accuracy-critical).
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+
+/** Model for high-volume structured extraction (transcripts, synopses) */
+const MODEL_FAST = "claude-haiku-4-5-20251001";
+
+/** Model for accuracy-critical tasks (title correction, vision) */
+const MODEL_ACCURATE = "claude-sonnet-4-5-20250514";
 
 export interface ExtractedBook {
   title: string;
@@ -133,7 +140,7 @@ export async function extractBooksFromTranscript(
       : transcript;
 
     const response = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
+      model: MODEL_FAST,
       max_tokens: 2048,
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: userMessage }],
@@ -168,11 +175,12 @@ export async function extractBooksFromTranscript(
 /**
  * TITLE CORRECTION PASS
  *
- * Uses Claude Haiku to fix likely Whisper transcription errors.
- * Whisper is bad at: fantasy proper nouns, unusual author names,
- * non-English words, and words that sound like common English words.
+ * Uses Claude Sonnet for better world knowledge when fixing Whisper
+ * transcription errors. Whisper is bad at: fantasy proper nouns,
+ * unusual author names, non-English words, and words that sound
+ * like common English words.
  *
- * Cost: ~$0.001 per call (tiny input, tiny output).
+ * Cost: ~$0.005 per call (tiny input, tiny output — Sonnet for accuracy).
  * On failure, returns the original array unchanged (graceful degradation).
  */
 export async function correctExtractedBooks(
@@ -193,7 +201,7 @@ export async function correctExtractedBooks(
     }));
 
     const response = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
+      model: MODEL_ACCURATE,
       max_tokens: 1024,
       system: `You are a book title and author name corrector. You receive a list of book titles and authors extracted from speech-to-text transcription of BookTok/BookStagram videos. Speech-to-text often garbles:
 - Fantasy/unusual proper nouns (e.g., "Alchemized" should be "Alchemised", "Manicold" should be "Manacled")

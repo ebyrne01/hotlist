@@ -5,6 +5,8 @@ import { Check, ExternalLink } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useSignInModal } from "@/lib/auth/useSignInModal";
 import { clsx } from "clsx";
+import SpiceAttribution, { isEstimatedSource } from "@/components/books/SpiceAttribution";
+import type { CompositeSpiceData } from "@/lib/types";
 
 interface SpiceData {
   spiceLevel: number;
@@ -15,6 +17,7 @@ interface SpiceData {
 
 interface SpiceSectionProps {
   bookId: string;
+  compositeSpice: CompositeSpiceData | null;
   romanceIoSpice: SpiceData | null;
   romanceIoHeatLabel: string | null;
   romanceIoSlug: string | null;
@@ -24,6 +27,7 @@ interface SpiceSectionProps {
 
 export default function SpiceSection({
   bookId,
+  compositeSpice,
   romanceIoSpice,
   romanceIoHeatLabel,
   romanceIoSlug,
@@ -42,17 +46,24 @@ export default function SpiceSection({
   const supabase = createClient();
 
   // Determine primary spice source:
-  // romance.io (high confidence) > community (≥5 ratings) > goodreads inference
+  // Use composite score when available, fall back to legacy sources
   const hasRomanceIo = !!romanceIoSpice;
   const hasCommunity =
     communitySpice && (communitySpice.ratingCount ?? 0) >= 5;
 
-  // The "headline" spice level shown at the top
-  const primaryLevel = hasRomanceIo
-    ? romanceIoSpice.spiceLevel
-    : hasCommunity
-      ? communitySpice.spiceLevel
-      : inferredSpice?.spiceLevel ?? null;
+  // The "headline" spice level — prefer composite, fall back to legacy
+  const primaryLevel = compositeSpice
+    ? compositeSpice.score
+    : hasRomanceIo
+      ? romanceIoSpice.spiceLevel
+      : hasCommunity
+        ? communitySpice.spiceLevel
+        : inferredSpice?.spiceLevel ?? null;
+
+  // Is the composite score estimated (not community or romance.io)?
+  const isEstimated = compositeSpice
+    ? isEstimatedSource(compositeSpice.primarySource)
+    : !hasRomanceIo && !hasCommunity;
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -126,10 +137,12 @@ export default function SpiceSection({
             (sum, r) => sum + (r.spice_rating ?? 0),
             0
           );
-          const avg = Math.round(total / allRatings.length);
+          const mean = total / allRatings.length;
+          // Match server-side rounding: one decimal place (community-aggregation.ts)
+          const avg = Math.round(mean * 10) / 10;
           const count = allRatings.length;
 
-          // Update book_spice community row
+          // Update book_spice community row (legacy)
           await supabase.from("book_spice").upsert(
             {
               book_id: bookId,
@@ -148,6 +161,13 @@ export default function SpiceSection({
             ratingCount: count,
           });
         }
+
+        // Trigger server-side community aggregation into spice_signals (fire-and-forget)
+        fetch("/api/books/refresh-spice", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bookId }),
+        }).catch(() => {/* non-blocking */});
 
         setJustSaved(true);
         setTimeout(() => setJustSaved(false), 1500);
@@ -211,7 +231,7 @@ export default function SpiceSection({
 
       {/* Primary spice indicator */}
       <div className="flex items-center gap-2">
-        <SpiceChilies level={primaryLevel} muted={false} />
+        <SpiceChilies level={primaryLevel} muted={false} estimated={isEstimated} />
         {hasRomanceIo && romanceIoHeatLabel && (
           <span className="text-xs font-body text-muted/80 italic">
             {romanceIoHeatLabel}
@@ -219,8 +239,15 @@ export default function SpiceSection({
         )}
       </div>
 
-      {/* Source attribution */}
-      {hasRomanceIo && romanceIoUrl ? (
+      {/* Source attribution — composite-aware */}
+      {compositeSpice ? (
+        <div className="mt-1.5">
+          <SpiceAttribution
+            composite={compositeSpice}
+            romanceIoSlug={romanceIoSlug}
+          />
+        </div>
+      ) : hasRomanceIo && romanceIoUrl ? (
         <a
           href={romanceIoUrl}
           target="_blank"
@@ -261,6 +288,13 @@ export default function SpiceSection({
         </div>
       )}
 
+      {/* "Rate the spice" nudge for estimated sources */}
+      {isEstimated && !userSpice && authChecked && (
+        <p className="mt-1.5 text-[10px] font-mono text-fire/50 italic">
+          This is an estimate — rate the spice below to improve it
+        </p>
+      )}
+
       {/* User's spice rating section */}
       {authChecked && (
         <div className="mt-3 pt-3 border-t border-border/50">
@@ -286,9 +320,11 @@ export default function SpiceSection({
 function SpiceChilies({
   level,
   muted,
+  estimated = false,
 }: {
   level: number | null;
   muted: boolean;
+  estimated?: boolean;
 }) {
   if (!level) {
     return (
@@ -307,7 +343,9 @@ function SpiceChilies({
             i < clamped
               ? muted
                 ? "opacity-50"
-                : "opacity-100"
+                : estimated
+                  ? "opacity-60"
+                  : "opacity-100"
               : "opacity-20 grayscale"
           )}
         >
