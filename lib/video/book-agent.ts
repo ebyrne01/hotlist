@@ -147,7 +147,13 @@ CRITICAL RULES:
 - Do NOT extract books mentioned only as brief comparisons ("similar to X", "if you liked X").
 - Do NOT extract planners, journals, non-book products.
 - If you cannot verify a book on Goodreads, still include it with null goodreads_id.
-- Call submit_books exactly ONCE with ALL books when you are done.`;
+- Call submit_books exactly ONCE with ALL books when you are done.
+
+SEARCH STRATEGY when a search returns 0 results:
+- You may have the title wrong. Try the AUTHOR NAME ALONE (e.g. "Katie Reus") — this often surfaces the right book.
+- Try partial or alternate title spellings. Video audio can be misheard — "Ancients Rising" might be "Ancient Protector".
+- Try shorter queries: just the most distinctive word + author.
+- Do NOT repeat the same failing query with minor keyword changes — change your approach entirely.`;
 
 interface BookAgentInput {
   frames: (string | Buffer)[];

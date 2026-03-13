@@ -468,69 +468,73 @@ function MatchedBookCard({
   );
 
   return (
-    <div className="flex gap-3 p-3 bg-white border border-border rounded-lg hover:border-fire/20 transition-colors">
-      <Link href={`/book/${detail.slug}`} className="shrink-0">
-        <BookCover
-          title={detail.title}
-          coverUrl={detail.coverUrl}
-          size="sm"
-          className="w-16 h-24 rounded"
-        />
-      </Link>
-      <div className="flex-1 min-w-0">
-        <Link href={`/book/${detail.slug}`}>
-          <h3 className="font-display font-bold text-ink text-sm truncate hover:text-fire transition-colors">
-            {detail.title}
-          </h3>
+    <div className="bg-white border border-border rounded-lg hover:border-fire/20 transition-colors">
+      <div className="flex gap-3 p-3">
+        <Link href={`/book/${detail.slug}`} className="shrink-0">
+          <BookCover
+            title={detail.title}
+            coverUrl={detail.coverUrl}
+            size="sm"
+            className="w-16 h-24 rounded"
+          />
         </Link>
-        <p className="text-xs font-body text-muted truncate">
-          {detail.author}
-          {detail.genres.length > 0 && (
-            <> &middot; {detail.genres[0]}</>
-          )}
-        </p>
-
-        {/* Ratings row */}
-        <div className="flex items-center gap-3 mt-1">
-          {grRating?.rating && (
-            <RatingBadge
-              score={grRating.rating}
-              source="goodreads"
-              ratingCount={grRating.ratingCount}
-            />
-          )}
-          {spice && (
-            <span className="text-xs">
-              {Array.from({ length: Math.min(5, Math.round(spice.spiceLevel)) }, (_, i) => (
-                <span key={i}>🌶️</span>
-              ))}
-            </span>
-          )}
-        </div>
-
-        {/* Creator quote */}
-        {book.creatorQuote && (
-          <p className="mt-1.5 text-xs font-body text-muted/70 italic leading-snug line-clamp-2">
-            &ldquo;{book.creatorQuote}&rdquo;
+        <div className="flex-1 min-w-0">
+          <Link href={`/book/${detail.slug}`}>
+            <h3 className="font-display font-bold text-ink text-sm truncate hover:text-fire transition-colors">
+              {detail.title}
+            </h3>
+          </Link>
+          <p className="text-xs font-body text-muted truncate">
+            {detail.author}
+            {detail.genres.length > 0 && (
+              <> &middot; {detail.genres[0]}</>
+            )}
           </p>
-        )}
-        <p className="text-[10px] font-mono text-muted/40 mt-0.5">
-          {SENTIMENT_EMOJI[book.creatorSentiment] ?? "mentioned"}
-        </p>
+
+          {/* Ratings row */}
+          <div className="flex items-center gap-3 mt-1">
+            {grRating?.rating && (
+              <RatingBadge
+                score={grRating.rating}
+                source="goodreads"
+                ratingCount={grRating.ratingCount}
+              />
+            )}
+            {spice && (
+              <span className="text-xs">
+                {Array.from({ length: Math.min(5, Math.round(spice.spiceLevel)) }, (_, i) => (
+                  <span key={i}>🌶️</span>
+                ))}
+              </span>
+            )}
+          </div>
+
+          {/* Creator quote */}
+          {book.creatorQuote && (
+            <p className="mt-1.5 text-xs font-body text-muted/70 italic leading-snug line-clamp-2">
+              &ldquo;{book.creatorQuote}&rdquo;
+            </p>
+          )}
+          <p className="text-[10px] font-mono text-muted/40 mt-0.5">
+            {SENTIMENT_EMOJI[book.creatorSentiment] ?? "mentioned"}
+          </p>
+        </div>
+        <div className="shrink-0 flex flex-col items-end gap-1">
+          <Link
+            href={`/book/${detail.slug}`}
+            className="text-[10px] font-mono text-fire hover:text-fire/80 transition-colors"
+          >
+            View &rarr;
+          </Link>
+        </div>
+      </div>
+      <div className="px-3 pb-2">
         <GrabFeedbackButton
           videoUrl={videoUrl}
           bookId={detail.id}
           bookTitle={detail.title}
           feedbackOptions={["wrong_book", "wrong_edition"]}
         />
-      </div>
-      <div className="shrink-0 flex flex-col items-end gap-1">
-        <Link
-          href={`/book/${detail.slug}`}
-          className="text-[10px] font-mono text-fire hover:text-fire/80 transition-colors"
-        >
-          View &rarr;
-        </Link>
       </div>
     </div>
   );
@@ -546,33 +550,37 @@ function UnmatchedBookCard({
   videoUrl: string;
 }) {
   return (
-    <div className="flex gap-3 p-3 bg-white border border-border rounded-lg opacity-70">
-      <div className="w-16 h-24 rounded bg-cream border border-border flex items-center justify-center shrink-0">
-        <span className="text-2xl text-muted/30">?</span>
+    <div className="bg-white border border-border rounded-lg opacity-70">
+      <div className="flex gap-3 p-3">
+        <div className="w-16 h-24 rounded bg-cream border border-border flex items-center justify-center shrink-0">
+          <span className="text-2xl text-muted/30">?</span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <h3 className="font-display font-bold text-ink text-sm truncate">
+            {book.rawTitle}
+          </h3>
+          {book.rawAuthor && (
+            <p className="text-xs font-body text-muted truncate">
+              {book.rawAuthor}
+            </p>
+          )}
+          <p className="text-xs font-mono text-muted/50 mt-1">
+            Mentioned but not in our database yet
+          </p>
+          {book.creatorQuote && (
+            <p className="mt-1 text-xs font-body text-muted/70 italic leading-snug line-clamp-2">
+              &ldquo;{book.creatorQuote}&rdquo;
+            </p>
+          )}
+          <Link
+            href={`/search?q=${encodeURIComponent(book.rawTitle + (book.rawAuthor ? " " + book.rawAuthor : ""))}`}
+            className="inline-block mt-1.5 text-[10px] font-mono text-fire hover:text-fire/80 transition-colors"
+          >
+            Search for this book &rarr;
+          </Link>
+        </div>
       </div>
-      <div className="flex-1 min-w-0">
-        <h3 className="font-display font-bold text-ink text-sm truncate">
-          {book.rawTitle}
-        </h3>
-        {book.rawAuthor && (
-          <p className="text-xs font-body text-muted truncate">
-            {book.rawAuthor}
-          </p>
-        )}
-        <p className="text-xs font-mono text-muted/50 mt-1">
-          Mentioned but not in our database yet
-        </p>
-        {book.creatorQuote && (
-          <p className="mt-1 text-xs font-body text-muted/70 italic leading-snug line-clamp-2">
-            &ldquo;{book.creatorQuote}&rdquo;
-          </p>
-        )}
-        <Link
-          href={`/search?q=${encodeURIComponent(book.rawTitle + (book.rawAuthor ? " " + book.rawAuthor : ""))}`}
-          className="inline-block mt-1.5 text-[10px] font-mono text-fire hover:text-fire/80 transition-colors"
-        >
-          Search for this book &rarr;
-        </Link>
+      <div className="px-3 pb-2">
         <GrabFeedbackButton
           videoUrl={videoUrl}
           bookTitle={book.rawTitle}
