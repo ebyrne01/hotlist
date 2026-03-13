@@ -178,8 +178,8 @@ async function preferSeriesBook1(results: ResolvedBook[]): Promise<ResolvedBook[
 
     const book = result.book;
     // Only swap if: book has a series, is NOT Book 1, and we know the series name
-    // DB-only lookup to avoid slow Goodreads calls that cause timeouts
     if (book.seriesName && book.seriesPosition && book.seriesPosition > 1) {
+      // Strategy 1: DB lookup (fast)
       const { data: book1Rows } = await supabase
         .from("books")
         .select("*")
@@ -195,6 +195,25 @@ async function preferSeriesBook1(results: ResolvedBook[]): Promise<ResolvedBook[
           continue;
         }
       }
+
+      // Strategy 2: Goodreads search for "[series name] book 1" (one query)
+      let swapped = false;
+      try {
+        const searchQuery = `${book.seriesName} ${book.author ?? ""}`.trim();
+        const grResults = await searchGoodreads(searchQuery);
+        for (const gr of grResults.slice(0, 5)) {
+          const grBook = await getBookDetail(gr.goodreadsId);
+          if (grBook && grBook.seriesPosition === 1) {
+            console.log(`[book-resolver] Goodreads swap "${book.title}" (Book ${book.seriesPosition}) → "${grBook.title}" (Book 1)`);
+            corrected.push({ ...result, book: grBook });
+            swapped = true;
+            break;
+          }
+        }
+      } catch (err) {
+        console.warn(`[book-resolver] Goodreads Book 1 search failed for "${book.seriesName}":`, err);
+      }
+      if (swapped) continue;
     }
 
     corrected.push(result);
@@ -425,7 +444,10 @@ async function resolveSeriesName(
   const { hydrateBookDetail } = await import("@/lib/books/cache");
 
   // ── Strategy 1: Search our DB by series_name column (fastest, most reliable) ──
+  // Use both ILIKE (exact) and fuzzy trigram search to handle typos like "Karadoc" vs "Karadok"
   const supabase = getAdminClient();
+
+  // 1a: Exact ILIKE match
   const { data: seriesMatches } = await supabase
     .from("books")
     .select("*")
@@ -433,11 +455,37 @@ async function resolveSeriesName(
     .eq("series_position", 1)
     .limit(3);
 
-  if (seriesMatches && seriesMatches.length > 0) {
+  // 1b: Fuzzy trigram match on series_name (handles spelling variations)
+  const { data: fuzzySeriesMatches } = await supabase.rpc("search_books_fuzzy", {
+    search_title: cleanedTitle,
+    search_author: author,
+    match_limit: 5,
+  });
+
+  // Combine: exact ILIKE matches first, then fuzzy matches that are Book 1
+  const allSeriesMatches = [...(seriesMatches ?? [])];
+  if (fuzzySeriesMatches) {
+    for (const fm of fuzzySeriesMatches) {
+      // Only add fuzzy matches that look like they match the series
+      const fmSeriesName = ((fm as Record<string, unknown>).series_name as string ?? "").toLowerCase();
+      const fmPosition = (fm as Record<string, unknown>).series_position as number;
+      if (fmPosition === 1 && fmSeriesName) {
+        // Check if the series name is similar to what we're looking for
+        const cleanedLower = cleanedTitle.toLowerCase();
+        const seriesWords = cleanedLower.split(/\s+/).filter((w: string) => w.length > 2);
+        const matchesEnough = seriesWords.some((w: string) => fmSeriesName.includes(w));
+        if (matchesEnough && !allSeriesMatches.some((m) => (m as Record<string, unknown>).id === fm.id)) {
+          allSeriesMatches.push(fm as Record<string, unknown>);
+        }
+      }
+    }
+  }
+
+  if (allSeriesMatches.length > 0) {
     // If we have an author, prefer matching author
     if (author) {
       const authorWords = author.toLowerCase().split(/\s+/).filter((w) => w.length > 1);
-      for (const row of seriesMatches) {
+      for (const row of allSeriesMatches) {
         const dbAuthor = ((row.author as string) ?? "").toLowerCase();
         if (authorWords.some((w) => dbAuthor.includes(w))) {
           const book = await hydrateBookDetail(supabase, row as Record<string, unknown>);
@@ -449,7 +497,7 @@ async function resolveSeriesName(
       }
     }
     // No author or no author match — use first Book 1 result
-    const book = await hydrateBookDetail(supabase, seriesMatches[0] as Record<string, unknown>);
+    const book = await hydrateBookDetail(supabase, allSeriesMatches[0] as Record<string, unknown>);
     if (book) {
       console.log(`[book-resolver] DB series match (no author) for "${seriesTitle}": "${book.title}"`);
       return book;
