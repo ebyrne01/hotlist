@@ -1,0 +1,158 @@
+/* Hotlist Chrome Extension — Overlay Styles
+   All classes prefixed with .hotlist- to avoid host page conflicts.
+   Uses hardcoded hex colors (not CSS variables) for isolation. */
+
+.hotlist-overlay {
+  border: 1px solid #e8e0d8;
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin: 12px 0;
+  background: #faf7f2;
+  font-family: "Libre Baskerville", "Georgia", serif;
+  color: #12080a;
+  line-height: 1.5;
+  box-shadow: 0 1px 4px rgba(18, 8, 10, 0.06);
+}
+
+.hotlist-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.hotlist-wordmark {
+  font-family: "Playfair Display", "Georgia", serif;
+  font-weight: 700;
+  font-style: italic;
+  font-size: 16px;
+  color: #12080a;
+}
+
+.hotlist-fire {
+  font-size: 14px;
+}
+
+/* Spice */
+.hotlist-spice {
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.hotlist-spice-peppers {
+  font-size: 16px;
+  letter-spacing: 1px;
+}
+
+.hotlist-heat-label {
+  font-family: "DM Mono", "Menlo", monospace;
+  font-size: 11px;
+  font-weight: 500;
+  color: #d4430e;
+  background: rgba(212, 67, 14, 0.08);
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.hotlist-spice-source {
+  font-family: "DM Mono", "Menlo", monospace;
+  font-size: 10px;
+  color: #8a7e76;
+}
+
+.hotlist-spice-unknown {
+  font-family: "DM Mono", "Menlo", monospace;
+  font-size: 11px;
+  color: #8a7e76;
+}
+
+/* Tropes */
+.hotlist-tropes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 10px;
+}
+
+.hotlist-trope-pill {
+  font-family: "DM Mono", "Menlo", monospace;
+  font-size: 10px;
+  color: #12080a;
+  background: rgba(212, 67, 14, 0.06);
+  border: 1px solid rgba(212, 67, 14, 0.15);
+  padding: 2px 8px;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+
+/* Actions */
+.hotlist-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.hotlist-btn-view {
+  font-family: "DM Mono", "Menlo", monospace;
+  font-size: 11px;
+  font-weight: 500;
+  color: #d4430e;
+  text-decoration: none;
+  transition: opacity 0.15s;
+}
+
+.hotlist-btn-view:hover {
+  opacity: 0.75;
+}
+
+.hotlist-btn-add {
+  font-family: "DM Mono", "Menlo", monospace;
+  font-size: 11px;
+  font-weight: 500;
+  color: #faf7f2;
+  background: #d4430e;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.hotlist-btn-add:hover {
+  background: #b8390c;
+}
+
+/* Amazon rating comparison */
+.hotlist-ratings-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-family: "DM Mono", "Menlo", monospace;
+  font-size: 11px;
+}
+
+.hotlist-rating-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hotlist-rating-source {
+  color: #8a7e76;
+  font-size: 10px;
+}
+
+.hotlist-rating-value {
+  font-weight: 600;
+  color: #12080a;
+}
+
+.hotlist-rating-count {
+  color: #8a7e76;
+  font-size: 9px;
+}

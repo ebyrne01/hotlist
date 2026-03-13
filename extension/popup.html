@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=350">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup">
+    <div class="header">
+      <span class="wordmark">Hotlist</span>
+      <span class="fire">🔥</span>
+    </div>
+
+    <!-- State: Video page detected -->
+    <div id="state-ready" class="state hidden">
+      <p class="url-preview" id="urlPreview"></p>
+      <button id="grabBtn" class="btn-primary">Find Books →</button>
+    </div>
+
+    <!-- State: Processing video -->
+    <div id="state-processing" class="state hidden">
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+      <p class="status-text" id="statusText">Starting...</p>
+    </div>
+
+    <!-- State: Results -->
+    <div id="state-results" class="state hidden">
+      <div id="bookList" class="book-list"></div>
+      <a id="openHotlistBtn" href="#" class="btn-primary" target="_blank">Open on Hotlist →</a>
+    </div>
+
+    <!-- State: Book page (Goodreads/Amazon) -->
+    <div id="state-book-page" class="state hidden">
+      <p class="message">Check the page below — the Hotlist overlay is there with spice levels and tropes.</p>
+    </div>
+
+    <!-- State: Not a video or book page -->
+    <div id="state-default" class="state hidden">
+      <p class="tagline">Your next great read, already waiting.</p>
+      <a href="https://www.myhotlist.app" target="_blank" class="link">Open Hotlist →</a>
+      <a href="https://www.myhotlist.app/booktok" target="_blank" class="link">Paste a BookTok link →</a>
+    </div>
+
+    <!-- State: Error -->
+    <div id="state-error" class="state hidden">
+      <p class="error-text" id="errorText"></p>
+      <button id="retryBtn" class="btn-secondary">Try Again</button>
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

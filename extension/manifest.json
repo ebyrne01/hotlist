@@ -1,0 +1,64 @@
+{
+  "manifest_version": 3,
+  "name": "Hotlist — Spice Levels, Tropes & BookTok",
+  "short_name": "Hotlist",
+  "version": "1.0.0",
+  "description": "See spice levels and tropes on Goodreads & Amazon. Grab books from BookTok videos. Add any book to your Hotlist in one click.",
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://www.myhotlist.app/*",
+    "https://myhotlist.app/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    },
+    "default_title": "Hotlist — Spice levels, tropes & BookTok"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.tiktok.com/*",
+        "*://*.instagram.com/*",
+        "*://*.youtube.com/*",
+        "*://youtu.be/*"
+      ],
+      "js": ["content-video.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "*://*.goodreads.com/book/show/*"
+      ],
+      "js": ["content-goodreads.js"],
+      "css": ["content-overlay.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "*://*.amazon.com/*/dp/*",
+        "*://*.amazon.com/dp/*",
+        "*://*.amazon.com/gp/product/*"
+      ],
+      "js": ["content-amazon.js"],
+      "css": ["content-overlay.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  }
+}
