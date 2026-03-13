@@ -58,7 +58,7 @@ export default function SpiceIndicator({
   const tooltip = getTooltip(source, confidence, ratingCount);
 
   return (
-    <span className={clsx("inline-flex items-center gap-0.5 group relative", className)}>
+    <span className={clsx("inline-flex items-center gap-0.5 group/spice relative", className)}>
       {Array.from({ length: 5 }, (_, i) => (
         <span
           key={i}
@@ -86,7 +86,7 @@ export default function SpiceIndicator({
         {tooltip && `, ${tooltip}`}
       </span>
       {tooltip && (
-        <span className="absolute top-full left-1/2 -translate-x-1/2 mt-1 bg-ink text-white text-xs font-mono px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-20">
+        <span className="absolute top-full left-1/2 -translate-x-1/2 mt-1 bg-ink text-white text-xs font-mono px-2 py-1 rounded opacity-0 group-hover/spice:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-20">
           {tooltip}
         </span>
       )}

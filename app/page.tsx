@@ -14,18 +14,63 @@ import type { BookDetail } from "@/lib/types";
 
 /**
  * What's Hot: NYT bestsellers filtered to romance/romantasy.
+ * Supplements with recent nyt_trending history (past 4 weeks) when
+ * this week's list has fewer than 10 romance titles.
  * Falls back to top-rated books in our DB if NYT returns nothing.
  */
+const MIN_HOT_BOOKS = 10;
+
 async function getWhatsHot(): Promise<BookDetail[]> {
+  const supabase = getAdminClient();
+  let nytBooks: BookDetail[] = [];
+
   try {
-    const nytBooks = await getNYTBestsellerRomance();
-    if (nytBooks.length > 0) return deduplicateBooks(nytBooks);
+    nytBooks = await getNYTBestsellerRomance();
   } catch (err) {
     console.warn("[homepage] NYT bestseller fetch failed, falling back:", err);
   }
 
+  // Supplement with recent NYT trending history if we have fewer than 10
+  if (nytBooks.length < MIN_HOT_BOOKS) {
+    const currentIds = new Set(nytBooks.map((b) => b.id));
+    const fourWeeksAgo = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString();
+
+    const { data: recentTrending } = await supabase
+      .from("nyt_trending")
+      .select("book_id, weeks_on_list")
+      .gte("fetched_at", fourWeeksAgo)
+      .order("weeks_on_list", { ascending: false });
+
+    if (recentTrending && recentTrending.length > 0) {
+      const seen = new Set<string>();
+      const backfillIds: string[] = [];
+      for (const row of recentTrending) {
+        if (currentIds.has(row.book_id) || seen.has(row.book_id)) continue;
+        seen.add(row.book_id);
+        backfillIds.push(row.book_id);
+        if (nytBooks.length + backfillIds.length >= MIN_HOT_BOOKS) break;
+      }
+
+      if (backfillIds.length > 0) {
+        const { data: backfillRows } = await supabase
+          .from("books")
+          .select("*")
+          .in("id", backfillIds)
+          .not("cover_url", "is", null);
+
+        if (backfillRows) {
+          for (const row of backfillRows as Record<string, unknown>[]) {
+            if (isJunkTitle(row.title as string)) continue;
+            nytBooks.push(await hydrateBookDetail(supabase, row));
+          }
+        }
+      }
+    }
+  }
+
+  if (nytBooks.length > 0) return deduplicateBooks(nytBooks);
+
   // Fallback: top-rated books from our database
-  const supabase = getAdminClient();
   const { data: topRated } = await supabase
     .from("book_ratings")
     .select("book_id, rating")
