@@ -19,6 +19,7 @@ const STATUS_MESSAGES: Record<GrabStatus, string> = {
   scanning: "Scanning for book covers...",
   extracting: "Finding book mentions...",
   correcting: "Double-checking titles...",
+  reconciling: "Cross-referencing covers with audio...",
   resolving: "Matching to our database...",
   done: "Done!",
 };

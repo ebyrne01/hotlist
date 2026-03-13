@@ -2,14 +2,17 @@
  * Grab from Video — Main orchestrator
  *
  * Coordinates: URL validation → video download → transcription →
- * book extraction → Goodreads resolution → cached result.
+ * multi-frame vision → transcript extraction → reconciliation →
+ * Goodreads resolution → cached result.
  */
 
 import { getAdminClient } from "@/lib/supabase/admin";
 import { getVideoDownloadUrl, detectPlatform } from "./downloader";
 import { transcribeAudio } from "./transcription";
 import { extractBooksFromTranscript, correctExtractedBooks } from "./book-extractor";
-import { extractBooksFromFrames, mergeExtractedBooks } from "./vision-extractor";
+import { extractBooksFromFrames } from "./vision-extractor";
+import { extractFrames } from "./frame-extractor";
+import { reconcileBooks } from "./reconciler";
 import { resolveExtractedBooks, type ResolvedBook } from "./book-resolver";
 import { queueEnrichmentJobs } from "@/lib/enrichment/queue";
 
@@ -19,6 +22,7 @@ export type GrabStatus =
   | "scanning"
   | "extracting"
   | "correcting"
+  | "reconciling"
   | "resolving"
   | "done";
 
@@ -116,9 +120,18 @@ function normalizeUrl(url: string): string {
 /**
  * Main orchestrator — processes a video URL end-to-end.
  *
- * @param url - TikTok, Instagram, or YouTube URL
- * @param onStatus - callback for progress updates (for streaming UI)
- * @param userId - optional user ID to associate with the grab
+ * Pipeline:
+ * 1. Validate URL + check cache
+ * 2. Download video/audio via RapidAPI
+ * 3. Transcribe audio via Whisper (parallel with steps 4-5)
+ * 4. Extract frames from video via ffmpeg (parallel with step 3)
+ * 5. Read book covers from frames via Claude Sonnet vision
+ * 6. Extract book mentions from transcript via Claude Haiku
+ * 7. Correct transcription errors via Claude Sonnet
+ * 8. Reconcile vision + transcript books via Claude Sonnet
+ * 9. Resolve each book to database/Goodreads
+ * 10. Queue enrichment for matched books
+ * 11. Cache result
  */
 export async function grabBooksFromVideo(
   url: string,
@@ -144,40 +157,77 @@ export async function grabBooksFromVideo(
     return { success: false, error: "video_unavailable" };
   }
 
-  // Prefer audio URL (smaller, faster) — fall back to video
+  // Prefer audio URL for transcription — fall back to video
   const mediaUrl = download.audioUrl ?? download.videoUrl;
   if (!mediaUrl) {
     return { success: false, error: "video_unavailable" };
   }
 
-  // Step 4: Transcribe
+  const creatorHandle = download.creatorHandle ?? null;
+
+  // Steps 4-5 (vision) and Step 3 (transcription) run in parallel
+  // Vision pipeline: extract frames → read covers
+  // Transcription: audio → text
   onStatus?.("transcribing");
-  const transcription = await transcribeAudio(mediaUrl);
+
+  const visionPipeline = (async () => {
+    // Try multi-frame extraction from the video file first
+    const videoUrl = download.videoUrl;
+    if (videoUrl) {
+      onStatus?.("scanning");
+      const frames = await extractFrames(videoUrl, download.durationSeconds);
+      if (frames.length > 0) {
+        console.log(`[grab] Extracted ${frames.length} frames, sending to vision`);
+        return extractBooksFromFrames(frames, creatorHandle ?? undefined);
+      }
+    }
+
+    // Fall back to thumbnail if frame extraction failed
+    if (download.thumbnailUrl) {
+      onStatus?.("scanning");
+      console.log("[grab] Frame extraction unavailable, falling back to thumbnail");
+      return extractBooksFromFrames([download.thumbnailUrl], creatorHandle ?? undefined);
+    }
+
+    return [];
+  })();
+
+  const [transcription, visionBooks] = await Promise.all([
+    transcribeAudio(mediaUrl),
+    visionPipeline,
+  ]);
+
   if (!transcription || !transcription.text.trim()) {
+    // Even without transcript, vision alone might have found books
+    if (visionBooks.length > 0) {
+      onStatus?.("resolving");
+      const resolved = await resolveExtractedBooks(visionBooks);
+      queueEnrichmentForResolved(resolved);
+
+      const result: GrabResultSuccess = {
+        success: true,
+        platform,
+        creatorHandle,
+        thumbnailUrl: download.thumbnailUrl,
+        booksFound: resolved.length,
+        books: resolved,
+        transcript: "",
+        processingTimeMs: Date.now() - start,
+      };
+      await cacheGrabResult(url, result, userId);
+      onStatus?.("done");
+      return result;
+    }
+
     return { success: false, error: "transcription_failed" };
   }
 
-  // Step 5: Extract book mentions (transcript + vision in parallel)
+  // Step 6: Extract book mentions from transcript
   onStatus?.("extracting");
-  const creatorHandle =
-    download.creatorHandle ?? null;
-
-  // Run transcript extraction and vision extraction in parallel
-  // Vision gets its own status update via scanning
-  const visionPromise = download.thumbnailUrl
-    ? (async () => {
-        onStatus?.("scanning");
-        return extractBooksFromFrames([download.thumbnailUrl!], creatorHandle ?? undefined);
-      })()
-    : Promise.resolve([]);
-
-  const [extracted, visionBooks] = await Promise.all([
-    extractBooksFromTranscript(
-      transcription.text,
-      creatorHandle ?? undefined
-    ),
-    visionPromise,
-  ]);
+  const extracted = await extractBooksFromTranscript(
+    transcription.text,
+    creatorHandle ?? undefined
+  );
 
   if (extracted.length === 0 && visionBooks.length === 0) {
     return {
@@ -187,29 +237,26 @@ export async function grabBooksFromVideo(
     };
   }
 
-  // Step 5b: Correct likely transcription errors in titles/authors
+  // Step 7: Correct transcription errors in titles/authors
   onStatus?.("correcting");
   const corrected = await correctExtractedBooks(extracted);
 
-  // Step 5c: Merge transcript-extracted and vision-extracted books
-  const merged = mergeExtractedBooks(corrected, visionBooks);
+  // Step 8: Reconcile vision + transcript books
+  // This replaces the old naive word-overlap merge with an intelligent
+  // cross-reference that matches descriptions to covers.
+  onStatus?.("reconciling");
+  const reconciled = await reconcileBooks({
+    visionBooks,
+    transcriptBooks: corrected,
+    transcript: transcription.text,
+  });
 
-  // Step 6: Resolve to our database
+  // Step 9: Resolve to our database
   onStatus?.("resolving");
-  const resolved = await resolveExtractedBooks(merged);
+  const resolved = await resolveExtractedBooks(reconciled);
 
-  // Step 6b: Queue enrichment for all matched books (fire-and-forget)
-  // Uses the user's wait time productively — enrichment starts immediately
-  // so data is ready (or nearly ready) when books land in a hotlist.
-  for (const book of resolved) {
-    if (book.matched) {
-      queueEnrichmentJobs(book.book.id, book.book.title, book.book.author, {
-        hasGoodreadsId: !!book.book.goodreadsId,
-      }).catch((err) =>
-        console.warn(`[grab] Failed to queue enrichment for "${book.book.title}":`, err)
-      );
-    }
-  }
+  // Step 10: Queue enrichment for all matched books (fire-and-forget)
+  queueEnrichmentForResolved(resolved);
 
   const result: GrabResultSuccess = {
     success: true,
@@ -222,9 +269,26 @@ export async function grabBooksFromVideo(
     processingTimeMs: Date.now() - start,
   };
 
-  // Step 7: Cache result
+  // Step 11: Cache result
   await cacheGrabResult(url, result, userId);
 
   onStatus?.("done");
   return result;
+}
+
+/**
+ * Queue enrichment for all matched books (fire-and-forget).
+ * Uses the user's wait time productively — enrichment starts immediately
+ * so data is ready (or nearly ready) when books land in a hotlist.
+ */
+function queueEnrichmentForResolved(resolved: ResolvedBook[]) {
+  for (const book of resolved) {
+    if (book.matched) {
+      queueEnrichmentJobs(book.book.id, book.book.title, book.book.author, {
+        hasGoodreadsId: !!book.book.goodreadsId,
+      }).catch((err) =>
+        console.warn(`[grab] Failed to queue enrichment for "${book.book.title}":`, err)
+      );
+    }
+  }
 }

@@ -8,12 +8,13 @@
  *
  * Uses Sonnet (not Haiku) for better OCR and cover reading accuracy.
  *
- * Approach (Option B — thumbnail-based, zero new dependencies):
- * 1. Use the video thumbnail URL from the RapidAPI downloader
- * 2. Send to Claude Sonnet vision to read book covers and on-screen text
- * 3. Return as ExtractedBook[] to merge with transcript extraction
+ * Approach: Multi-frame analysis
+ * 1. Extract frames from the video at regular intervals (via frame-extractor)
+ * 2. Fall back to thumbnail if frame extraction fails
+ * 3. Send all frames to Claude Sonnet vision to read book covers
+ * 4. Return as ExtractedBook[] for reconciliation with transcript extraction
  *
- * Cost: ~$0.008-0.015 per call (one image + small output).
+ * Cost: ~$0.04-0.08 per call (10-20 frames + output).
  */
 
 import Anthropic from "@anthropic-ai/sdk";
@@ -22,17 +23,26 @@ import type { ExtractedBook } from "./book-extractor";
 /** Model for accuracy-critical tasks (title correction, vision) */
 const MODEL_ACCURATE = "claude-sonnet-4-5-20250514";
 
-const VISION_SYSTEM_PROMPT = `You are a book title extractor. Look at these frames from a BookTok/BookStagram video and identify every book that is visible. Look for:
-- Book covers being held up or displayed
-- Title text on book covers or spines
-- On-screen text overlays listing book titles (e.g., "books I read this month" lists)
-- Title cards or captions showing book names
-- Bookshelves where spines are readable
+const VISION_SYSTEM_PROMPT = `You are a book cover reader for a BookTok video analysis tool. You will receive sequential frames from a short video (typically 15-60 seconds). Your job is to identify every distinct book shown in the video.
 
-For each book you can identify, extract:
-- title (as printed on the cover or screen)
-- author (if visible on the cover, otherwise null)
-- confidence: "high" (clearly readable) | "medium" (partially visible or likely) | "low" (guessing)
+WHAT TO LOOK FOR:
+- Book covers being held up, displayed, or shown to the camera
+- Title and author text printed on book covers
+- Book spines with readable text
+- On-screen text overlays listing book titles (e.g., "books I read this month" lists)
+- Title cards, captions, or text graphics showing book names
+- Screenshots of Amazon, Goodreads, or bookstore listings
+
+IMPORTANT:
+- The same book may appear in multiple consecutive frames — deduplicate. Only list each book ONCE.
+- Read the EXACT text from the cover. Do not guess or infer titles — only report what you can actually read.
+- If a cover is partially visible or blurry, report what you CAN read and set confidence accordingly.
+- Author names are often in smaller text below the title — look carefully.
+
+For each book, extract:
+- title: The title as printed on the cover or screen (exact text, not a guess)
+- author: The author name if visible (null if not readable)
+- confidence: "high" (title and author clearly readable) | "medium" (title readable, author unclear) | "low" (partially visible, uncertain)
 
 Return ONLY a JSON array. No preamble.
 Example: [{"title": "Fourth Wing", "author": "Rebecca Yarros", "confidence": "high"}]
@@ -47,7 +57,7 @@ interface VisionBook {
 /**
  * Extract book titles from video frames/thumbnails using Claude Sonnet vision.
  *
- * Accepts either image URLs (thumbnail URLs) or base64 Buffers.
+ * Accepts either image URLs (thumbnail URLs) or base64 Buffers (extracted frames).
  * Returns empty array on failure — never throws.
  */
 export async function extractBooksFromFrames(
@@ -75,7 +85,7 @@ export async function extractBooksFromFrames(
             source: { type: "url", url: img },
           };
         } else if (Buffer.isBuffer(img)) {
-          // Base64-encoded buffer
+          // Base64-encoded buffer (extracted frame)
           return {
             type: "image",
             source: {
@@ -92,19 +102,20 @@ export async function extractBooksFromFrames(
     if (imageBlocks.length === 0) return [];
 
     // Add text prompt after images
+    const frameCount = imageBlocks.length;
     const userContent: Anthropic.Messages.ContentBlockParam[] = [
       ...imageBlocks,
       {
         type: "text",
         text: creatorHandle
-          ? `These are frames from a BookTok video by ${creatorHandle}. What books can you see?`
-          : "These are frames from a BookTok video. What books can you see?",
+          ? `These are ${frameCount} sequential frames from a BookTok video by ${creatorHandle}. Identify every distinct book shown across all frames. Read titles and authors directly from what's visible — do not guess.`
+          : `These are ${frameCount} sequential frames from a BookTok video. Identify every distinct book shown across all frames. Read titles and authors directly from what's visible — do not guess.`,
       },
     ];
 
     const response = await client.messages.create({
       model: MODEL_ACCURATE,
-      max_tokens: 1024,
+      max_tokens: 2048,
       system: VISION_SYSTEM_PROMPT,
       messages: [{ role: "user", content: userContent }],
     });
@@ -123,6 +134,8 @@ export async function extractBooksFromFrames(
       return [];
     }
 
+    console.log(`[vision-extractor] Found ${parsed.length} books from ${frameCount} frames`);
+
     // Filter out low-confidence and map to ExtractedBook format
     return parsed
       .filter((book) => book.confidence !== "low" && book.title)
@@ -137,93 +150,4 @@ export async function extractBooksFromFrames(
     console.error("[vision-extractor] Failed:", err);
     return [];
   }
-}
-
-/**
- * Merge transcript-extracted and vision-extracted books.
- *
- * Deduplicates by normalized title similarity.
- * When the same book appears in both:
- * - Prefer transcript version's sentiment and quote
- * - Prefer vision version's title spelling (read from text, not speech-to-text)
- * - Use the higher confidence of the two
- *
- * Vision-only books are appended at the end.
- */
-export function mergeExtractedBooks(
-  fromTranscript: ExtractedBook[],
-  fromVision: ExtractedBook[]
-): ExtractedBook[] {
-  if (fromVision.length === 0) return fromTranscript;
-  if (fromTranscript.length === 0) return fromVision;
-
-  const merged = [...fromTranscript];
-  const usedTranscriptIndices = new Set<number>();
-
-  for (const visionBook of fromVision) {
-    const vNorm = normalize(visionBook.title);
-
-    // Find matching transcript book
-    let bestIdx = -1;
-    let bestScore = 0;
-
-    for (let i = 0; i < fromTranscript.length; i++) {
-      if (usedTranscriptIndices.has(i)) continue;
-      const tNorm = normalize(fromTranscript[i].title);
-      const score = titleSimilarity(vNorm, tNorm);
-      if (score > bestScore) {
-        bestScore = score;
-        bestIdx = i;
-      }
-    }
-
-    if (bestScore >= 0.6 && bestIdx >= 0) {
-      // Match found — merge: vision title, transcript sentiment/quote, higher confidence
-      usedTranscriptIndices.add(bestIdx);
-      const transcript = fromTranscript[bestIdx];
-      merged[bestIdx] = {
-        ...transcript,
-        // Prefer vision's title spelling (read from text, not STT)
-        title: visionBook.title,
-        // Prefer vision's author if transcript has none
-        author: transcript.author ?? visionBook.author,
-        // Use higher confidence
-        confidence: higherConfidence(transcript.confidence, visionBook.confidence),
-      };
-    } else {
-      // Vision-only book — append
-      merged.push(visionBook);
-    }
-  }
-
-  return merged;
-}
-
-// ── Helpers ──
-
-function normalize(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/['']/g, "'")
-    .replace(/[^\w\s']/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-/** Simple word-overlap similarity between two normalized titles. */
-function titleSimilarity(a: string, b: string): number {
-  const wordsA = a.split(" ").filter((w) => w.length > 1);
-  const wordsB = new Set(b.split(" ").filter((w) => w.length > 1));
-  if (wordsA.length === 0 || wordsB.size === 0) return 0;
-  const matches = wordsA.filter((w) => wordsB.has(w)).length;
-  return matches / Math.max(wordsA.length, wordsB.size);
-}
-
-const CONFIDENCE_RANK: Record<string, number> = { high: 3, medium: 2, low: 1 };
-
-function higherConfidence(
-  a: "high" | "medium" | "low",
-  b: "high" | "medium" | "low"
-): "high" | "medium" | "low" {
-  return (CONFIDENCE_RANK[a] ?? 0) >= (CONFIDENCE_RANK[b] ?? 0) ? a : b;
 }

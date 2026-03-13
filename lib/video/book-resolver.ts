@@ -39,9 +39,9 @@ export type ResolvedBook = ResolvedBookMatched | ResolvedBookUnmatched;
 export async function resolveExtractedBooks(
   extracted: ExtractedBook[]
 ): Promise<ResolvedBook[]> {
-  // Step 1: Pre-filter junk titles
+  // Step 1: Pre-filter junk titles (but keep descriptionOnly books — they're descriptions, not real titles)
   const filtered = extracted.filter((book) => {
-    if (isJunkTitle(book.title)) {
+    if (!book.descriptionOnly && isJunkTitle(book.title)) {
       console.log(`[book-resolver] Skipping junk title: "${book.title}"`);
       return false;
     }
@@ -52,6 +52,21 @@ export async function resolveExtractedBooks(
   const results: ResolvedBook[] = [];
   for (const book of filtered) {
     try {
+      // Description-only books: the "title" is a description, not a real title.
+      // Don't try to resolve — it would match the wrong book.
+      if (book.descriptionOnly) {
+        console.log(`[book-resolver] Skipping description-only: "${book.title}"`);
+        results.push({
+          matched: false,
+          rawTitle: book.title,
+          rawAuthor: book.author,
+          creatorSentiment: book.sentiment,
+          creatorQuote: book.creatorQuote,
+          confidence: book.confidence as "high" | "medium",
+        });
+        continue;
+      }
+
       const resolved = await resolveOneBook(book);
       // Post-resolution junk check — the resolved title may be a box set
       if (resolved.matched && isJunkTitle(resolved.book.title)) {

@@ -20,6 +20,8 @@ export interface ExtractedBook {
   sentiment: "loved" | "liked" | "mixed" | "disliked" | "neutral";
   creatorQuote: string;
   confidence: "high" | "medium" | "low";
+  /** True when the title is a description of the book, not the actual title spoken aloud */
+  descriptionOnly?: boolean;
 }
 
 const SYSTEM_PROMPT = `You are a book recommendation extractor for BookTok/BookStagram videos. Given a transcript, identify books the creator is RECOMMENDING, REVIEWING, or DISCUSSING as a main topic.
@@ -37,9 +39,15 @@ DO NOT EXTRACT:
 - Items with product numbers, model numbers, or prices (e.g., "(119) Elite Planner")
 - Stationery, bookmarks, book accessories, or merchandise
 
+CRITICAL — TITLE ACCURACY:
+- If the creator says the EXACT title of a book, use that title and set descriptionOnly to false.
+- If the creator describes a book WITHOUT saying its title (e.g., "this dragon shifter romance" or "a fae enemies-to-lovers book"), return the DESCRIPTION as the title field and set descriptionOnly to true. Do NOT guess or hallucinate a specific book title that was never spoken.
+- When in doubt, use a description. It is much better to return "a medieval proxy marriage romance" than to guess "The Bride" and be wrong.
+
 For each book extract:
-- title: The book title ONLY — do not include the author name in the title field
+- title: The exact book title if spoken aloud, OR a brief description if the title was not explicitly stated
 - author: Author name if mentioned (null if not mentioned). Extract separately from title.
+- descriptionOnly: true if the title field contains a description rather than the actual title; false if the creator said the exact title
 - sentiment: "loved" | "liked" | "mixed" | "disliked" | "neutral"
 - creatorQuote: A direct quote or close paraphrase of what the creator said about this book (max 2 sentences). Only include quotes about THIS specific book.
 - confidence: "high" (creator clearly names and discusses this book) | "medium" (probably this book but title unclear) | "low" (brief mention, might be wrong)
@@ -50,14 +58,23 @@ Mark as "low" confidence if:
 - The mention is very brief (just a name drop with no opinion)
 
 Return ONLY a JSON array. No preamble, no explanation.
-Example:
+Examples:
 [
   {
     "title": "A Court of Thorns and Roses",
     "author": "Sarah J. Maas",
+    "descriptionOnly": false,
     "sentiment": "loved",
     "creatorQuote": "This is the book that got me into romantasy, I have reread it four times.",
     "confidence": "high"
+  },
+  {
+    "title": "a dragon shifter romance with a warrior heroine",
+    "author": null,
+    "descriptionOnly": true,
+    "sentiment": "loved",
+    "creatorQuote": "This one had me screaming, the dragon scenes were incredible.",
+    "confidence": "medium"
   }
 ]
 

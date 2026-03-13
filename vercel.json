@@ -1,4 +1,12 @@
 {
+  "functions": {
+    "app/api/grab/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/cron/enrichment-worker/route.ts": {
+      "maxDuration": 60
+    }
+  },
   "crons": [
     {
       "path": "/api/cron/weekly-refresh",

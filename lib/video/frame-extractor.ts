@@ -1,0 +1,133 @@
+/**
+ * FRAME EXTRACTION — Extract keyframes from video for vision analysis.
+ *
+ * Uses ffmpeg-static to extract frames at regular intervals from a video URL.
+ * Frames are written to /tmp, read as Buffers, then cleaned up.
+ *
+ * Design constraints:
+ * - Vercel serverless: /tmp has 512MB (Pro) or 256MB (Hobby)
+ * - TikTok videos are typically 15-60s, 5-20MB
+ * - We extract 1 frame per 2 seconds, capped at MAX_FRAMES
+ * - Frames are resized to 512px wide to keep Sonnet vision costs down
+ */
+
+import { execFile } from "child_process";
+import { promisify } from "util";
+import * as fs from "fs";
+import * as path from "path";
+import * as os from "os";
+import * as crypto from "crypto";
+
+const execFileAsync = promisify(execFile);
+const readFile = promisify(fs.readFile);
+const readdir = promisify(fs.readdir);
+const mkdir = promisify(fs.mkdir);
+const rm = promisify(fs.rm);
+
+/** Max frames to extract (cost control — each frame ≈ $0.003-0.005 in Sonnet vision) */
+const MAX_FRAMES = 20;
+
+/** Extract 1 frame every N seconds */
+const FRAME_INTERVAL_SECONDS = 2;
+
+/** Resize frames to this width (pixels) — keeps vision tokens down */
+const FRAME_WIDTH = 512;
+
+/**
+ * Extract frames from a video URL at regular intervals.
+ *
+ * Returns an array of JPEG Buffers (one per frame).
+ * Returns empty array on failure — never throws.
+ *
+ * @param videoUrl - Direct URL to the video file
+ * @param durationSeconds - Video duration (if known) for smarter interval calculation
+ */
+export async function extractFrames(
+  videoUrl: string,
+  durationSeconds?: number | null
+): Promise<Buffer[]> {
+  // Resolve ffmpeg binary path
+  let ffmpegPath: string;
+  try {
+    // ffmpeg-static exports the path to the binary
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    ffmpegPath = require("ffmpeg-static");
+    if (!ffmpegPath) throw new Error("ffmpeg-static returned null");
+  } catch (err) {
+    console.error("[frame-extractor] ffmpeg-static not available:", err);
+    return [];
+  }
+
+  const jobId = crypto.randomBytes(4).toString("hex");
+  const tmpDir = path.join(os.tmpdir(), `hotlist-frames-${jobId}`);
+
+  try {
+    await mkdir(tmpDir, { recursive: true });
+
+    // Calculate frame interval based on duration
+    let fps: string;
+    if (durationSeconds && durationSeconds > 0) {
+      // Aim for MAX_FRAMES evenly spaced, but at least 1 frame per FRAME_INTERVAL_SECONDS
+      const idealInterval = Math.max(
+        FRAME_INTERVAL_SECONDS,
+        durationSeconds / MAX_FRAMES
+      );
+      fps = `1/${Math.round(idealInterval)}`;
+    } else {
+      fps = `1/${FRAME_INTERVAL_SECONDS}`;
+    }
+
+    // Extract frames using ffmpeg
+    // -i: input URL
+    // -vf: video filter (fps + scale)
+    // -frames:v: max frames to output
+    // -q:v 2: high quality JPEG
+    // -f image2: output as image sequence
+    const outputPattern = path.join(tmpDir, "frame-%03d.jpg");
+
+    await execFileAsync(
+      ffmpegPath,
+      [
+        "-i", videoUrl,
+        "-vf", `fps=${fps},scale=${FRAME_WIDTH}:-1`,
+        "-frames:v", String(MAX_FRAMES),
+        "-q:v", "2",
+        "-f", "image2",
+        outputPattern,
+      ],
+      {
+        timeout: 30_000, // 30s timeout for download + extraction
+        maxBuffer: 10 * 1024 * 1024, // 10MB stdout buffer
+      }
+    );
+
+    // Read all extracted frame files
+    const files = (await readdir(tmpDir))
+      .filter((f) => f.startsWith("frame-") && f.endsWith(".jpg"))
+      .sort(); // Ensures chronological order (frame-001, frame-002, ...)
+
+    if (files.length === 0) {
+      console.warn("[frame-extractor] No frames extracted");
+      return [];
+    }
+
+    const frames: Buffer[] = [];
+    for (const file of files) {
+      const buf = await readFile(path.join(tmpDir, file));
+      frames.push(buf);
+    }
+
+    console.log(`[frame-extractor] Extracted ${frames.length} frames from video`);
+    return frames;
+  } catch (err) {
+    console.error("[frame-extractor] Failed:", err);
+    return [];
+  } finally {
+    // Cleanup tmp directory
+    try {
+      await rm(tmpDir, { recursive: true, force: true });
+    } catch {
+      // Ignore cleanup errors
+    }
+  }
+}
