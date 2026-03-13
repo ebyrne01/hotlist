@@ -82,29 +82,56 @@ export async function GET(request: NextRequest) {
   }
 
   // Title+author fuzzy search as fallback
+  // Amazon titles are verbose: "Fourth Wing (Standard Edition) (The Empyrean, 1)"
+  // so we strip parentheticals to get the core title for matching
   if (!bookRow && title) {
-    const { data: searchResults } = await supabase
-      .from("books")
-      .select("*")
-      .ilike("title", `%${title}%`)
-      .limit(5);
+    const coreTitle = title.replace(/\s*\(.*$/, "").trim();
+    const lowerAuthor = (author || "").toLowerCase().trim();
+    const authorLastName = lowerAuthor.split(" ").pop() || "";
 
-    if (searchResults && searchResults.length > 0) {
-      const lowerTitle = title.toLowerCase().trim();
-      const lowerAuthor = (author || "").toLowerCase().trim();
+    // Search with both full title and core title
+    const searches = [
+      supabase.from("books").select("*").ilike("title", `%${title}%`).limit(5),
+      ...(coreTitle !== title
+        ? [supabase.from("books").select("*").ilike("title", `%${coreTitle}%`).limit(5)]
+        : []),
+      ...(authorLastName
+        ? [supabase.from("books").select("*").ilike("title", `%${coreTitle}%`).ilike("author", `%${authorLastName}%`).limit(5)]
+        : []),
+    ];
+
+    const results = await Promise.all(searches);
+    const seen = new Set<string>();
+    const allMatches: Record<string, unknown>[] = [];
+    for (const res of results) {
+      for (const row of res?.data ?? []) {
+        const id = row.id as string;
+        if (!seen.has(id)) {
+          seen.add(id);
+          allMatches.push(row);
+        }
+      }
+    }
+
+    if (allMatches.length > 0) {
+      const lowerCore = coreTitle.toLowerCase().trim();
+      // Prefer: exact core title + author > exact core title > author match > first
       bookRow =
-        searchResults.find(
-          (r: Record<string, unknown>) =>
-            (r.title as string).toLowerCase().trim() === lowerTitle
+        allMatches.find(
+          (r) =>
+            (r.title as string).toLowerCase().trim() === lowerCore &&
+            authorLastName &&
+            (r.author as string).toLowerCase().includes(authorLastName)
         ) ||
-        (lowerAuthor
-          ? searchResults.find((r: Record<string, unknown>) =>
-              (r.author as string)
-                .toLowerCase()
-                .includes(lowerAuthor.split(" ").pop() || "")
+        allMatches.find(
+          (r) => (r.title as string).toLowerCase().trim() === lowerCore
+        ) ||
+        (authorLastName
+          ? allMatches.find((r) =>
+              (r.author as string).toLowerCase().includes(authorLastName)
             )
           : null) ||
-        searchResults[0];
+        allMatches[0];
     }
   }
 
