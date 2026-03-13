@@ -15,7 +15,6 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
-import type { MessageParam, ContentBlockParam, ToolResultBlockParam } from "@anthropic-ai/sdk/resources/messages";
 import { searchGoodreads, type GoodreadsSearchResult } from "@/lib/books/goodreads-search";
 import { getBookDetail } from "@/lib/books";
 import { isJunkTitle } from "@/lib/books/romance-filter";
@@ -154,7 +153,7 @@ export async function identifyBooksWithAgent(
     const client = new Anthropic({ apiKey });
 
     // Build the user message with frames + transcript
-    const contentBlocks: ContentBlockParam[] = [];
+    const contentBlocks: Anthropic.Messages.ContentBlockParam[] = [];
 
     // Add video frames as images
     for (const img of input.frames) {
@@ -190,7 +189,7 @@ Identify every book the creator is recommending or discussing. Use search_goodre
     });
 
     // Agentic loop — process tool calls until submit_books is called
-    let messages: MessageParam[] = [{ role: "user", content: contentBlocks }];
+    let messages: Anthropic.Messages.MessageParam[] = [{ role: "user", content: contentBlocks }];
     let submittedBooks: SubmittedBook[] | null = null;
     const maxTurns = 15; // Safety limit
     let turn = 0;
@@ -198,16 +197,24 @@ Identify every book the creator is recommending or discussing. Use search_goodre
     while (turn < maxTurns && submittedBooks === null) {
       turn++;
 
-      const response = await client.messages.create({
-        model: MODEL,
-        max_tokens: 4096,
-        temperature: 0,
-        system: SYSTEM_PROMPT,
-        tools: TOOLS,
-        messages,
-      });
+      console.log(`[book-agent] Turn ${turn}: sending ${messages.length} messages, ${contentBlocks.length} content blocks`);
 
-      console.log(`[book-agent] Turn ${turn}: stop_reason=${response.stop_reason}`);
+      let response: Anthropic.Messages.Message;
+      try {
+        response = await client.messages.create({
+          model: MODEL,
+          max_tokens: 4096,
+          temperature: 0,
+          system: SYSTEM_PROMPT,
+          tools: TOOLS,
+          messages,
+        });
+      } catch (apiErr) {
+        console.error(`[book-agent] Anthropic API error on turn ${turn}:`, apiErr);
+        break;
+      }
+
+      console.log(`[book-agent] Turn ${turn}: stop_reason=${response.stop_reason}, content_types=${response.content.map(b => b.type).join(",")}`);
 
       // If the model stopped without tool use, we're done (or it failed)
       if (response.stop_reason === "end_turn") {
@@ -226,63 +233,83 @@ Identify every book the creator is recommending or discussing. Use search_goodre
       }
 
       // Build tool results
-      const toolResults: ToolResultBlockParam[] = [];
+      const toolResults: Anthropic.Messages.ToolResultBlockParam[] = [];
 
       for (const toolUse of toolUseBlocks) {
         const toolInput = toolUse.input as Record<string, unknown>;
 
-        if (toolUse.name === "search_goodreads") {
-          const query = toolInput.query as string;
-          console.log(`[book-agent] Searching Goodreads: "${query}"`);
-          const results = await searchGoodreads(query);
-          const simplified = results.slice(0, 5).map((r: GoodreadsSearchResult) => ({
-            goodreads_id: r.goodreadsId,
-            title: r.title,
-            author: r.author,
-            rating: r.rating,
-            rating_count: r.ratingCount,
-          }));
-          toolResults.push({
-            type: "tool_result",
-            tool_use_id: toolUse.id,
-            content: JSON.stringify(simplified),
-          });
-        } else if (toolUse.name === "confirm_book") {
-          const goodreadsId = toolInput.goodreads_id as string;
-          console.log(`[book-agent] Confirming book: ${goodreadsId}`);
-          const detail = await getBookDetail(goodreadsId);
-          if (detail) {
+        try {
+          if (toolUse.name === "search_goodreads") {
+            const query = toolInput.query as string;
+            console.log(`[book-agent] Searching Goodreads: "${query}"`);
+            const results = await searchGoodreads(query);
+            const simplified = results.slice(0, 5).map((r: GoodreadsSearchResult) => ({
+              goodreads_id: r.goodreadsId,
+              title: r.title,
+              author: r.author,
+              rating: r.rating,
+              rating_count: r.ratingCount,
+            }));
+            console.log(`[book-agent] Goodreads returned ${simplified.length} results for "${query}"`);
             toolResults.push({
               type: "tool_result",
               tool_use_id: toolUse.id,
-              content: JSON.stringify({
-                goodreads_id: detail.goodreadsId,
-                title: detail.title,
-                author: detail.author,
-                series_name: detail.seriesName,
-                series_position: detail.seriesPosition,
-                genres: detail.genres?.slice(0, 5),
-                rating: detail.ratings?.[0]?.rating,
-              }),
+              content: JSON.stringify(simplified),
+            });
+          } else if (toolUse.name === "confirm_book") {
+            const goodreadsId = toolInput.goodreads_id as string;
+            console.log(`[book-agent] Confirming book: ${goodreadsId}`);
+            const detail = await getBookDetail(goodreadsId);
+            if (detail) {
+              console.log(`[book-agent] Confirmed: "${detail.title}" by ${detail.author} (series: ${detail.seriesName} #${detail.seriesPosition})`);
+              toolResults.push({
+                type: "tool_result",
+                tool_use_id: toolUse.id,
+                content: JSON.stringify({
+                  goodreads_id: detail.goodreadsId,
+                  title: detail.title,
+                  author: detail.author,
+                  series_name: detail.seriesName,
+                  series_position: detail.seriesPosition,
+                  genres: detail.genres?.slice(0, 5),
+                  rating: detail.ratings?.[0]?.rating,
+                }),
+              });
+            } else {
+              console.log(`[book-agent] Book ${goodreadsId} not found`);
+              toolResults.push({
+                type: "tool_result",
+                tool_use_id: toolUse.id,
+                content: JSON.stringify({ error: "Book not found" }),
+              });
+            }
+          } else if (toolUse.name === "submit_books") {
+            const books = (toolInput.books as SubmittedBook[]) ?? [];
+            submittedBooks = books;
+            console.log(
+              `[book-agent] Submitted ${books.length} books:`,
+              JSON.stringify(books.map((b) => ({ title: b.title, author: b.author, gid: b.goodreads_id })))
+            );
+            toolResults.push({
+              type: "tool_result",
+              tool_use_id: toolUse.id,
+              content: JSON.stringify({ status: "accepted", count: books.length }),
             });
           } else {
+            console.warn(`[book-agent] Unknown tool: ${toolUse.name}`);
             toolResults.push({
               type: "tool_result",
               tool_use_id: toolUse.id,
-              content: JSON.stringify({ error: "Book not found" }),
+              content: JSON.stringify({ error: `Unknown tool: ${toolUse.name}` }),
             });
           }
-        } else if (toolUse.name === "submit_books") {
-          const books = (toolInput.books as SubmittedBook[]) ?? [];
-          submittedBooks = books;
-          console.log(
-            `[book-agent] Submitted ${books.length} books:`,
-            JSON.stringify(books.map((b) => ({ title: b.title, author: b.author, gid: b.goodreads_id })))
-          );
+        } catch (toolErr) {
+          console.error(`[book-agent] Tool ${toolUse.name} failed:`, toolErr);
           toolResults.push({
             type: "tool_result",
             tool_use_id: toolUse.id,
-            content: JSON.stringify({ status: "accepted", count: books.length }),
+            content: JSON.stringify({ error: `Tool failed: ${String(toolErr)}` }),
+            is_error: true,
           });
         }
       }
