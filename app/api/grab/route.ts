@@ -1,10 +1,13 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import {
   grabBooksFromVideo,
   getCachedGrab,
   type GrabStatus,
 } from "@/lib/video";
+import { CORS_HEADERS, corsOptions } from "@/lib/api/cors";
+
+export { corsOptions as OPTIONS };
 
 const bodySchema = z.object({
   url: z
@@ -48,7 +51,7 @@ export async function POST(req: NextRequest) {
   // Check cache first (instant response, no streaming needed)
   const cached = await getCachedGrab(body.url);
   if (cached) {
-    return Response.json(cached);
+    return NextResponse.json(cached, { headers: CORS_HEADERS });
   }
 
   // Stream progress updates
@@ -92,6 +95,7 @@ export async function POST(req: NextRequest) {
       "Content-Type": "text/plain; charset=utf-8",
       "Transfer-Encoding": "chunked",
       "Cache-Control": "no-cache",
+      ...CORS_HEADERS,
     },
   });
 }
