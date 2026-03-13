@@ -19,7 +19,6 @@ import type { MessageParam, ContentBlockParam, ToolResultBlockParam } from "@ant
 import { searchGoodreads, type GoodreadsSearchResult } from "@/lib/books/goodreads-search";
 import { getBookDetail } from "@/lib/books";
 import { isJunkTitle } from "@/lib/books/romance-filter";
-import type { BookDetail } from "@/lib/types";
 import type { ResolvedBook, ResolvedBookMatched, ResolvedBookUnmatched } from "./book-resolver";
 
 const MODEL = "claude-sonnet-4-5-20250514";
