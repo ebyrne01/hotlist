@@ -30,12 +30,13 @@ Your job is to produce the FINAL, reconciled list of books by cross-referencing 
 RULES:
 1. SERIES AWARENESS IS CRITICAL: When the transcript says "starting book", "first in the series", "where you first meet [character]", or implies Book 1, but the vision shows a different book in the same series, USE BOOK 1's TITLE — not the vision title. The creator is recommending the entry point, not whichever book happened to be face-up.
 2. When a transcript description matches a vision-detected book and there's no series conflict, use the vision title. Carry over the transcript's sentiment, quote, and author.
-3. SERIES NAMES: If the transcript mentions a series name (e.g., "the Monsters of Faerie series" or "the Brides of Karadoc series"), try to identify the specific book being discussed. If the creator is recommending the series as a whole or says "starting with [book]", use the first book's title if you know it. If unsure, keep the series name but set descriptionOnly: false so the resolver can search for it.
+3. SERIES NAMES ARE NOT TITLES: If the transcript mentions a series name (e.g., "the Monsters of Faerie series" or "the Brides of Karadoc series"), you MUST resolve it to a specific book title. Use context clues: if the creator recommends the series as a whole, use Book 1. If they mention a specific book, use that title. Use your knowledge of book series to identify the correct title and author. NEVER output a series name as a title — always output the specific book.
 4. Vision-only books (shown but never discussed): include them with sentiment "neutral".
 5. Transcript-only books with exact titles (not shown on screen): include them as-is.
 6. Transcript-only descriptions that don't match any vision book: include them but mark as descriptionOnly.
-7. DO NOT invent books that appear in neither list. But DO use your book knowledge to identify the correct book in a series when context clues are clear.
-8. Deduplicate: each real book should appear exactly once.
+7. USE YOUR BOOK KNOWLEDGE: You know romance, romantasy, and fantasy series. When the transcript or vision gives you a series name, an incorrect book in a series, or a description, use your knowledge to identify the SPECIFIC correct book title and author. For example, if vision reads "Ancient Vengeance" but the transcript describes "a dystopian future where evil dragons have taken over" and talks about the series as a whole, the correct entry point is likely the FIRST book in that series — use your knowledge to name it.
+8. DO NOT invent books that appear in neither list. But DO correct series misidentifications using your knowledge.
+9. Deduplicate: each real book should appear exactly once.
 
 For each book in the final list, return:
 - title: The CORRECT book title — use your knowledge of book series to pick the right entry when transcript context and vision disagree

@@ -5,6 +5,7 @@
 import { getAdminClient } from "@/lib/supabase/admin";
 import { resolveToGoodreadsId, searchGoodreads } from "@/lib/books/goodreads-search";
 import { getBookDetail } from "@/lib/books";
+import { searchGoogleBooks } from "@/lib/books/google-books";
 import { isJunkTitle } from "@/lib/books/romance-filter";
 import type { BookDetail } from "@/lib/types";
 import type { ExtractedBook } from "./book-extractor";
@@ -341,7 +342,7 @@ function looksLikeSeriesName(title: string): boolean {
 
 /**
  * Try to resolve a series name to its first book.
- * Strips "series" suffix and searches Goodreads, preferring Book 1.
+ * Strips "series" suffix and searches Goodreads + Google Books, preferring Book 1.
  */
 async function resolveSeriesName(
   seriesTitle: string,
@@ -352,36 +353,65 @@ async function resolveSeriesName(
     .replace(/\b(series|trilogy|saga|chronicles|collection)\b/gi, "")
     .trim();
 
-  const searchQuery = author ? `${cleanedTitle} ${author}` : cleanedTitle;
-  const results = await searchGoodreads(searchQuery);
+  // Try multiple search strategies
+  const searchQueries = [
+    author ? `${cleanedTitle} ${author}` : cleanedTitle,
+    cleanedTitle, // Without author (author might be misspelled)
+    `${cleanedTitle} book 1`, // Explicitly ask for Book 1
+  ];
 
-  if (results.length === 0) return null;
+  for (const searchQuery of searchQueries) {
+    const results = await searchGoodreads(searchQuery);
 
-  // Look for Book 1 / first entry in the series among the results
-  for (const result of results.slice(0, 5)) {
-    const bookDetail = await getBookDetail(result.goodreadsId);
-    if (!bookDetail) continue;
+    // Look for Book 1 among results
+    for (const result of results.slice(0, 5)) {
+      const bookDetail = await getBookDetail(result.goodreadsId);
+      if (!bookDetail) continue;
 
-    // If it has series info and it's Book 1, perfect
-    if (bookDetail.seriesPosition === 1) {
-      console.log(`[book-resolver] Found Book 1 for series "${seriesTitle}": "${bookDetail.title}"`);
-      return bookDetail;
+      if (bookDetail.seriesPosition === 1) {
+        console.log(`[book-resolver] Found Book 1 for series "${seriesTitle}": "${bookDetail.title}"`);
+        return bookDetail;
+      }
+    }
+
+    // Accept first result with matching author if no Book 1 found
+    if (author && results.length > 0) {
+      const authorWords = author.toLowerCase().split(/\s+/).filter((w) => w.length > 1);
+      for (const result of results.slice(0, 3)) {
+        const resultAuthorLower = result.author.toLowerCase();
+        if (authorWords.some((w) => resultAuthorLower.includes(w))) {
+          const bookDetail = await getBookDetail(result.goodreadsId);
+          if (bookDetail) {
+            console.log(`[book-resolver] Author-matched for series "${seriesTitle}": "${bookDetail.title}"`);
+            return bookDetail;
+          }
+        }
+      }
     }
   }
 
-  // No explicit Book 1 found — use the first result if author matches
-  if (author) {
-    const authorWords = author.toLowerCase().split(/\s+/).filter((w) => w.length > 1);
-    for (const result of results.slice(0, 3)) {
-      const resultAuthorLower = result.author.toLowerCase();
-      if (authorWords.some((w) => resultAuthorLower.includes(w))) {
-        const bookDetail = await getBookDetail(result.goodreadsId);
+  // Fallback: try Google Books (broader coverage for niche titles)
+  try {
+    const googleQuery = author ? `${cleanedTitle} ${author}` : cleanedTitle;
+    const googleResults = await searchGoogleBooks(googleQuery);
+    if (googleResults.length > 0) {
+      // Try to resolve the first Google result through our normal pipeline
+      const firstResult = googleResults[0];
+      const goodreadsId = await resolveToGoodreadsId(
+        firstResult.title,
+        firstResult.author,
+        { fuzzy: true }
+      );
+      if (goodreadsId) {
+        const bookDetail = await getBookDetail(goodreadsId);
         if (bookDetail) {
-          console.log(`[book-resolver] Author-matched for series "${seriesTitle}": "${bookDetail.title}"`);
+          console.log(`[book-resolver] Google Books → Goodreads for series "${seriesTitle}": "${bookDetail.title}"`);
           return bookDetail;
         }
       }
     }
+  } catch (err) {
+    console.warn(`[book-resolver] Google Books fallback failed for "${seriesTitle}":`, err);
   }
 
   return null;
