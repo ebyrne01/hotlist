@@ -137,7 +137,17 @@ async function resolveOneBook(
     }
   }
 
-  // Step 4: Unmatched
+  // Step 4: Series name search — if the title looks like a series name,
+  // search for the series and try to find Book 1
+  if (looksLikeSeriesName(extracted.title)) {
+    console.log(`[book-resolver] Title looks like series name: "${extracted.title}", searching for Book 1`);
+    const seriesBook = await resolveSeriesName(extracted.title, extracted.author);
+    if (seriesBook) {
+      return { matched: true, book: seriesBook, ...base };
+    }
+  }
+
+  // Step 5: Unmatched
   return {
     matched: false,
     rawTitle: extracted.title,
@@ -311,6 +321,67 @@ function pickBestMatch(
     normalizedTitle.startsWith(dbTitle)
   ) {
     return first;
+  }
+
+  return null;
+}
+
+/**
+ * Detect if a title is actually a series name rather than a book title.
+ * e.g., "Monsters of Faerie series", "Brides of Karadoc series", "Dragon Kin"
+ */
+function looksLikeSeriesName(title: string): boolean {
+  const lower = title.toLowerCase();
+  // Explicit "series" keyword
+  if (/\bseries\b/.test(lower)) return true;
+  // Explicit "trilogy", "saga", "chronicles"
+  if (/\b(trilogy|saga|chronicles|collection)\b/.test(lower)) return true;
+  return false;
+}
+
+/**
+ * Try to resolve a series name to its first book.
+ * Strips "series" suffix and searches Goodreads, preferring Book 1.
+ */
+async function resolveSeriesName(
+  seriesTitle: string,
+  author: string | null
+): Promise<BookDetail | null> {
+  // Strip "series" and similar suffixes for cleaner search
+  const cleanedTitle = seriesTitle
+    .replace(/\b(series|trilogy|saga|chronicles|collection)\b/gi, "")
+    .trim();
+
+  const searchQuery = author ? `${cleanedTitle} ${author}` : cleanedTitle;
+  const results = await searchGoodreads(searchQuery);
+
+  if (results.length === 0) return null;
+
+  // Look for Book 1 / first entry in the series among the results
+  for (const result of results.slice(0, 5)) {
+    const bookDetail = await getBookDetail(result.goodreadsId);
+    if (!bookDetail) continue;
+
+    // If it has series info and it's Book 1, perfect
+    if (bookDetail.seriesPosition === 1) {
+      console.log(`[book-resolver] Found Book 1 for series "${seriesTitle}": "${bookDetail.title}"`);
+      return bookDetail;
+    }
+  }
+
+  // No explicit Book 1 found — use the first result if author matches
+  if (author) {
+    const authorWords = author.toLowerCase().split(/\s+/).filter((w) => w.length > 1);
+    for (const result of results.slice(0, 3)) {
+      const resultAuthorLower = result.author.toLowerCase();
+      if (authorWords.some((w) => resultAuthorLower.includes(w))) {
+        const bookDetail = await getBookDetail(result.goodreadsId);
+        if (bookDetail) {
+          console.log(`[book-resolver] Author-matched for series "${seriesTitle}": "${bookDetail.title}"`);
+          return bookDetail;
+        }
+      }
+    }
   }
 
   return null;
