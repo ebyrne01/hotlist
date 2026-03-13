@@ -18,7 +18,35 @@ import Anthropic from "@anthropic-ai/sdk";
 import { searchGoodreads, type GoodreadsSearchResult } from "@/lib/books/goodreads-search";
 import { getBookDetail } from "@/lib/books";
 import { isJunkTitle } from "@/lib/books/romance-filter";
+import { getAdminClient } from "@/lib/supabase/admin";
 import type { ResolvedBook, ResolvedBookMatched, ResolvedBookUnmatched } from "./book-resolver";
+
+/** Collects debug log entries and flushes to Supabase at the end */
+class AgentDebugLog {
+  private entries: string[] = [];
+  private url: string;
+
+  constructor(url: string) {
+    this.url = url;
+  }
+
+  log(msg: string) {
+    this.entries.push(`${new Date().toISOString()} ${msg}`);
+    console.log(`[book-agent] ${msg}`);
+  }
+
+  async flush() {
+    try {
+      const supabase = getAdminClient();
+      await supabase.from("agent_debug_logs").insert({
+        url: this.url,
+        log_entries: this.entries,
+      });
+    } catch (e) {
+      console.error("[book-agent] Failed to flush debug log:", e);
+    }
+  }
+}
 
 const MODEL = "claude-sonnet-4-5-20250514";
 
@@ -125,6 +153,7 @@ interface BookAgentInput {
   frames: (string | Buffer)[];
   transcript: string;
   creatorHandle?: string;
+  debugUrl?: string;
 }
 
 interface SubmittedBook {
@@ -164,9 +193,11 @@ export async function identifyBooksWithAgent(
   input: BookAgentInput
 ): Promise<ResolvedBook[]> {
   const agentStart = Date.now();
+  const dbg = new AgentDebugLog(input.debugUrl ?? "unknown");
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    console.error("[book-agent] Missing ANTHROPIC_API_KEY");
+    dbg.log("ERROR: Missing ANTHROPIC_API_KEY");
+    await dbg.flush();
     return [];
   }
 
@@ -175,7 +206,7 @@ export async function identifyBooksWithAgent(
 
     // Subsample frames to keep request size manageable
     const frames = subsampleFrames(input.frames);
-    console.log(`[book-agent] Using ${frames.length} frames (from ${input.frames.length} total)`);
+    dbg.log(`Using ${frames.length} frames (from ${input.frames.length} total), transcript length=${input.transcript.length}`);
 
     // Build the user message with frames + transcript
     const contentBlocks: Anthropic.Messages.ContentBlockParam[] = [];
@@ -223,7 +254,7 @@ Identify every book the creator is recommending or discussing. Use search_goodre
       turn++;
       const turnStart = Date.now();
 
-      console.log(`[book-agent] Turn ${turn}: sending request...`);
+      dbg.log(`Turn ${turn}: sending request (${messages.length} messages)...`);
 
       let response: Anthropic.Messages.Message;
       try {
@@ -236,21 +267,20 @@ Identify every book the creator is recommending or discussing. Use search_goodre
           messages,
         });
       } catch (apiErr) {
-        console.error(`[book-agent] Anthropic API error on turn ${turn}:`, apiErr);
+        dbg.log(`ERROR: Anthropic API error on turn ${turn}: ${String(apiErr)}`);
         break;
       }
 
       const apiMs = Date.now() - turnStart;
-      console.log(`[book-agent] Turn ${turn}: stop_reason=${response.stop_reason}, blocks=${response.content.map(b => b.type).join(",")}, api_ms=${apiMs}`);
+      dbg.log(`Turn ${turn}: stop_reason=${response.stop_reason}, blocks=${response.content.map(b => b.type).join(",")}, api_ms=${apiMs}, usage=${JSON.stringify(response.usage)}`);
 
       // If the model stopped without tool use, we're done (or it failed)
       if (response.stop_reason === "end_turn") {
-        // Check if there's text content we should log
         const textBlocks = response.content.filter(b => b.type === "text");
         if (textBlocks.length > 0) {
-          console.warn(`[book-agent] Model stopped with text: ${(textBlocks[0] as Anthropic.Messages.TextBlock).text.slice(0, 200)}`);
+          dbg.log(`Model stopped with text: ${(textBlocks[0] as Anthropic.Messages.TextBlock).text.slice(0, 500)}`);
         } else {
-          console.warn("[book-agent] Model stopped without calling submit_books");
+          dbg.log("Model stopped without calling submit_books (no text, no tools)");
         }
         break;
       }
@@ -261,11 +291,11 @@ Identify every book the creator is recommending or discussing. Use search_goodre
       );
 
       if (toolUseBlocks.length === 0) {
-        console.warn("[book-agent] No tool calls in response");
+        dbg.log("No tool calls in response despite stop_reason != end_turn");
         break;
       }
 
-      console.log(`[book-agent] Turn ${turn}: processing ${toolUseBlocks.length} tool calls in parallel`);
+      dbg.log(`Turn ${turn}: processing ${toolUseBlocks.length} tool calls: ${toolUseBlocks.map(b => b.name).join(", ")}`);
 
       // Execute ALL tool calls in parallel for speed
       const toolResults = await Promise.all(
@@ -275,7 +305,7 @@ Identify every book the creator is recommending or discussing. Use search_goodre
           try {
             if (toolUse.name === "search_goodreads") {
               const query = toolInput.query as string;
-              console.log(`[book-agent] Searching Goodreads: "${query}"`);
+              dbg.log(`search_goodreads("${query}")`);
               const results = await searchGoodreads(query);
               const simplified = results.slice(0, 5).map((r: GoodreadsSearchResult) => ({
                 goodreads_id: r.goodreadsId,
@@ -284,7 +314,7 @@ Identify every book the creator is recommending or discussing. Use search_goodre
                 rating: r.rating,
                 rating_count: r.ratingCount,
               }));
-              console.log(`[book-agent] Goodreads returned ${simplified.length} results for "${query}"`);
+              dbg.log(`search_goodreads("${query}") => ${simplified.length} results: ${simplified.map(s => `${s.title} (${s.goodreads_id})`).join(", ")}`);
               return {
                 type: "tool_result",
                 tool_use_id: toolUse.id,
@@ -292,10 +322,10 @@ Identify every book the creator is recommending or discussing. Use search_goodre
               };
             } else if (toolUse.name === "confirm_book") {
               const goodreadsId = toolInput.goodreads_id as string;
-              console.log(`[book-agent] Confirming book: ${goodreadsId}`);
+              dbg.log(`confirm_book(${goodreadsId})`);
               const detail = await getBookDetail(goodreadsId);
               if (detail) {
-                console.log(`[book-agent] Confirmed: "${detail.title}" by ${detail.author} (series: ${detail.seriesName} #${detail.seriesPosition})`);
+                dbg.log(`confirm_book(${goodreadsId}) => "${detail.title}" by ${detail.author} (series: ${detail.seriesName} #${detail.seriesPosition})`);
                 return {
                   type: "tool_result",
                   tool_use_id: toolUse.id,
@@ -310,7 +340,7 @@ Identify every book the creator is recommending or discussing. Use search_goodre
                   }),
                 };
               } else {
-                console.log(`[book-agent] Book ${goodreadsId} not found`);
+                dbg.log(`confirm_book(${goodreadsId}) => NOT FOUND`);
                 return {
                   type: "tool_result",
                   tool_use_id: toolUse.id,
@@ -320,17 +350,14 @@ Identify every book the creator is recommending or discussing. Use search_goodre
             } else if (toolUse.name === "submit_books") {
               const books = (toolInput.books as SubmittedBook[]) ?? [];
               submittedBooks = books;
-              console.log(
-                `[book-agent] Submitted ${books.length} books:`,
-                JSON.stringify(books.map((b) => ({ title: b.title, author: b.author, gid: b.goodreads_id })))
-              );
+              dbg.log(`submit_books(${books.length}): ${JSON.stringify(books.map((b) => ({ title: b.title, author: b.author, gid: b.goodreads_id })))}`);
               return {
                 type: "tool_result",
                 tool_use_id: toolUse.id,
                 content: JSON.stringify({ status: "accepted", count: books.length }),
               };
             } else {
-              console.warn(`[book-agent] Unknown tool: ${toolUse.name}`);
+              dbg.log(`Unknown tool: ${toolUse.name}`);
               return {
                 type: "tool_result",
                 tool_use_id: toolUse.id,
@@ -338,7 +365,7 @@ Identify every book the creator is recommending or discussing. Use search_goodre
               };
             }
           } catch (toolErr) {
-            console.error(`[book-agent] Tool ${toolUse.name} failed:`, toolErr);
+            dbg.log(`ERROR: Tool ${toolUse.name} failed: ${String(toolErr)}`);
             return {
               type: "tool_result",
               tool_use_id: toolUse.id,
@@ -350,7 +377,7 @@ Identify every book the creator is recommending or discussing. Use search_goodre
       );
 
       const toolMs = Date.now() - turnStart - apiMs;
-      console.log(`[book-agent] Turn ${turn} complete: api=${apiMs}ms, tools=${toolMs}ms`);
+      dbg.log(`Turn ${turn} complete: api=${apiMs}ms, tools=${toolMs}ms`);
 
       // Add assistant response + tool results to messages for next turn
       messages = [
@@ -361,17 +388,22 @@ Identify every book the creator is recommending or discussing. Use search_goodre
     }
 
     const totalMs = Date.now() - agentStart;
-    console.log(`[book-agent] Agent complete: ${turn} turns, ${totalMs}ms total`);
+    dbg.log(`Agent complete: ${turn} turns, ${totalMs}ms total`);
 
     if (!submittedBooks || (submittedBooks as SubmittedBook[]).length === 0) {
-      console.warn("[book-agent] No books submitted after", turn, "turns");
+      dbg.log(`No books submitted after ${turn} turns`);
+      await dbg.flush();
       return [];
     }
 
     // Convert submitted books to ResolvedBook format
-    return await resolveSubmittedBooks(submittedBooks as SubmittedBook[]);
+    const resolved = await resolveSubmittedBooks(submittedBooks as SubmittedBook[]);
+    dbg.log(`Resolved ${resolved.length} books: ${resolved.map(r => r.matched ? r.book.title : r.rawTitle).join(", ")}`);
+    await dbg.flush();
+    return resolved;
   } catch (err) {
-    console.error("[book-agent] Failed:", err);
+    dbg.log(`FATAL ERROR: ${String(err)}`);
+    await dbg.flush();
     return [];
   }
 }

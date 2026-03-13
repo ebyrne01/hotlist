@@ -205,6 +205,7 @@ export async function grabBooksFromVideo(
     frames,
     transcript: transcript || "(no transcript available — identify books from video frames only)",
     creatorHandle: creatorHandle ?? undefined,
+    debugUrl: url,
   });
 
   console.log(
