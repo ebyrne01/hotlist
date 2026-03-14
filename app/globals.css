@@ -19,3 +19,15 @@ body {
   background-color: #faf7f2;
   color: #12080a;
 }
+
+/* Global focus-visible style for keyboard navigation */
+:focus-visible {
+  outline: 2px solid #d4430e;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Remove default outline — focus-visible handles it */
+:focus:not(:focus-visible) {
+  outline: none;
+}

@@ -70,10 +70,10 @@ export default function SpiceDisplay({
 }: SpiceDisplayProps) {
   if (!composite) {
     if (compact) {
-      return <span className="text-muted/40 font-mono text-sm">{"\u2014"}</span>;
+      return <span className="text-muted/60 font-mono text-sm">{"\u2014"}</span>;
     }
     return (
-      <span className="text-xs font-mono text-muted/50">Spice unknown</span>
+      <span className="text-xs font-mono text-muted">Spice unknown</span>
     );
   }
 
@@ -120,7 +120,7 @@ export default function SpiceDisplay({
       {showNudge && isEstimated && bookSlug && (
         <a
           href={`/book/${bookSlug}`}
-          className="text-[10px] font-mono text-fire/50 hover:text-fire transition-colors"
+          className="text-xs font-mono text-fire/70 hover:text-fire transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-fire rounded"
         >
           Rate the spice →
         </a>

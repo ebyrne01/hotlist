@@ -42,10 +42,10 @@ export default function SpiceIndicator({
   if (!level || !source) {
     return (
       <span className={clsx("inline-flex flex-col items-start gap-0.5", className)}>
-        <span className="text-xs font-mono text-muted/50">Spice unknown</span>
+        <span className="text-xs font-mono text-muted">Spice unknown</span>
         <button
           onClick={() => openSignIn()}
-          className="text-[10px] font-mono text-fire/70 hover:text-fire transition-colors text-left"
+          className="text-xs font-mono text-fire/80 hover:text-fire transition-colors text-left focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-fire rounded"
         >
           Be the first to rate the spice &rarr;
         </button>
@@ -82,10 +82,10 @@ export default function SpiceIndicator({
         </svg>
       ))}
       {showSource && source === "goodreads_inference" && (
-        <span className="text-[9px] font-mono text-muted/40 ml-0.5">est.</span>
+        <span className="text-xs font-mono text-muted/70 ml-0.5">est.</span>
       )}
       {showSource && source === "hotlist_community" && ratingCount && ratingCount > 0 && (
-        <span className="text-[9px] font-mono text-muted/40 ml-0.5">{ratingCount} ratings</span>
+        <span className="text-xs font-mono text-muted/70 ml-0.5">{ratingCount} ratings</span>
       )}
       <span className="sr-only">
         Spice level {clamped} of 5

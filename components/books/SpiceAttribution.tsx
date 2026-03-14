@@ -53,7 +53,7 @@ export default function SpiceAttribution({
   return (
     <div
       className={clsx(
-        "text-[11px] font-mono text-muted/60",
+        "text-xs font-mono text-muted",
         opacity,
         className
       )}
@@ -77,7 +77,7 @@ export default function SpiceAttribution({
       )}
 
       {!composite.conflictFlag && composite.signalCount > 1 && (
-        <span className="ml-1 text-muted/40">
+        <span className="ml-1 text-muted/70">
           ({composite.signalCount} signals)
         </span>
       )}

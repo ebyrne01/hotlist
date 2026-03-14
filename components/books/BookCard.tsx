@@ -39,7 +39,7 @@ export default function BookCard({ book, layout = "grid", className }: BookCardP
       <Link
         href={`/book/${slug}`}
         className={clsx(
-          "flex gap-3 rounded-lg border border-border bg-white p-3 hover:shadow-md hover:border-fire/30 transition-all",
+          "flex gap-3 rounded-lg border border-border bg-white p-3 hover:shadow-md hover:border-fire/30 transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire",
           className
         )}
       >
@@ -52,19 +52,19 @@ export default function BookCard({ book, layout = "grid", className }: BookCardP
           <div className="flex items-center gap-3 mt-auto">
             {grRating !== null && (
               <span className="text-xs font-mono">
-                <span className="text-muted/60">GR</span>{" "}
+                <span className="text-muted">GR</span>{" "}
                 <span className="text-gold font-medium">{grRating.toFixed(1)}</span>
               </span>
             )}
             {amzRating !== null ? (
               <span className="text-xs font-mono">
-                <span className="text-muted/60">AMZ</span>{" "}
+                <span className="text-muted">AMZ</span>{" "}
                 <span className="text-gold font-medium">{amzRating.toFixed(1)}</span>
               </span>
             ) : grRating !== null ? (
               <span className="text-xs font-mono">
-                <span className="text-muted/60">AMZ</span>{" "}
-                <span className="text-muted/30">&mdash;</span>
+                <span className="text-muted">AMZ</span>{" "}
+                <span className="text-muted/60">&mdash;</span>
               </span>
             ) : null}
             {book.compositeSpice ? (
@@ -103,7 +103,7 @@ export default function BookCard({ book, layout = "grid", className }: BookCardP
     <Link
       href={`/book/${slug}`}
       className={clsx(
-        "group flex flex-col rounded-lg border border-border bg-white hover:shadow-md hover:border-fire/30 transition-all w-[160px] sm:w-[180px] shrink-0",
+        "group flex flex-col rounded-lg border border-border bg-white hover:shadow-md hover:border-fire/30 transition-all w-[160px] sm:w-[180px] shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire",
         className
       )}
     >
@@ -119,23 +119,23 @@ export default function BookCard({ book, layout = "grid", className }: BookCardP
         <h3 className="font-display font-bold text-ink text-sm leading-tight break-words">
           {book.title}
         </h3>
-        <p className="text-xs font-body text-ink/60 truncate">{book.author}</p>
+        <p className="text-xs font-body text-muted truncate">{book.author}</p>
         <div className="flex items-center gap-2 mt-1 flex-wrap">
           {grRating !== null && (
-            <span className="text-[11px] font-mono">
-              <span className="text-muted/60">GR</span>{" "}
+            <span className="text-xs font-mono">
+              <span className="text-muted">GR</span>{" "}
               <span className="text-gold font-medium">{grRating.toFixed(1)}</span>
             </span>
           )}
           {amzRating !== null ? (
-            <span className="text-[11px] font-mono">
-              <span className="text-muted/60">AMZ</span>{" "}
+            <span className="text-xs font-mono">
+              <span className="text-muted">AMZ</span>{" "}
               <span className="text-gold font-medium">{amzRating.toFixed(1)}</span>
             </span>
           ) : grRating !== null ? (
-            <span className="text-[11px] font-mono">
-              <span className="text-muted/60">AMZ</span>{" "}
-              <span className="text-muted/30">&mdash;</span>
+            <span className="text-xs font-mono">
+              <span className="text-muted">AMZ</span>{" "}
+              <span className="text-muted/60">&mdash;</span>
             </span>
           ) : null}
           {book.compositeSpice ? (
@@ -158,7 +158,7 @@ export default function BookCard({ book, layout = "grid", className }: BookCardP
         {topTropes.length > 0 && (
           <div className="flex gap-1 mt-0.5 flex-wrap">
             {topTropes.map((t) => (
-              <Badge key={t.id} variant="trope" className="text-[9px] px-1.5 py-0">
+              <Badge key={t.id} variant="trope" className="text-[10px] px-1.5 py-0.5">
                 {t.name}
               </Badge>
             ))}

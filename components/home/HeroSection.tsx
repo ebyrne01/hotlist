@@ -55,14 +55,14 @@ export default function HeroSection({ bookCount, tropeCount }: HeroSectionProps)
 
         {/* Stats bar */}
         {displayBookCount && (
-          <p className="mt-4 text-xs font-mono text-cream/35 tracking-wide">
+          <p className="mt-4 text-sm font-mono text-cream/60 tracking-wide">
             {displayBookCount} books &middot; 3 rating sources &middot; {displayTropeCount} tropes &middot; 5 spice levels
           </p>
         )}
 
         <a
           href="#tropes"
-          className="mt-3 text-[11px] font-mono text-cream/25 hover:text-cream/45 transition-colors"
+          className="mt-3 text-xs font-mono text-cream/50 hover:text-cream/70 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire rounded"
         >
           or browse by trope &darr;
         </a>

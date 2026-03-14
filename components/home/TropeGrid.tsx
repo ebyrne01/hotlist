@@ -76,7 +76,7 @@ export default function TropeGrid({ tropes }: TropeGridProps) {
 
         return (
           <div key={group.label}>
-            <h3 className="text-xs font-mono text-muted/50 uppercase tracking-wider mb-2 text-center">
+            <h3 className="text-xs font-mono text-muted/80 uppercase tracking-wider mb-2 text-center">
               {group.label}
             </h3>
             <div className="flex flex-wrap gap-2 justify-center">
@@ -95,7 +95,7 @@ export default function TropeGrid({ tropes }: TropeGridProps) {
                   >
                     {trope.name}
                     {trope.bookCount != null && trope.bookCount > 0 && (
-                      <span className="text-[10px] font-mono text-muted/40">
+                      <span className="text-xs font-mono text-muted/70">
                         ({trope.bookCount})
                       </span>
                     )}
@@ -110,7 +110,7 @@ export default function TropeGrid({ tropes }: TropeGridProps) {
       {/* Any tropes not in a group */}
       {ungrouped.length > 0 && (
         <div>
-          <h3 className="text-xs font-mono text-muted/50 uppercase tracking-wider mb-2 text-center">
+          <h3 className="text-xs font-mono text-muted/80 uppercase tracking-wider mb-2 text-center">
             More Tropes
           </h3>
           <div className="flex flex-wrap gap-2 justify-center">
@@ -122,7 +122,7 @@ export default function TropeGrid({ tropes }: TropeGridProps) {
               >
                 {trope.name}
                 {trope.bookCount != null && trope.bookCount > 0 && (
-                  <span className="text-[10px] font-mono text-muted/40">
+                  <span className="text-xs font-mono text-muted/70">
                     ({trope.bookCount})
                   </span>
                 )}

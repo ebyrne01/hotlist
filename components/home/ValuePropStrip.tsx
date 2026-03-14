@@ -32,12 +32,12 @@ export default function ValuePropStrip() {
           {VALUE_PROPS.map((prop) => {
             const content = (
               <div className="flex items-start gap-2">
-                <span className="text-base shrink-0 mt-0.5">{prop.icon}</span>
+                <span className="text-lg shrink-0 mt-0.5">{prop.icon}</span>
                 <div className="min-w-0">
-                  <p className="text-xs font-display font-bold text-ink leading-tight">
+                  <p className="text-sm font-display font-bold text-ink leading-tight">
                     {prop.title}
                   </p>
-                  <p className="text-[11px] font-body text-muted/60 leading-snug mt-0.5">
+                  <p className="text-xs font-body text-muted leading-snug mt-0.5">
                     {prop.desc}
                   </p>
                 </div>

@@ -46,7 +46,7 @@ export default function BookTokBanner({ previewCovers = [] }: BookTokBannerProps
                   />
                 </div>
               ))}
-              <p className="text-[9px] font-mono text-muted/40 ml-4 whitespace-nowrap">
+              <p className="text-xs font-mono text-muted/70 ml-4 whitespace-nowrap">
                 From a single TikTok
               </p>
             </div>
