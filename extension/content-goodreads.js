@@ -50,38 +50,56 @@ function injectWidget(data, goodreadsId, title, author) {
   if (data.found) {
     const book = data.book;
 
-    const spiceHtml = book.spiceLevel
+    // Spice column content
+    const spiceInner = book.spiceLevel
       ? `<div class="hotlist-spice">
            <span class="hotlist-spice-peppers">${"\uD83C\uDF36\uFE0F".repeat(Math.min(5, book.spiceLevel))}</span>
            ${book.heatLabel ? `<span class="hotlist-heat-label">${book.heatLabel}</span>` : ""}
-           ${book.spiceAttribution ? `<span class="hotlist-spice-source">${book.spiceAttribution}</span>` : ""}
-         </div>`
-      : `<div class="hotlist-spice"><span class="hotlist-spice-unknown">Spice level unknown</span></div>`;
+         </div>
+         ${book.spiceAttribution ? `<span class="hotlist-spice-source">${book.spiceAttribution}</span>` : ""}`
+      : `<span class="hotlist-spice-unknown">Unknown</span>`;
 
-    const tropesHtml =
+    // Tropes column content
+    const tropesInner =
       book.tropes.length > 0
         ? `<div class="hotlist-tropes">${book.tropes.map((t) => `<span class="hotlist-trope-pill">${t}</span>`).join("")}</div>`
-        : "";
+        : `<span class="hotlist-spice-unknown">None yet</span>`;
 
-    // Show Goodreads rating comparison if we have Amazon data
-    let ratingsHtml = "";
-    if (book.amazonRating) {
-      ratingsHtml = `<div class="hotlist-ratings-row">
-        ${book.amazonRating ? `<span class="hotlist-rating-badge"><span class="hotlist-rating-source">Amazon</span> <span class="hotlist-rating-value">${book.amazonRating.toFixed(1)}</span></span>` : ""}
-      </div>`;
-    }
+    // Amazon rating column content (cross-site value-add on Goodreads)
+    const ratingInner = book.amazonRating
+      ? `<div class="hotlist-ratings-row">
+          <span class="hotlist-rating-badge">
+            <span class="hotlist-rating-value">${book.amazonRating.toFixed(1)}</span>
+          </span>
+        </div>`
+      : `<span class="hotlist-spice-unknown">—</span>`;
 
     widget.innerHTML = `
       <div class="hotlist-header">
-        <span class="hotlist-wordmark">Hotlist</span>
-        <span class="hotlist-fire">\uD83D\uDD25</span>
+        <div class="hotlist-header-left">
+          <span class="hotlist-wordmark">Hotlist</span>
+          <span class="hotlist-fire">\uD83D\uDD25</span>
+        </div>
+        <div class="hotlist-actions">
+          <a href="${book.hotlistUrl}" target="_blank" class="hotlist-btn-view">View on Hotlist \u2192</a>
+          <button class="hotlist-btn-add" data-book-id="${book.id}" data-title="${escapeAttr(book.title)}" data-author="${escapeAttr(book.author)}">+ Add to Hotlist</button>
+        </div>
       </div>
-      ${spiceHtml}
-      ${tropesHtml}
-      ${ratingsHtml}
-      <div class="hotlist-actions">
-        <a href="${book.hotlistUrl}" target="_blank" class="hotlist-btn-view">View on Hotlist \u2192</a>
-        <button class="hotlist-btn-add" data-book-id="${book.id}" data-title="${escapeAttr(book.title)}" data-author="${escapeAttr(book.author)}">+ Add to Hotlist</button>
+      <div class="hotlist-content">
+        <div class="hotlist-col">
+          <span class="hotlist-col-label">Spice</span>
+          ${spiceInner}
+        </div>
+        <div class="hotlist-divider"></div>
+        <div class="hotlist-col">
+          <span class="hotlist-col-label">Tropes</span>
+          ${tropesInner}
+        </div>
+        <div class="hotlist-divider"></div>
+        <div class="hotlist-col">
+          <span class="hotlist-col-label">Amazon</span>
+          ${ratingInner}
+        </div>
       </div>
     `;
   } else {
@@ -91,12 +109,16 @@ function injectWidget(data, goodreadsId, title, author) {
     );
     widget.innerHTML = `
       <div class="hotlist-header">
-        <span class="hotlist-wordmark">Hotlist</span>
-        <span class="hotlist-fire">\uD83D\uDD25</span>
+        <div class="hotlist-header-left">
+          <span class="hotlist-wordmark">Hotlist</span>
+          <span class="hotlist-fire">\uD83D\uDD25</span>
+        </div>
+        <div class="hotlist-actions">
+          <a href="${API_BASE}/search?q=${searchQuery}" target="_blank" class="hotlist-btn-view">Search on Hotlist \u2192</a>
+        </div>
       </div>
-      <div class="hotlist-spice"><span class="hotlist-spice-unknown">Not in Hotlist yet</span></div>
-      <div class="hotlist-actions">
-        <a href="${API_BASE}/search?q=${searchQuery}" target="_blank" class="hotlist-btn-view">Search on Hotlist \u2192</a>
+      <div class="hotlist-content">
+        <span class="hotlist-spice-unknown">Not in Hotlist yet</span>
       </div>
     `;
   }

@@ -27,9 +27,6 @@ export default function Footer() {
             <Link href="/terms" className="hover:text-cream transition-colors">
               Terms
             </Link>
-            <Link href="/pro" className="text-gold hover:text-gold/80 transition-colors">
-              Join Pro Waitlist
-            </Link>
           </nav>
         </div>
 

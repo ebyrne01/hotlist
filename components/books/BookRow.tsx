@@ -45,7 +45,7 @@ export default function BookRow({ books, loading }: BookRowProps) {
     return (
       <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
         {Array.from({ length: 5 }, (_, i) => (
-          <BookCardSkeleton key={i} className="w-[160px] sm:w-[180px] shrink-0" />
+          <BookCardSkeleton key={i} layout="grid" />
         ))}
       </div>
     );

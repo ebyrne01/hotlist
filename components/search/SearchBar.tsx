@@ -31,11 +31,13 @@ export interface SearchResult {
 interface SearchBarProps {
   variant?: "hero" | "navbar";
   className?: string;
+  /** HTML id for the input element (useful for external focus triggers) */
+  inputId?: string;
   /** When provided, selecting a result calls this instead of navigating to book detail */
   onSelectBook?: (book: SearchResult) => void;
 }
 
-export default function SearchBar({ variant = "navbar", className, onSelectBook }: SearchBarProps) {
+export default function SearchBar({ variant = "navbar", className, inputId, onSelectBook }: SearchBarProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [noResults, setNoResults] = useState(false);
@@ -161,8 +163,9 @@ export default function SearchBar({ variant = "navbar", className, onSelectBook 
           />
           <input
             ref={inputRef}
+            id={inputId}
             type="text"
-            placeholder="Search books, authors, tropes... or paste a video link"
+            placeholder="Search by title, author, or ISBN"
             value={query}
             onChange={(e) => {
               const val = e.target.value;

@@ -1,8 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 
-export default function BookTokBanner() {
+interface BookTokBannerProps {
+  previewCovers?: string[];
+}
+
+export default function BookTokBanner({ previewCovers = [] }: BookTokBannerProps) {
+  const covers = previewCovers.slice(0, 3);
+
   return (
     <section className="max-w-6xl mx-auto px-4 py-6">
       <Link
@@ -19,6 +26,32 @@ export default function BookTokBanner() {
               Paste any TikTok, Reels, or YouTube link and we&apos;ll pull every book mentioned.
             </p>
           </div>
+
+          {/* Cover previews */}
+          {covers.length > 0 && (
+            <div className="hidden sm:flex items-center -space-x-3 shrink-0">
+              {covers.map((url, i) => (
+                <div
+                  key={i}
+                  className="w-12 h-[72px] rounded-md overflow-hidden border-2 border-white shadow-sm"
+                  style={{ zIndex: covers.length - i }}
+                >
+                  <Image
+                    src={url}
+                    alt=""
+                    width={48}
+                    height={72}
+                    className="w-full h-full object-cover"
+                    unoptimized
+                  />
+                </div>
+              ))}
+              <p className="text-[9px] font-mono text-muted/40 ml-4 whitespace-nowrap">
+                From a single TikTok
+              </p>
+            </div>
+          )}
+
           <span className="text-fire font-mono text-sm font-medium shrink-0 group-hover:translate-x-0.5 transition-transform">
             Try it &rarr;
           </span>

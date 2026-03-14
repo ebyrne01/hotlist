@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { getAdminClient } from "@/lib/supabase/admin";
 import HeroSection from "@/components/home/HeroSection";
+import ValuePropStrip from "@/components/home/ValuePropStrip";
 import BookTokBanner from "@/components/home/BookTokBanner";
 import TropeGrid from "@/components/home/TropeGrid";
 import BookRow from "@/components/books/BookRow";
@@ -9,8 +10,32 @@ import { getNYTBestsellerRomance } from "@/lib/books/nyt-lists";
 import { getRomanceNewReleases } from "@/lib/books/new-releases";
 import { hydrateBookDetail } from "@/lib/books/cache";
 import { isJunkTitle } from "@/lib/books/romance-filter";
-import { deduplicateBooks } from "@/lib/books/utils";
+import { deduplicateBooks, diversifyByAuthor, isCompilationTitle, hasYAGenre } from "@/lib/books/utils";
 import type { BookDetail } from "@/lib/types";
+
+/** Confirmed spice sources — not estimated/inferred */
+const CONFIRMED_SPICE_SOURCES = new Set(["community", "romance_io"]);
+const CONFIRMED_LEGACY_SPICE = new Set(["romance_io", "hotlist_community"]);
+
+/** Check if a book has confirmed (non-estimated) spice data */
+function hasConfirmedSpice(book: BookDetail): boolean {
+  const hasConfirmedComposite =
+    book.compositeSpice && CONFIRMED_SPICE_SOURCES.has(book.compositeSpice.primarySource);
+  const hasConfirmedLegacy = book.spice.some((s) => CONFIRMED_LEGACY_SPICE.has(s.source));
+  return !!(hasConfirmedComposite || hasConfirmedLegacy);
+}
+
+/** Check if a book meets homepage curation quality bar */
+function isHomepageQualified(book: BookDetail): boolean {
+  if (!book.coverUrl) return false;
+  if (isCompilationTitle(book.title)) return false;
+  // Must have Goodreads rating
+  const grRating = book.ratings.find((r) => r.source === "goodreads");
+  if (!grRating || (grRating.ratingCount ?? 0) < 100) return false;
+  // Must have confirmed spice (not estimated/inferred)
+  if (!hasConfirmedSpice(book)) return false;
+  return true;
+}
 
 /**
  * What's Hot: NYT bestsellers filtered to romance/romantasy.
@@ -18,7 +43,8 @@ import type { BookDetail } from "@/lib/types";
  * this week's list has fewer than 10 romance titles.
  * Falls back to top-rated books in our DB if NYT returns nothing.
  */
-const MIN_HOT_BOOKS = 10;
+const MIN_HOT_BOOKS = 6;
+const TARGET_HOT_BOOKS = 8;
 
 async function getWhatsHot(): Promise<BookDetail[]> {
   const supabase = getAdminClient();
@@ -68,58 +94,86 @@ async function getWhatsHot(): Promise<BookDetail[]> {
     }
   }
 
-  if (nytBooks.length > 0) return deduplicateBooks(nytBooks);
+  // Apply homepage quality filter (confirmed spice + Goodreads rating)
+  const qualified = deduplicateBooks(nytBooks).filter(isHomepageQualified);
 
-  // Fallback: top-rated books from our database
-  const { data: topRated } = await supabase
-    .from("book_ratings")
-    .select("book_id, rating")
-    .not("rating", "is", null);
+  // Backfill with well-enriched books if we don't have enough
+  if (qualified.length < MIN_HOT_BOOKS) {
+    const existingIds = new Set(qualified.map((b) => b.id));
 
-  if (!topRated || topRated.length === 0) return [];
+    // Find books with confirmed spice from romance_io or community
+    const { data: spiceRows } = await supabase
+      .from("spice_signals")
+      .select("book_id")
+      .in("source", ["community", "romance_io"])
+      .gte("confidence", 0.5)
+      .order("updated_at", { ascending: false })
+      .limit(40);
 
-  const ratingsByBook = new Map<string, number[]>();
-  for (const r of topRated) {
-    const list = ratingsByBook.get(r.book_id) ?? [];
-    list.push(parseFloat(r.rating));
-    ratingsByBook.set(r.book_id, list);
-  }
+    if (spiceRows && spiceRows.length > 0) {
+      const candidateIds = spiceRows
+        .map((r) => r.book_id as string)
+        .filter((id) => !existingIds.has(id));
+      const uniqueIds = Array.from(new Set(candidateIds)).slice(0, 20);
 
-  const qualifiedIds: string[] = [];
-  const avgMap = new Map<string, number>();
-  for (const [bookId, ratings] of Array.from(ratingsByBook)) {
-    const avg = ratings.reduce((a, b) => a + b, 0) / ratings.length;
-    if (avg >= 4.0) {
-      qualifiedIds.push(bookId);
-      avgMap.set(bookId, avg);
+      if (uniqueIds.length > 0) {
+        const { data: backfillBooks } = await supabase
+          .from("books")
+          .select("*")
+          .in("id", uniqueIds)
+          .not("cover_url", "is", null);
+
+        if (backfillBooks) {
+          for (const row of backfillBooks as Record<string, unknown>[]) {
+            if (qualified.length >= TARGET_HOT_BOOKS) break;
+            if (isJunkTitle(row.title as string)) continue;
+            const hydrated = await hydrateBookDetail(supabase, row);
+            if (isHomepageQualified(hydrated) && !existingIds.has(hydrated.id)) {
+              qualified.push(hydrated);
+              existingIds.add(hydrated.id);
+            }
+          }
+        }
+      }
     }
   }
 
-  if (qualifiedIds.length === 0) return [];
-
-  const { data: books } = await supabase
-    .from("books")
-    .select("*")
-    .in("id", qualifiedIds)
-    .not("cover_url", "is", null);
-
-  if (!books || books.length === 0) return [];
-
-  books.sort((a, b) => (avgMap.get(b.id as string) ?? 0) - (avgMap.get(a.id as string) ?? 0));
-
-  const hydrated: BookDetail[] = [];
-  for (const book of books.slice(0, 12) as Record<string, unknown>[]) {
-    if (isJunkTitle(book.title as string)) continue;
-    hydrated.push(await hydrateBookDetail(supabase, book));
+  if (qualified.length > 0) {
+    // Sort: books with tropes first, then by number of rating sources
+    qualified.sort((a, b) => {
+      const aScore = (a.tropes.length > 0 ? 10 : 0) + a.ratings.length;
+      const bScore = (b.tropes.length > 0 ? 10 : 0) + b.ratings.length;
+      return bScore - aScore;
+    });
+    return diversifyByAuthor(qualified).slice(0, TARGET_HOT_BOOKS);
   }
 
-  // Quality threshold: only show books with sufficient Goodreads data + cover
-  const qualified = hydrated.filter((book) => {
-    if (!book.coverUrl) return false;
-    const grRating = book.ratings.find((r) => r.source === "goodreads");
-    return grRating && (grRating.ratingCount ?? 0) >= 100;
-  });
-  return qualified;
+  // Last-resort fallback: top-rated books regardless of spice
+  const { data: topRated } = await supabase
+    .from("book_ratings")
+    .select("book_id, rating")
+    .eq("source", "goodreads")
+    .gte("rating", 4.0)
+    .not("rating", "is", null)
+    .limit(20);
+
+  if (!topRated || topRated.length === 0) return [];
+
+  const fallbackIds = Array.from(new Set(topRated.map((r) => r.book_id)));
+  const { data: fallbackBooks } = await supabase
+    .from("books")
+    .select("*")
+    .in("id", fallbackIds)
+    .not("cover_url", "is", null);
+
+  if (!fallbackBooks || fallbackBooks.length === 0) return [];
+
+  const fallbackHydrated: BookDetail[] = [];
+  for (const book of fallbackBooks.slice(0, 12) as Record<string, unknown>[]) {
+    if (isJunkTitle(book.title as string)) continue;
+    fallbackHydrated.push(await hydrateBookDetail(supabase, book));
+  }
+  return fallbackHydrated.filter((b) => !!b.coverUrl).slice(0, TARGET_HOT_BOOKS);
 }
 
 async function getNewReleases(): Promise<BookDetail[]> {
@@ -135,16 +189,18 @@ async function getNewReleases(): Promise<BookDetail[]> {
 async function getSpiciest(): Promise<BookDetail[]> {
   const supabase = getAdminClient();
 
+  // Use spice_signals for confirmed high-spice (>= 4) from trusted sources
   const { data: spiceRows } = await supabase
-    .from("book_spice")
-    .select("book_id, spice_level")
-    .gte("spice_level", 4)
-    .order("spice_level", { ascending: false })
-    .limit(12);
+    .from("spice_signals")
+    .select("book_id, spice_value")
+    .in("source", ["community", "romance_io"])
+    .gte("spice_value", 4)
+    .order("spice_value", { ascending: false })
+    .limit(30);
 
   if (!spiceRows || spiceRows.length === 0) return [];
 
-  const bookIds = Array.from(new Set(spiceRows.map((r) => r.book_id)));
+  const bookIds = Array.from(new Set(spiceRows.map((r) => r.book_id as string)));
   const { data: books } = await supabase
     .from("books")
     .select("*")
@@ -159,19 +215,21 @@ async function getSpiciest(): Promise<BookDetail[]> {
     hydrated.push(await hydrateBookDetail(supabase, book));
   }
 
-  // Quality threshold: only show books with sufficient Goodreads data + cover
+  // Strict filter: confirmed spice >= 4, no YA, no compilations
   const qualified = hydrated.filter((book) => {
-    if (!book.coverUrl) return false;
-    const grRating = book.ratings.find((r) => r.source === "goodreads");
-    return grRating && (grRating.ratingCount ?? 0) >= 100;
+    if (!isHomepageQualified(book)) return false;
+    if (hasYAGenre(book)) return false;
+    // Require high confirmed spice
+    const spiceLevel = book.compositeSpice?.score ?? 0;
+    return spiceLevel >= 4;
   });
-  return deduplicateBooks(qualified);
+  return diversifyByAuthor(deduplicateBooks(qualified)).slice(0, 12);
 }
 
 async function getRomantasyPicks(): Promise<BookDetail[]> {
   const supabase = getAdminClient();
 
-  // Find books with romantasy/fantasy-romance genres
+  // Find books with romantasy/fantasy-romance genres — query extra for filtering
   const { data: books } = await supabase
     .from("books")
     .select("*")
@@ -180,7 +238,7 @@ async function getRomantasyPicks(): Promise<BookDetail[]> {
       "genres.cs.{romantasy},genres.cs.{fantasy romance},genres.cs.{romantic fantasy},genres.cs.{fae},genres.cs.{faerie}"
     )
     .order("updated_at", { ascending: false })
-    .limit(30);
+    .limit(40);
 
   if (!books || books.length === 0) {
     // Fallback: search descriptions for romantasy keywords
@@ -190,7 +248,7 @@ async function getRomantasyPicks(): Promise<BookDetail[]> {
       .not("cover_url", "is", null)
       .or("description.ilike.%romantasy%,description.ilike.%fae court%,description.ilike.%fantasy romance%")
       .order("updated_at", { ascending: false })
-      .limit(20);
+      .limit(30);
 
     if (!fallback || fallback.length === 0) return [];
 
@@ -199,7 +257,7 @@ async function getRomantasyPicks(): Promise<BookDetail[]> {
       if (isJunkTitle(book.title as string)) continue;
       hydrated.push(await hydrateBookDetail(supabase, book));
     }
-    return deduplicateBooks(hydrated.filter((b) => !!b.coverUrl)).slice(0, 12);
+    return diversifyByAuthor(deduplicateBooks(hydrated.filter(isHomepageQualified))).slice(0, 12);
   }
 
   const hydrated: BookDetail[] = [];
@@ -208,31 +266,81 @@ async function getRomantasyPicks(): Promise<BookDetail[]> {
     hydrated.push(await hydrateBookDetail(supabase, book));
   }
 
-  const qualified = hydrated.filter((b) => {
-    if (!b.coverUrl) return false;
-    const grRating = b.ratings.find((r) => r.source === "goodreads");
-    return grRating && (grRating.ratingCount ?? 0) >= 100;
-  });
-  return deduplicateBooks(qualified).slice(0, 12);
+  return diversifyByAuthor(deduplicateBooks(hydrated.filter(isHomepageQualified))).slice(0, 12);
 }
 
-async function getTropes() {
+async function getTropesWithCounts() {
   const supabase = getAdminClient();
-  const { data } = await supabase
-    .from("tropes")
-    .select("id, slug, name")
-    .order("sort_order", { ascending: true });
-  return data ?? [];
+
+  // Fetch tropes and book counts in parallel
+  const [{ data: tropes }, { data: bookTropes }] = await Promise.all([
+    supabase
+      .from("tropes")
+      .select("id, slug, name")
+      .order("sort_order", { ascending: true }),
+    supabase
+      .from("book_tropes")
+      .select("trope_id"),
+  ]);
+
+  // Count books per trope
+  const countMap = new Map<string, number>();
+  if (bookTropes) {
+    for (const row of bookTropes) {
+      const id = row.trope_id as string;
+      countMap.set(id, (countMap.get(id) ?? 0) + 1);
+    }
+  }
+
+  return (tropes ?? []).map((t) => ({
+    ...t,
+    bookCount: countMap.get(t.id) ?? 0,
+  }));
+}
+
+async function getHomepageStats() {
+  const supabase = getAdminClient();
+  const { count } = await supabase
+    .from("books")
+    .select("*", { count: "exact", head: true });
+  return { bookCount: count ?? 0 };
+}
+
+async function getBookTokPreviewCovers(): Promise<string[]> {
+  const supabase = getAdminClient();
+
+  // Get covers from a recent BookTok grab result
+  const { data: recentGrab } = await supabase
+    .from("video_grabs")
+    .select("result")
+    .not("result", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(5);
+
+  if (!recentGrab) return [];
+
+  for (const grab of recentGrab) {
+    const result = grab.result as { books?: { coverUrl?: string }[] } | null;
+    if (!result?.books) continue;
+    const covers = result.books
+      .map((b) => b.coverUrl)
+      .filter(Boolean) as string[];
+    if (covers.length >= 2) return covers.slice(0, 3);
+  }
+
+  return [];
 }
 
 
 export default async function Home() {
-  const [hotBooks, newReleases, spicyBooks, romantasyBooks, tropes] = await Promise.all([
+  const [hotBooks, newReleases, spicyBooks, romantasyBooks, tropes, stats, previewCovers] = await Promise.all([
     getWhatsHot(),
     getNewReleases(),
     getSpiciest(),
     getRomantasyPicks(),
-    getTropes(),
+    getTropesWithCounts(),
+    getHomepageStats(),
+    getBookTokPreviewCovers(),
   ]);
 
   // Remove any new releases that already appear in What's Hot
@@ -241,9 +349,11 @@ export default async function Home() {
 
   return (
     <>
-      <HeroSection />
+      <HeroSection bookCount={stats.bookCount} tropeCount={tropes.length} />
 
-      <BookTokBanner />
+      <ValuePropStrip />
+
+      <BookTokBanner previewCovers={previewCovers} />
 
       <div className="max-w-6xl mx-auto px-4">
         {/* What's Hot — NYT Bestsellers */}
@@ -293,44 +403,6 @@ export default async function Home() {
             <BookRow books={spicyBooks} />
           </section>
         )}
-
-        {/* What is Hotlist explainer */}
-        <section className="py-12 border-t border-border">
-          <div className="max-w-lg mx-auto text-center">
-            <h2 className="font-display text-2xl font-bold text-ink italic">
-              What is Hotlist?
-            </h2>
-            <div className="mt-6 space-y-4 text-left">
-              <div className="flex gap-3">
-                <span className="text-xl shrink-0">📊</span>
-                <p className="text-sm font-body text-muted">
-                  <strong className="text-ink">Every rating in one place.</strong> Goodreads, Amazon, and community ratings side by side so you can compare.
-                </p>
-              </div>
-              <div className="flex gap-3">
-                <span className="text-xl shrink-0">🌶️</span>
-                <p className="text-sm font-body text-muted">
-                  <strong className="text-ink">Know the spice before you start.</strong> Spice levels and trope tags so you always know what you&apos;re getting into.
-                </p>
-              </div>
-              <div className="flex gap-3">
-                <span className="text-xl shrink-0">🔥</span>
-                <p className="text-sm font-body text-muted">
-                  <strong className="text-ink">Build your Hotlist.</strong> Save books to a comparison table and decide what to read next.
-                </p>
-              </div>
-              <div className="flex gap-3">
-                <span className="text-xl shrink-0">📹</span>
-                <p className="text-sm font-body text-muted">
-                  <strong className="text-ink">BookTok {"\u2192"} Hotlist.</strong> Paste a TikTok, Reels, or YouTube link and we&apos;ll pull every book rec automatically.{" "}
-                  <a href="/booktok" className="text-fire hover:text-fire/80 font-mono text-xs transition-colors">
-                    Try it &rarr;
-                  </a>
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
       </div>
     </>
   );

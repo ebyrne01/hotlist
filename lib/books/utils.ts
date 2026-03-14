@@ -69,3 +69,61 @@ export function deduplicateBooks(books: BookDetail[]): BookDetail[] {
 
   return Array.from(seen.values());
 }
+
+/**
+ * Limit author representation in a curated list.
+ * Iterates through books and skips any where the author already
+ * has `maxPerAuthor` entries in the output.
+ */
+export function diversifyByAuthor(books: BookDetail[], maxPerAuthor = 2): BookDetail[] {
+  const authorCounts = new Map<string, number>();
+  const result: BookDetail[] = [];
+
+  for (const book of books) {
+    const key = book.author.toLowerCase().trim();
+    const count = authorCounts.get(key) ?? 0;
+    if (count >= maxPerAuthor) continue;
+    authorCounts.set(key, count + 1);
+    result.push(book);
+  }
+
+  return result;
+}
+
+/** Compilation / omnibus / box set patterns */
+const COMPILATION_PATTERNS = [
+  /books?\s+\d+\s*[-–&and]+\s*\d+/i,       // "Books 1 and 2", "Books 1-3"
+  /\bcomplete\s+series\b/i,                   // "Complete Series"
+  /\bbox\s*set\b/i,                            // "Box Set", "Boxed Set"
+  /\bomnibus\b/i,                              // "Omnibus"
+  /\bcollection\s*:/i,                         // "Collection:"
+  /\b(?:duet|trilogy|quartet)\s*:/i,           // "Duet:", "Trilogy:"
+];
+
+/**
+ * Detect compilation/omnibus editions by title.
+ * Returns true for multi-book bundles that shouldn't appear in curated rows.
+ */
+export function isCompilationTitle(title: string): boolean {
+  return COMPILATION_PATTERNS.some((pattern) => pattern.test(title));
+}
+
+/** YA / children's genres to exclude from spicy curated rows */
+const YA_GENRES = new Set([
+  "young-adult",
+  "young adult",
+  "ya",
+  "teen",
+  "children",
+  "childrens",
+  "children's",
+  "middle-grade",
+  "middle grade",
+]);
+
+/**
+ * Check if a book has YA or children's genre tags.
+ */
+export function hasYAGenre(book: BookDetail): boolean {
+  return book.genres.some((g) => YA_GENRES.has(g.toLowerCase()));
+}

@@ -56,12 +56,17 @@ export default function BookCard({ book, layout = "grid", className }: BookCardP
                 <span className="text-gold font-medium">{grRating.toFixed(1)}</span>
               </span>
             )}
-            {amzRating !== null && (
+            {amzRating !== null ? (
               <span className="text-xs font-mono">
                 <span className="text-muted/60">AMZ</span>{" "}
                 <span className="text-gold font-medium">{amzRating.toFixed(1)}</span>
               </span>
-            )}
+            ) : grRating !== null ? (
+              <span className="text-xs font-mono">
+                <span className="text-muted/60">AMZ</span>{" "}
+                <span className="text-muted/30">&mdash;</span>
+              </span>
+            ) : null}
             {book.compositeSpice ? (
               <SpiceDisplay
                 composite={book.compositeSpice}
@@ -122,12 +127,17 @@ export default function BookCard({ book, layout = "grid", className }: BookCardP
               <span className="text-gold font-medium">{grRating.toFixed(1)}</span>
             </span>
           )}
-          {amzRating !== null && (
+          {amzRating !== null ? (
             <span className="text-[11px] font-mono">
               <span className="text-muted/60">AMZ</span>{" "}
               <span className="text-gold font-medium">{amzRating.toFixed(1)}</span>
             </span>
-          )}
+          ) : grRating !== null ? (
+            <span className="text-[11px] font-mono">
+              <span className="text-muted/60">AMZ</span>{" "}
+              <span className="text-muted/30">&mdash;</span>
+            </span>
+          ) : null}
           {book.compositeSpice ? (
             <SpiceDisplay
               composite={book.compositeSpice}

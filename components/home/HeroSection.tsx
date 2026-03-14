@@ -1,8 +1,28 @@
 "use client";
 
+import { useEffect } from "react";
 import SearchBar from "@/components/search/SearchBar";
 
-export default function HeroSection() {
+interface HeroSectionProps {
+  bookCount?: number;
+  tropeCount?: number;
+}
+
+export default function HeroSection({ bookCount, tropeCount }: HeroSectionProps) {
+  // Autofocus search on desktop only (avoid mobile keyboard pop-up)
+  useEffect(() => {
+    if (window.innerWidth >= 768) {
+      document.getElementById("hero-search")?.focus();
+    }
+  }, []);
+
+  // Round down to nearest hundred
+  const displayBookCount = bookCount
+    ? `${(Math.floor(bookCount / 100) * 100).toLocaleString()}+`
+    : null;
+
+  const displayTropeCount = tropeCount ?? 25;
+
   return (
     <section className="relative bg-ink overflow-hidden">
       {/* Subtle radial gradient */}
@@ -23,12 +43,26 @@ export default function HeroSection() {
         </p>
 
         <div className="mt-8 w-full max-w-lg">
-          <SearchBar variant="hero" />
+          <SearchBar variant="hero" inputId="hero-search" />
         </div>
+
+        <button
+          onClick={() => document.getElementById("hero-search")?.focus()}
+          className="mt-4 px-6 py-3 bg-fire text-cream font-mono text-sm font-semibold rounded-lg hover:bg-fire/90 transition-colors shadow-lg shadow-fire/20"
+        >
+          Find Your Next Read
+        </button>
+
+        {/* Stats bar */}
+        {displayBookCount && (
+          <p className="mt-4 text-xs font-mono text-cream/35 tracking-wide">
+            {displayBookCount} books &middot; 3 rating sources &middot; {displayTropeCount} tropes &middot; 5 spice levels
+          </p>
+        )}
 
         <a
           href="#tropes"
-          className="mt-6 text-sm font-mono text-cream/50 hover:text-cream/70 transition-colors"
+          className="mt-3 text-[11px] font-mono text-cream/25 hover:text-cream/45 transition-colors"
         >
           or browse by trope &darr;
         </a>

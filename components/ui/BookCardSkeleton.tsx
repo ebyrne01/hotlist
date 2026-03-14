@@ -2,9 +2,40 @@ import { clsx } from "clsx";
 
 interface BookCardSkeletonProps {
   className?: string;
+  layout?: "grid" | "list";
 }
 
-export default function BookCardSkeleton({ className }: BookCardSkeletonProps) {
+export default function BookCardSkeleton({ className, layout = "list" }: BookCardSkeletonProps) {
+  if (layout === "grid") {
+    return (
+      <div
+        className={clsx(
+          "flex flex-col rounded-lg border border-border bg-white w-[160px] sm:w-[180px] shrink-0 animate-pulse",
+          className
+        )}
+      >
+        {/* Cover placeholder */}
+        <div className="w-full aspect-[2/3] bg-border/40 rounded-t-lg" />
+        <div className="p-2.5 flex flex-col gap-1.5">
+          {/* Title */}
+          <div className="h-4 w-4/5 rounded bg-border/50" />
+          {/* Author */}
+          <div className="h-3 w-3/5 rounded bg-border/30" />
+          {/* Rating row */}
+          <div className="flex gap-2 mt-1">
+            <div className="h-3 w-10 rounded bg-border/30" />
+            <div className="h-3 w-10 rounded bg-border/30" />
+          </div>
+          {/* Trope badges */}
+          <div className="flex gap-1">
+            <div className="h-4 w-14 rounded-full bg-border/30" />
+            <div className="h-4 w-16 rounded-full bg-border/30" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className={clsx(
