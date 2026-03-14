@@ -23,6 +23,7 @@ interface SpiceAttributionProps {
 
 const SOURCE_OPACITY: Record<string, string> = {
   community: "opacity-100",
+  creator: "opacity-100",
   romance_io: "opacity-100",
   review_classifier: "opacity-70",
   llm_inference: "opacity-60",
@@ -31,7 +32,7 @@ const SOURCE_OPACITY: Record<string, string> = {
 
 /** Is this an estimated (non-authoritative) source? */
 export function isEstimatedSource(primarySource: string): boolean {
-  return !["community", "romance_io"].includes(primarySource);
+  return !["community", "creator", "romance_io"].includes(primarySource);
 }
 
 export default function SpiceAttribution({

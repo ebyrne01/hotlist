@@ -17,6 +17,7 @@ import BookDetailClient from "./BookDetailClient";
 import { InlineUserRating } from "./InlineRatings";
 import SpiceSection from "./SpiceSection";
 import BookTokMentions from "@/components/books/BookTokMentions";
+import CreateShareCardButton from "@/components/books/CreateShareCardButton";
 
 // ── Helpers ──────────────────────────────────────────
 
@@ -550,6 +551,11 @@ export default async function BookPage({ params }: PageProps) {
                 bookId={book.id}
                 bookTitle={book.title}
               />
+            </div>
+
+            {/* Creator share card button (only visible to verified creators) */}
+            <div className="mt-3">
+              <CreateShareCardButton bookSlug={book.slug} />
             </div>
 
           </div>

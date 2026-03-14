@@ -18,6 +18,7 @@ export type { SpiceSource } from "@/lib/types";
 
 const SOURCE_WEIGHTS: Record<string, number> = {
   community: 1.0,
+  creator: 0.9,
   romance_io: 0.85,
   review_classifier: 0.6,
   llm_inference: 0.4,
@@ -52,6 +53,7 @@ export function computeFromSignals(signals: SpiceSignal[]): CompositeSpice | nul
   let weightSum = 0;
   let maxWeightedConfidence = 0;
   let bestSource: SpiceSource = signals[0].source;
+  let bestEvidence: Record<string, unknown> = signals[0].evidence;
   let communityCount: number | null = null;
 
   for (const signal of signals) {
@@ -64,6 +66,7 @@ export function computeFromSignals(signals: SpiceSignal[]): CompositeSpice | nul
     if (effectiveWeight > maxWeightedConfidence) {
       maxWeightedConfidence = effectiveWeight;
       bestSource = signal.source;
+      bestEvidence = signal.evidence;
     }
 
     if (signal.source === "community" && signal.evidence?.rating_count != null) {
@@ -91,7 +94,7 @@ export function computeFromSignals(signals: SpiceSignal[]): CompositeSpice | nul
 
   const attribution = conflictFlag
     ? "Spice estimates vary — community ratings help!"
-    : getAttribution(bestSource, communityCount);
+    : getAttribution(bestSource, communityCount, bestEvidence);
 
   return {
     score,
@@ -167,12 +170,20 @@ export async function getCompositeSpiceBatch(
   return result;
 }
 
-function getAttribution(source: SpiceSource, communityCount: number | null): string {
+function getAttribution(
+  source: SpiceSource,
+  communityCount: number | null,
+  evidence?: Record<string, unknown>
+): string {
   switch (source) {
     case "community":
       return communityCount
         ? `based on ${communityCount} community rating${communityCount === 1 ? "" : "s"}`
         : "based on community ratings";
+    case "creator": {
+      const handle = evidence?.creator_handle as string | undefined;
+      return handle ? `rated by @${handle}` : "rated by a verified creator";
+    }
     case "romance_io":
       return "from Romance.io";
     case "review_classifier":

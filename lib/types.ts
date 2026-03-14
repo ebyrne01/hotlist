@@ -54,6 +54,7 @@ export interface Trope {
 
 export type SpiceSource =
   | "community"
+  | "creator"
   | "romance_io"
   | "review_classifier"
   | "llm_inference"

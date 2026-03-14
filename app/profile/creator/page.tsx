@@ -409,6 +409,9 @@ export default function CreatorSettingsPage() {
             )}
           </div>
         </form>
+
+        {/* My Cards section */}
+        <MyShareCards userId={user.id} />
       </div>
     );
   }
@@ -535,6 +538,137 @@ export default function CreatorSettingsPage() {
           {submitting ? "Submitting..." : "Submit Application"}
         </button>
       </form>
+    </div>
+  );
+}
+
+// ── My Share Cards (sub-component for verified creators) ──
+
+interface ShareCardRow {
+  id: string;
+  book_id: string;
+  export_count: number;
+  view_count: number;
+  created_at: string;
+  book_title: string;
+  book_cover: string | null;
+  book_slug: string;
+}
+
+function MyShareCards({ userId }: { userId: string }) {
+  const [cards, setCards] = useState<ShareCardRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const supabase = createClient();
+
+  useEffect(() => {
+    async function load() {
+      const { data } = await supabase
+        .from("creator_share_cards")
+        .select("id, book_id, export_count, view_count, created_at")
+        .eq("creator_id", userId)
+        .order("created_at", { ascending: false });
+
+      if (!data || data.length === 0) {
+        setLoading(false);
+        return;
+      }
+
+      // Fetch book titles + covers
+      const bookIds = data.map((c) => c.book_id);
+      const { data: books } = await supabase
+        .from("books")
+        .select("id, title, cover_url, slug")
+        .in("id", bookIds);
+
+      const bookMap = new Map(
+        (books ?? []).map((b) => [b.id, b])
+      );
+
+      setCards(
+        data.map((c) => {
+          const book = bookMap.get(c.book_id);
+          return {
+            ...c,
+            book_title: (book?.title as string) ?? "Unknown",
+            book_cover: (book?.cover_url as string) ?? null,
+            book_slug: (book?.slug as string) ?? "",
+          };
+        })
+      );
+      setLoading(false);
+    }
+    load();
+  }, [userId, supabase]);
+
+  async function handleDelete(cardId: string) {
+    if (!confirm("Delete this share card?")) return;
+    await supabase.from("creator_share_cards").delete().eq("id", cardId);
+    setCards((prev) => prev.filter((c) => c.id !== cardId));
+  }
+
+  return (
+    <div className="mt-10 pt-8 border-t border-border">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-display text-xl font-bold text-ink">
+          My Share Cards
+        </h2>
+        <Link
+          href="/search"
+          className="text-xs font-mono text-fire hover:text-fire/80 transition-colors"
+        >
+          + Create new card
+        </Link>
+      </div>
+
+      {loading ? (
+        <div className="py-8 text-center">
+          <div className="w-6 h-6 border-2 border-fire border-t-transparent rounded-full animate-spin mx-auto" />
+        </div>
+      ) : cards.length === 0 ? (
+        <p className="text-sm font-body text-muted py-4">
+          No share cards yet. Visit a book page and click &ldquo;Create share card&rdquo; to get started.
+        </p>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {cards.map((card) => (
+            <div
+              key={card.id}
+              className="bg-white border border-border rounded-lg p-3 group relative"
+            >
+              <Link href={`/creator/card/${card.book_slug}`}>
+                {card.book_cover ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={card.book_cover}
+                    alt={card.book_title}
+                    className="w-full h-32 object-cover rounded-md mb-2"
+                  />
+                ) : (
+                  <div className="w-full h-32 bg-cream rounded-md mb-2 flex items-center justify-center">
+                    <span className="text-xs text-muted italic text-center px-2">
+                      {card.book_title}
+                    </span>
+                  </div>
+                )}
+                <p className="text-xs font-body text-ink font-medium truncate">
+                  {card.book_title}
+                </p>
+                <div className="flex items-center gap-2 mt-1 text-xs font-mono text-muted">
+                  <span>{card.export_count} exports</span>
+                  <span>&middot;</span>
+                  <span>{card.view_count} views</span>
+                </div>
+              </Link>
+              <button
+                onClick={() => handleDelete(card.id)}
+                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-xs text-muted hover:text-red-600 bg-white/80 rounded px-1.5 py-0.5"
+              >
+                Delete
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
