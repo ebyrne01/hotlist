@@ -99,7 +99,7 @@ export default function Navbar() {
                   <p className="text-xs font-mono text-ink font-semibold truncate">
                     {displayName}
                   </p>
-                  <p className="text-[10px] font-mono text-muted truncate">
+                  <p className="text-xs font-mono text-muted truncate">
                     {user.email}
                   </p>
                 </div>

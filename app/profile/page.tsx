@@ -161,7 +161,7 @@ export default function ProfilePage() {
             <p className="font-display text-2xl font-bold text-ink">
               {stat.value}
             </p>
-            <p className="text-[10px] font-mono text-muted uppercase tracking-wide mt-1">
+            <p className="text-xs font-mono text-muted uppercase tracking-wide mt-1">
               {stat.label}
             </p>
           </div>

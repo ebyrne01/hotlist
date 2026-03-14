@@ -276,7 +276,7 @@ function BookTokPageInner() {
         Paste a BookTok, Instagram, or YouTube link and we&apos;ll find every
         book recommendation for you.
       </p>
-      <p className="text-xs font-mono text-muted/50 mt-1">
+      <p className="text-xs font-mono text-muted/70 mt-1">
         Works with TikTok, Instagram Reels, and YouTube
       </p>
 
@@ -301,7 +301,7 @@ function BookTokPageInner() {
       </div>
 
       {/* Platform icons */}
-      <div className="flex items-center gap-3 mt-3 text-xs font-mono text-muted/40">
+      <div className="flex items-center gap-3 mt-3 text-xs font-mono text-muted/70">
         <span>Supported:</span>
         <span>TikTok</span>
         <span>&middot;</span>
@@ -317,7 +317,7 @@ function BookTokPageInner() {
           <p className="text-sm font-mono text-ink font-medium text-center">
             {STATUS_MESSAGES[status]}
           </p>
-          <p className="text-xs font-body text-muted/50 mt-1 text-center italic">
+          <p className="text-xs font-body text-muted/70 mt-1 text-center italic">
             Extracting the magic — this takes about a minute
           </p>
 
@@ -339,12 +339,12 @@ function BookTokPageInner() {
                     }`}
                   />
                   <span
-                    className={`text-[9px] font-mono transition-colors duration-300 ${
+                    className={`text-xs font-mono transition-colors duration-300 ${
                       isComplete
                         ? "text-fire/70"
                         : isActive
                           ? "text-ink/70"
-                          : "text-muted/30"
+                          : "text-muted/70"
                     }`}
                   >
                     {PROGRESS_LABELS[step]}
@@ -390,17 +390,17 @@ function BookTokPageInner() {
                 </p>
               )}
               <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-[10px] font-mono text-muted/60 uppercase">
+                <span className="text-xs font-mono text-muted/70 uppercase">
                   {result.platform}
                 </span>
-                <span className="text-[10px] font-mono text-fire font-medium">
+                <span className="text-xs font-mono text-fire font-medium">
                   {result.booksFound} book{result.booksFound !== 1 ? "s" : ""}{" "}
                   found
                 </span>
               </div>
             </div>
             {result.processingTimeMs > 0 && (
-              <span className="text-[10px] font-mono text-muted/40 shrink-0">
+              <span className="text-xs font-mono text-muted/70 shrink-0">
                 {(result.processingTimeMs / 1000).toFixed(1)}s
               </span>
             )}
@@ -448,7 +448,7 @@ function BookTokPageInner() {
           <div className="mt-8 border-t border-border pt-4">
             <button
               onClick={() => setShowTranscript(!showTranscript)}
-              className="text-xs font-mono text-muted/60 hover:text-ink transition-colors"
+              className="text-xs font-mono text-muted/70 hover:text-ink transition-colors"
             >
               {showTranscript
                 ? "Hide transcript \u25B4"
@@ -534,14 +534,14 @@ function MatchedBookCard({
               &ldquo;{book.creatorQuote}&rdquo;
             </p>
           )}
-          <p className="text-[10px] font-mono text-muted/40 mt-0.5">
+          <p className="text-xs font-mono text-muted/70 mt-0.5">
             {SENTIMENT_EMOJI[book.creatorSentiment] ?? "mentioned"}
           </p>
         </div>
         <div className="shrink-0 flex flex-col items-end gap-1">
           <Link
             href={`/book/${detail.slug}`}
-            className="text-[10px] font-mono text-fire hover:text-fire/80 transition-colors"
+            className="text-xs font-mono text-fire hover:text-fire/80 transition-colors"
           >
             View &rarr;
           </Link>
@@ -572,7 +572,7 @@ function UnmatchedBookCard({
     <div className="bg-white border border-border rounded-lg opacity-70">
       <div className="flex gap-3 p-3">
         <div className="w-16 h-24 rounded bg-cream border border-border flex items-center justify-center shrink-0">
-          <span className="text-2xl text-muted/30">?</span>
+          <span className="text-2xl text-muted/70">?</span>
         </div>
         <div className="flex-1 min-w-0">
           <h3 className="font-display font-bold text-ink text-sm truncate">
@@ -583,7 +583,7 @@ function UnmatchedBookCard({
               {book.rawAuthor}
             </p>
           )}
-          <p className="text-xs font-mono text-muted/50 mt-1">
+          <p className="text-xs font-mono text-muted/70 mt-1">
             Mentioned but not in our database yet
           </p>
           {book.creatorQuote && (
@@ -593,7 +593,7 @@ function UnmatchedBookCard({
           )}
           <Link
             href={`/search?q=${encodeURIComponent(book.rawTitle + (book.rawAuthor ? " " + book.rawAuthor : ""))}`}
-            className="inline-block mt-1.5 text-[10px] font-mono text-fire hover:text-fire/80 transition-colors"
+            className="inline-block mt-1.5 text-xs font-mono text-fire hover:text-fire/80 transition-colors"
           >
             Search for this book &rarr;
           </Link>

@@ -18,7 +18,7 @@ export default function MissingBookFeedback({ videoUrl }: MissingBookFeedbackPro
   if (state === "submitted") {
     return (
       <div className="mt-4 p-3 border border-dashed border-border/50 rounded-lg text-center">
-        <p className="text-xs font-mono text-muted/50 italic">
+        <p className="text-xs font-mono text-muted/70 italic">
           Thanks for helping us get smarter! Your feedback improves results for everyone.
         </p>
       </div>
@@ -30,7 +30,7 @@ export default function MissingBookFeedback({ videoUrl }: MissingBookFeedbackPro
       <div className="mt-4 text-center">
         <button
           onClick={() => setState("expanded")}
-          className="text-xs font-mono text-muted/40 hover:text-muted/60 transition-colors"
+          className="text-xs font-mono text-muted/70 hover:text-muted/60 transition-colors"
         >
           Missing a book from this video?
         </button>
@@ -69,14 +69,14 @@ export default function MissingBookFeedback({ videoUrl }: MissingBookFeedbackPro
         value={bookTitle}
         onChange={(e) => setBookTitle(e.target.value)}
         placeholder="Book title and author"
-        className="w-full text-sm font-body border border-border/50 rounded px-3 py-1.5 bg-white placeholder:text-muted/30 focus:outline-none focus:border-fire/30"
+        className="w-full text-sm font-body border border-border/50 rounded px-3 py-1.5 bg-white placeholder:text-muted/70 focus:outline-none focus:border-fire/30"
       />
       <input
         type="text"
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
         placeholder="Any other details? (optional)"
-        className="mt-1.5 w-full text-[11px] font-body border border-border/50 rounded px-3 py-1.5 bg-white placeholder:text-muted/30 focus:outline-none focus:border-fire/30"
+        className="mt-1.5 w-full text-xs font-body border border-border/50 rounded px-3 py-1.5 bg-white placeholder:text-muted/70 focus:outline-none focus:border-fire/30"
         onKeyDown={(e) => e.key === "Enter" && !submitting && handleSubmit()}
       />
       <div className="flex items-center gap-2 mt-2">
@@ -89,7 +89,7 @@ export default function MissingBookFeedback({ videoUrl }: MissingBookFeedbackPro
         </button>
         <button
           onClick={() => setState("collapsed")}
-          className="text-xs font-mono text-muted/40 hover:text-muted/60 transition-colors"
+          className="text-xs font-mono text-muted/70 hover:text-muted/60 transition-colors"
         >
           Cancel
         </button>

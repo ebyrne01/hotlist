@@ -218,12 +218,12 @@ export default function SpiceSection({
             fill="none"
             stroke="currentColor"
             strokeWidth="1.5"
-            className="text-muted/50"
+            className="text-muted/70"
           >
             <circle cx="8" cy="8" r="7" />
             <path d="M8 11V8M8 5.5V5" strokeLinecap="round" />
           </svg>
-          <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-2.5 bg-ink text-white text-[11px] font-body leading-snug rounded-lg shadow-lg opacity-0 group-hover/tip:opacity-100 pointer-events-none transition-opacity z-20 normal-case tracking-normal">
+          <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-2.5 bg-ink text-white text-xs font-body leading-snug rounded-lg shadow-lg opacity-0 group-hover/tip:opacity-100 pointer-events-none transition-opacity z-20 normal-case tracking-normal">
             {tooltipText}
           </span>
         </span>
@@ -252,18 +252,18 @@ export default function SpiceSection({
           href={romanceIoUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-mono text-fire/60 hover:text-fire transition-colors"
+          className="mt-1.5 inline-flex items-center gap-1 text-xs font-mono text-fire/80 hover:text-fire transition-colors"
         >
           romance.io
           <ExternalLink size={10} />
         </a>
       ) : hasCommunity ? (
-        <p className="mt-1.5 text-[11px] font-mono text-muted/60">
+        <p className="mt-1.5 text-xs font-mono text-muted/60">
           Rated by {communitySpice.ratingCount} Hotlist reader
           {(communitySpice.ratingCount ?? 0) === 1 ? "" : "s"}
         </p>
       ) : inferredSpice ? (
-        <p className="mt-1.5 text-[11px] font-mono text-muted/60">
+        <p className="mt-1.5 text-xs font-mono text-muted/60">
           Estimated from Goodreads reader shelves
         </p>
       ) : null}
@@ -273,7 +273,7 @@ export default function SpiceSection({
         <div className="mt-2 flex items-center gap-2 text-xs font-mono text-muted/60">
           <span>Hotlist readers:</span>
           <SpiceChilies level={communitySpice.spiceLevel} muted />
-          <span className="text-[10px]">
+          <span className="text-xs">
             ({communitySpice.ratingCount} rating
             {(communitySpice.ratingCount ?? 0) === 1 ? "" : "s"})
           </span>
@@ -290,7 +290,7 @@ export default function SpiceSection({
 
       {/* "Rate the spice" nudge for estimated sources */}
       {isEstimated && !userSpice && authChecked && (
-        <p className="mt-1.5 text-[10px] font-mono text-fire/50 italic">
+        <p className="mt-1.5 text-xs font-mono text-fire/70 italic">
           This is an estimate — rate the spice below to improve it
         </p>
       )}
@@ -328,7 +328,7 @@ function SpiceChilies({
 }) {
   if (!level) {
     return (
-      <span className="text-xs font-mono text-muted/50">Spice unknown</span>
+      <span className="text-xs font-mono text-muted/70">Spice unknown</span>
     );
   }
 
@@ -384,7 +384,7 @@ function UserSpiceRow({
     return (
       <button
         onClick={onSignIn}
-        className="text-[11px] font-mono text-fire/70 hover:text-fire transition-colors"
+        className="text-xs font-mono text-fire/70 hover:text-fire transition-colors"
       >
         How spicy did you find it? Sign in &rarr;
       </button>
@@ -395,8 +395,8 @@ function UserSpiceRow({
   if (justSaved) {
     return (
       <div className="flex items-center gap-2">
-        <span className="text-[11px] font-mono text-muted/60">Your take:</span>
-        <span className="inline-flex items-center gap-1 text-[11px] font-mono text-green-600">
+        <span className="text-xs font-mono text-muted/60">Your take:</span>
+        <span className="inline-flex items-center gap-1 text-xs font-mono text-green-600">
           <Check size={12} strokeWidth={3} /> Saved
         </span>
       </div>
@@ -408,7 +408,7 @@ function UserSpiceRow({
     return (
       <div>
         <div className="flex items-center gap-2">
-          <span className="text-[11px] font-mono text-muted/60">
+          <span className="text-xs font-mono text-muted/60">
             Your take:
           </span>
           <span className="inline-flex items-center gap-0.5">
@@ -426,13 +426,13 @@ function UserSpiceRow({
           </span>
           <button
             onClick={onEdit}
-            className="text-[10px] font-mono text-fire/50 hover:text-fire transition-colors ml-1"
+            className="text-xs font-mono text-fire/70 hover:text-fire transition-colors ml-1"
           >
             Edit
           </button>
         </div>
         {spiceDifference >= 2 && (
-          <p className="mt-1.5 text-[10px] font-body text-muted/50 italic">
+          <p className="mt-1.5 text-xs font-body text-muted/70 italic">
             Spice is personal — your experience may vary 🌶️
           </p>
         )}
@@ -443,7 +443,7 @@ function UserSpiceRow({
   // Unrated or editing: interactive chilies
   return (
     <div className="flex items-center gap-2">
-      <span className="text-[11px] font-mono text-muted/60">Your take:</span>
+      <span className="text-xs font-mono text-muted/60">Your take:</span>
       <span className="inline-flex items-center gap-0.5">
         {Array.from({ length: 5 }, (_, i) => (
           <button

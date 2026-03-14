@@ -63,7 +63,7 @@ export default async function DiscoverPage() {
                   <p className="text-sm font-mono text-ink font-semibold truncate">
                     {creator.handle as string}
                   </p>
-                  <p className="text-xs font-mono text-muted/60">
+                  <p className="text-xs font-mono text-muted/70">
                     {creator.book_count as number} book{(creator.book_count as number) !== 1 ? "s" : ""} · {creator.platform as string}
                   </p>
                 </div>
@@ -90,11 +90,11 @@ export default async function DiscoverPage() {
                   <span className="text-sm font-mono text-ink font-semibold">
                     {creator.handle as string}
                   </span>
-                  <span className="text-xs font-mono text-muted/50">
+                  <span className="text-xs font-mono text-muted/70">
                     {creator.platform as string}
                   </span>
                 </div>
-                <div className="flex items-center gap-4 text-xs font-mono text-muted/60">
+                <div className="flex items-center gap-4 text-xs font-mono text-muted/70">
                   <span>{creator.book_count as number} books</span>
                   <span>{creator.grab_count as number} grabs</span>
                   {(creator.follower_count as number) > 0 && (

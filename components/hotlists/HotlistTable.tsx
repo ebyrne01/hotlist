@@ -150,7 +150,7 @@ export default function HotlistTable({
                     {isOwner && (
                       <button
                         onClick={() => onRemoveBook?.(hb.bookId)}
-                        className="text-muted/40 hover:text-fire transition-colors p-1 shrink-0"
+                        className="text-muted/70 hover:text-fire transition-colors p-1 shrink-0"
                         title="Remove"
                       >
                         <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -198,7 +198,7 @@ export default function HotlistTable({
                           >🌶️</span>
                         ))}
                         {hb.book.compositeSpice?.conflictFlag && (
-                          <span className="text-[9px] font-mono text-fire/50 italic ml-1">varies</span>
+                          <span className="text-xs font-mono text-fire/70 italic ml-1">varies</span>
                         )}
                       </span>
                     )}
@@ -308,11 +308,11 @@ export default function HotlistTable({
                           >🌶️</span>
                         ))}
                         {hb.book.compositeSpice?.conflictFlag && (
-                          <span className="block text-[9px] font-mono text-fire/50 italic">varies</span>
+                          <span className="block text-xs font-mono text-fire/70 italic">varies</span>
                         )}
                       </span>
                     ) : (
-                      <span className="text-muted/40 font-mono text-sm">{"\u2014"}</span>
+                      <span className="text-muted/70 font-mono text-sm">{"\u2014"}</span>
                     )}
                   </td>
                   <td className="px-3 py-3 text-center">
@@ -326,12 +326,12 @@ export default function HotlistTable({
                   <td className="px-3 py-3">
                     <div className="flex gap-1 flex-wrap max-w-[160px]">
                       {hb.book.tropes.slice(0, 3).map((t) => (
-                        <span key={t.id} className="text-[10px] font-mono px-1.5 py-0.5 rounded-full border border-border bg-white text-muted whitespace-nowrap">
+                        <span key={t.id} className="text-xs font-mono px-1.5 py-0.5 rounded-full border border-border bg-white text-muted whitespace-nowrap">
                           {t.name}
                         </span>
                       ))}
                       {hb.book.tropes.length === 0 && (
-                        <span className="text-muted/40 font-mono text-xs">{"\u2014"}</span>
+                        <span className="text-muted/70 font-mono text-xs">{"\u2014"}</span>
                       )}
                     </div>
                   </td>
@@ -353,7 +353,7 @@ export default function HotlistTable({
                     <td className="px-2 py-3 text-center">
                       <button
                         onClick={() => onRemoveBook?.(hb.bookId)}
-                        className="text-muted/40 hover:text-fire transition-colors p-1"
+                        className="text-muted/70 hover:text-fire transition-colors p-1"
                         title="Remove from list"
                       >
                         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -399,7 +399,7 @@ function SortHeader({
         }`}
       >
         {label}
-        <span className="ml-1 text-[10px]">
+        <span className="ml-1 text-xs">
           {isActive ? (dir === "asc" ? "\u25B2" : "\u25BC") : "\u25B2\u25BC"}
         </span>
       </button>
@@ -415,7 +415,7 @@ function RatingCell({ value, isEnriching }: { value: number | null; isEnriching:
   }
 
   return (
-    <span className="inline-flex items-center gap-1 text-muted/40">
+    <span className="inline-flex items-center gap-1 text-muted/70">
       {"\u2014"}
       {isEnriching && (
         <span
@@ -464,7 +464,7 @@ function BuyDropdown({
     <div ref={ref} className="relative inline-block">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="text-[10px] font-mono text-fire hover:underline whitespace-nowrap"
+        className="text-xs font-mono text-fire hover:underline whitespace-nowrap"
       >
         Buy &rarr;
       </button>
@@ -536,7 +536,7 @@ function InlineStarRating({
           onMouseEnter={() => setHovering(star)}
           onClick={() => onRate?.(bookId, star)}
           className={`text-sm transition-colors ${
-            star <= display ? "text-gold" : "text-muted/20"
+            star <= display ? "text-gold" : "text-muted/40"
           } hover:scale-110`}
         >
           ★
@@ -600,13 +600,13 @@ function ReadStatusToggle({
   }
 
   if (!isOwner || !loaded) {
-    return <span className="text-muted/40 font-mono text-xs">{"\u2014"}</span>;
+    return <span className="text-muted/70 font-mono text-xs">{"\u2014"}</span>;
   }
 
   return (
     <button
       onClick={toggle}
-      className={`text-[10px] font-mono px-2 py-1 rounded-full border transition-colors ${
+      className={`text-xs font-mono px-2 py-1 rounded-full border transition-colors ${
         status === "read"
           ? "bg-green-50 text-green-700 border-green-200"
           : "bg-white text-muted border-border hover:border-fire/30 hover:text-ink"

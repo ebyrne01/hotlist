@@ -372,7 +372,7 @@ export default async function BookPage({ params }: PageProps) {
               >
                 Read on Kindle &rarr;
               </a>
-              <p className="text-[10px] font-mono text-muted/50 uppercase tracking-wide mt-1">
+              <p className="text-xs font-mono text-muted/70 uppercase tracking-wide mt-1">
                 Read in Print
               </p>
               <div className="flex gap-2">
@@ -512,7 +512,7 @@ export default async function BookPage({ params }: PageProps) {
                   ))}
                 </div>
               ) : (
-                <p className="text-sm font-body text-muted/50 italic">
+                <p className="text-sm font-body text-muted/70 italic">
                   No tropes tagged yet
                 </p>
               )}
@@ -528,7 +528,7 @@ export default async function BookPage({ params }: PageProps) {
                   <p className="font-body text-ink/90 leading-[1.85]" style={{ fontSize: "0.95rem" }}>
                     {cleanSynopsis(book.aiSynopsis!, book.title, book.author)}
                   </p>
-                  <span className="inline-block mt-2 text-[10px] font-mono text-muted/40">
+                  <span className="inline-block mt-2 text-xs font-mono text-muted/70">
                     AI-generated synopsis
                   </span>
                 </div>
@@ -537,7 +537,7 @@ export default async function BookPage({ params }: PageProps) {
                   {book.description}
                 </p>
               ) : (
-                <p className="font-body text-muted/50 text-sm italic">
+                <p className="font-body text-muted/70 text-sm italic">
                   No synopsis available yet.
                 </p>
               )}

@@ -117,7 +117,7 @@ export default function SignInModal() {
           </div>
         )}
 
-        <p className="text-[10px] text-muted/60 text-center mt-6 leading-relaxed">
+        <p className="text-xs text-muted/60 text-center mt-6 leading-relaxed">
           By signing in you agree to our Terms & Privacy Policy
         </p>
       </div>

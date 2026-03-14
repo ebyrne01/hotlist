@@ -93,7 +93,7 @@ export default function RatingWidget({ bookId, userId }: RatingWidgetProps) {
     <div className="mt-3 pt-3 border-t border-border/50">
       <label
         htmlFor="private-note"
-        className="text-[11px] font-mono text-muted/60 block mb-1.5"
+        className="text-xs font-mono text-muted/70 block mb-1.5"
       >
         Private Note (optional)
       </label>
@@ -103,7 +103,7 @@ export default function RatingWidget({ bookId, userId }: RatingWidgetProps) {
         onChange={(e) => setNote(e.target.value)}
         placeholder="Your reading notes — only you can see this"
         rows={3}
-        className="w-full text-sm font-body text-ink border border-border rounded-md px-3 py-2 resize-none focus:outline-none focus:border-fire/50 bg-white placeholder:text-muted/40"
+        className="w-full text-sm font-body text-ink border border-border rounded-md px-3 py-2 resize-none focus:outline-none focus:border-fire/50 bg-white placeholder:text-muted/50"
       />
       <div className="flex items-center gap-2 mt-2">
         <button
@@ -130,7 +130,7 @@ export default function RatingWidget({ bookId, userId }: RatingWidgetProps) {
           <button
             onClick={handleClear}
             disabled={saving}
-            className="text-xs font-mono text-muted/50 hover:text-fire transition-colors px-2 py-1.5"
+            className="text-xs font-mono text-muted/70 hover:text-fire transition-colors px-2 py-1.5"
           >
             Clear
           </button>

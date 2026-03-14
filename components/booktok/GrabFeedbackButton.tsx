@@ -32,7 +32,7 @@ export default function GrabFeedbackButton({
 
   if (state === "submitted") {
     return (
-      <p className="text-[10px] font-mono text-muted/50 italic mt-1">
+      <p className="text-xs font-mono text-muted/70 italic mt-1">
         Thanks, we&apos;ll look into it!
       </p>
     );
@@ -42,7 +42,7 @@ export default function GrabFeedbackButton({
     return (
       <button
         onClick={() => setState("expanded")}
-        className="text-[10px] font-mono text-muted/40 hover:text-muted/60 transition-colors mt-0.5"
+        className="text-xs font-mono text-muted/70 hover:text-muted/60 transition-colors mt-0.5"
       >
         Not right?
       </button>
@@ -76,10 +76,10 @@ export default function GrabFeedbackButton({
           <button
             key={opt}
             onClick={() => setSelectedType(opt)}
-            className={`text-[10px] font-mono px-2 py-0.5 rounded-full border transition-colors ${
+            className={`text-xs font-mono px-2 py-0.5 rounded-full border transition-colors ${
               selectedType === opt
                 ? "border-fire/40 text-fire bg-fire/5"
-                : "border-border text-muted/50 hover:border-muted/30"
+                : "border-border text-muted/70 hover:border-muted/30"
             }`}
           >
             {LABELS[opt]}
@@ -91,20 +91,20 @@ export default function GrabFeedbackButton({
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
         placeholder="What should it be? (optional)"
-        className="mt-1.5 w-full text-[11px] font-body border border-border/50 rounded px-2 py-1 bg-white placeholder:text-muted/30 focus:outline-none focus:border-fire/30"
+        className="mt-1.5 w-full text-xs font-body border border-border/50 rounded px-2 py-1 bg-white placeholder:text-muted/70 focus:outline-none focus:border-fire/30"
         onKeyDown={(e) => e.key === "Enter" && !submitting && handleSubmit()}
       />
       <div className="flex items-center gap-2 mt-1.5">
         <button
           onClick={handleSubmit}
           disabled={submitting}
-          className="text-[10px] font-mono text-fire hover:text-fire/80 transition-colors disabled:opacity-50"
+          className="text-xs font-mono text-fire hover:text-fire/80 transition-colors disabled:opacity-50"
         >
           {submitting ? "Sending..." : "Send"}
         </button>
         <button
           onClick={() => setState("collapsed")}
-          className="text-[10px] font-mono text-muted/40 hover:text-muted/60 transition-colors"
+          className="text-xs font-mono text-muted/70 hover:text-muted/60 transition-colors"
         >
           Cancel
         </button>

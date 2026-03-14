@@ -272,7 +272,7 @@ export default function MyHotlistsPage() {
                           e.preventDefault();
                           handleTogglePublic(hl.id, hl.isPublic);
                         }}
-                        className={`text-[10px] font-mono px-2 py-0.5 rounded-full border transition-colors ${
+                        className={`text-xs font-mono px-2 py-0.5 rounded-full border transition-colors ${
                           hl.isPublic
                             ? "text-green-700 bg-green-50 border-green-200 hover:bg-green-100"
                             : "text-muted bg-cream border-border hover:border-fire/30"
@@ -295,7 +295,7 @@ export default function MyHotlistsPage() {
                     setEditingId(hl.id);
                     setEditName(hl.name);
                   }}
-                  className="text-muted/40 hover:text-ink transition-colors p-1"
+                  className="text-muted/70 hover:text-ink transition-colors p-1"
                   title="Rename"
                 >
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -305,7 +305,7 @@ export default function MyHotlistsPage() {
                 {/* Copy share link */}
                 <button
                   onClick={() => handleCopyLink(hl.shareSlug, hl.id)}
-                  className="text-muted/40 hover:text-ink transition-colors p-1"
+                  className="text-muted/70 hover:text-ink transition-colors p-1"
                   title="Copy share link"
                 >
                   {copied === hl.id ? (
@@ -323,7 +323,7 @@ export default function MyHotlistsPage() {
                 <button
                   onClick={() => handleDelete(hl.id)}
                   disabled={deleting === hl.id}
-                  className="text-muted/40 hover:text-fire transition-colors p-1"
+                  className="text-muted/70 hover:text-fire transition-colors p-1"
                   title="Delete hotlist"
                 >
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">

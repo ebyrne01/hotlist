@@ -121,7 +121,7 @@ export default function CreatorDiscoveryClient({ creator, books }: Props) {
         </div>
 
         {followerCount > 0 && (
-          <p className="text-xs font-mono text-muted/60 mt-2">
+          <p className="text-xs font-mono text-muted/70 mt-2">
             {followerCount} Hotlist {followerCount === 1 ? "reader" : "readers"} following
           </p>
         )}
@@ -133,7 +133,7 @@ export default function CreatorDiscoveryClient({ creator, books }: Props) {
               <Link
                 key={t.slug}
                 href={`/tropes/${t.slug}`}
-                className="text-[10px] font-mono text-muted/60 px-2 py-0.5 border border-border rounded-full hover:border-fire/30 transition-colors"
+                className="text-xs font-mono text-muted/70 px-2 py-0.5 border border-border rounded-full hover:border-fire/30 transition-colors"
               >
                 {t.name}
               </Link>
@@ -214,7 +214,7 @@ export default function CreatorDiscoveryClient({ creator, books }: Props) {
                     <p className="text-xs font-body text-muted/70 italic mt-1.5 line-clamp-2">
                       &ldquo;{book.creatorQuote}&rdquo;
                       {book.creatorSentiment && (
-                        <span className="not-italic text-muted/50 ml-1">
+                        <span className="not-italic text-muted/70 ml-1">
                           — {SENTIMENT_LABELS[book.creatorSentiment] || book.creatorSentiment}
                         </span>
                       )}
@@ -228,7 +228,7 @@ export default function CreatorDiscoveryClient({ creator, books }: Props) {
                         <Link
                           key={t.slug}
                           href={`/tropes/${t.slug}`}
-                          className="text-[10px] font-mono text-muted/60 px-1.5 py-0.5 border border-border rounded-full hover:border-fire/30 transition-colors"
+                          className="text-xs font-mono text-muted/70 px-1.5 py-0.5 border border-border rounded-full hover:border-fire/30 transition-colors"
                         >
                           {t.name}
                         </Link>

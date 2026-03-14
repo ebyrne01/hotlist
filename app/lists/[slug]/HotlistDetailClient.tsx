@@ -349,7 +349,7 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
               }`}
               title={isPublic ? "Click to make private" : "Click to make public & shareable"}
             >
-              <span className="text-[11px]">{isPublic ? "\uD83C\uDF10" : "\uD83D\uDD12"}</span>
+              <span className="text-xs">{isPublic ? "\uD83C\uDF10" : "\uD83D\uDD12"}</span>
               {isPublic
                 ? (copied ? "Link copied!" : "Public")
                 : "Private \u2014 tap to share"}
@@ -429,7 +429,7 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
           ) : (
             <button
               onClick={() => setShowConfirmDelete(true)}
-              className="text-xs font-mono text-muted/50 hover:text-red-600 transition-colors"
+              className="text-xs font-mono text-muted/70 hover:text-red-600 transition-colors"
             >
               Delete this hotlist
             </button>

@@ -158,7 +158,7 @@ export default function BookCard({ book, layout = "grid", className }: BookCardP
         {topTropes.length > 0 && (
           <div className="flex gap-1 mt-0.5 flex-wrap">
             {topTropes.map((t) => (
-              <Badge key={t.id} variant="trope" className="text-[10px] px-1.5 py-0.5">
+              <Badge key={t.id} variant="trope" className="text-xs px-1.5 py-0.5">
                 {t.name}
               </Badge>
             ))}

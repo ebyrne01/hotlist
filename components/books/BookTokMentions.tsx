@@ -34,11 +34,11 @@ export default function BookTokMentions({ mentions }: { mentions: Mention[] }) {
                 >
                   {m.creatorHandle}
                 </Link>
-                <span className="text-xs font-mono text-muted/50">
+                <span className="text-xs font-mono text-muted/70">
                   {m.platform}
                 </span>
                 {m.sentiment && (
-                  <span className="text-xs font-mono text-muted/50">
+                  <span className="text-xs font-mono text-muted/70">
                     · {SENTIMENT_LABELS[m.sentiment] ?? m.sentiment}
                   </span>
                 )}
@@ -53,7 +53,7 @@ export default function BookTokMentions({ mentions }: { mentions: Mention[] }) {
         ))}
       </div>
       {mentions.length > 5 && (
-        <p className="text-xs font-mono text-muted/50 mt-2">
+        <p className="text-xs font-mono text-muted/70 mt-2">
           and {mentions.length - 5} more creator{mentions.length - 5 > 1 ? "s" : ""}
         </p>
       )}

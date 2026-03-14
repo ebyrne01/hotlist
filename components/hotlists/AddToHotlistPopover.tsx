@@ -313,7 +313,7 @@ export default function AddToHotlistPopover({
                     className="flex-1 text-left flex items-center gap-2 min-w-0"
                   >
                     <span className="text-sm font-body text-ink truncate">{hl.name}</span>
-                    <span className="text-[10px] font-mono text-muted shrink-0">
+                    <span className="text-xs font-mono text-muted shrink-0">
                       {hl.bookCount} {hl.bookCount === 1 ? "book" : "books"}
                     </span>
                   </button>
@@ -322,7 +322,7 @@ export default function AddToHotlistPopover({
                       <>
                         <a
                           href={`/lists/${hl.shareSlug}`}
-                          className="text-[10px] font-mono text-fire/70 hover:text-fire transition-colors"
+                          className="text-xs font-mono text-fire/70 hover:text-fire transition-colors"
                           onClick={() => setOpen(false)}
                         >
                           View

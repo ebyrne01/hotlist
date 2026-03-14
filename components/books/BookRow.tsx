@@ -53,7 +53,7 @@ export default function BookRow({ books, loading }: BookRowProps) {
 
   if (books.length === 0) {
     return (
-      <p className="text-sm font-body text-muted/50 py-4">
+      <p className="text-sm font-body text-muted/70 py-4">
         No books to show yet
       </p>
     );

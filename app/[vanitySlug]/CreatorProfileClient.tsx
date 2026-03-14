@@ -94,7 +94,7 @@ export default function CreatorProfileClient({ profile, hotlists, stats }: Props
               {profile.displayName}
             </h1>
             {profile.creatorVerifiedAt && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-fire/10 text-fire text-[10px] font-mono rounded-full shrink-0">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-fire/10 text-fire text-xs font-mono rounded-full shrink-0">
                 <svg
                   width="12"
                   height="12"
@@ -233,7 +233,7 @@ export default function CreatorProfileClient({ profile, hotlists, stats }: Props
               <h3 className="font-display font-semibold text-ink group-hover:text-fire transition-colors truncate">
                 {hotlist.name}
               </h3>
-              <p className="text-[10px] font-mono text-muted mt-0.5">
+              <p className="text-xs font-mono text-muted mt-0.5">
                 {hotlist.bookCount} book{hotlist.bookCount !== 1 ? "s" : ""} · {formatDate(hotlist.updatedAt)}
               </p>
 

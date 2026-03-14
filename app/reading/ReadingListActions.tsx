@@ -39,7 +39,7 @@ export default function ReadingListActions({ bookId }: ReadingListActionsProps) 
     <button
       onClick={handleRemove}
       disabled={removing}
-      className="shrink-0 text-muted/30 hover:text-fire transition-colors p-1 opacity-0 group-hover:opacity-100"
+      className="shrink-0 text-muted/60 hover:text-fire transition-colors p-1 opacity-0 group-hover:opacity-100"
       title="Remove from shelf"
     >
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">

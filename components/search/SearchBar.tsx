@@ -178,7 +178,7 @@ export default function SearchBar({ variant = "navbar", className, inputId, onSe
             onFocus={() => (results.length > 0 || noResults) && setIsOpen(true)}
             onKeyDown={handleKeyDown}
             className={clsx(
-              "w-full font-body text-ink placeholder:text-muted/50 focus:outline-none transition-shadow",
+              "w-full font-body text-ink placeholder:text-muted/70 focus:outline-none transition-shadow",
               isHero
                 ? "pl-12 pr-4 py-4 text-base bg-white border-2 border-white/20 rounded-xl shadow-lg focus:ring-4 focus:ring-fire/20 focus:border-fire/40"
                 : "pl-9 pr-3 py-2 text-sm bg-white border border-border rounded-lg focus:ring-2 focus:ring-fire/30 focus:border-fire/40"
@@ -256,20 +256,20 @@ export default function SearchBar({ variant = "navbar", className, inputId, onSe
                   <div className="flex items-center gap-2">
                     <p className="text-xs font-mono text-muted truncate">{book.author}</p>
                     {book.seriesName && (
-                      <span className="text-xs font-body text-muted/60 truncate">
+                      <span className="text-xs font-body text-muted/70 truncate">
                         Book {book.seriesPosition ?? "?"} of {book.seriesName}
                       </span>
                     )}
                   </div>
                   {book.subgenre && (
-                    <span className="text-[10px] font-mono text-fire/70 bg-fire/5 px-1.5 py-0.5 rounded mt-0.5 inline-block">
+                    <span className="text-xs font-mono text-fire/70 bg-fire/5 px-1.5 py-0.5 rounded mt-0.5 inline-block">
                       {book.subgenre}
                     </span>
                   )}
                 </div>
                 {book.goodreadsRating && (
                   <span className="text-xs font-mono shrink-0 flex items-center gap-1">
-                    <span className="text-muted/60">GR</span>
+                    <span className="text-muted/70">GR</span>
                     <span className="text-gold font-medium">{book.goodreadsRating.toFixed(1)}</span>
                   </span>
                 )}

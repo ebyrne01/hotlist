@@ -104,12 +104,12 @@ export function InlineUserRating({ bookId }: { bookId: string }) {
         >
           + Rate
         </button>
-        <span className="text-[10px] font-mono text-muted uppercase tracking-wide">
+        <span className="text-xs font-mono text-muted uppercase tracking-wide">
           Your Rating
         </span>
         <button
           onClick={() => openSignIn()}
-          className="text-[9px] font-mono text-fire/60 hover:text-fire transition-colors"
+          className="text-xs font-mono text-fire/80 hover:text-fire transition-colors"
         >
           Sign in &rarr;
         </button>
@@ -126,7 +126,7 @@ export function InlineUserRating({ bookId }: { bookId: string }) {
         <span className="text-xl font-display font-bold text-green-600">
           <Check size={24} strokeWidth={3} />
         </span>
-        <span className="text-[10px] font-mono text-green-600 uppercase tracking-wide">
+        <span className="text-xs font-mono text-green-600 uppercase tracking-wide">
           Saved
         </span>
       </div>
@@ -140,12 +140,12 @@ export function InlineUserRating({ bookId }: { bookId: string }) {
         <span className="text-xl font-display font-bold text-ink">
           {starRating}.0
         </span>
-        <span className="text-[10px] font-mono text-muted uppercase tracking-wide">
+        <span className="text-xs font-mono text-muted uppercase tracking-wide">
           Your Rating
         </span>
         <button
           onClick={() => setEditing(true)}
-          className="text-[9px] font-mono text-fire/60 hover:text-fire transition-colors"
+          className="text-xs font-mono text-fire/80 hover:text-fire transition-colors"
         >
           Edit
         </button>
@@ -184,7 +184,7 @@ export function InlineUserRating({ bookId }: { bookId: string }) {
           );
         })}
       </span>
-      <span className="text-[10px] font-mono text-muted uppercase tracking-wide">
+      <span className="text-xs font-mono text-muted uppercase tracking-wide">
         Your Rating
       </span>
     </div>

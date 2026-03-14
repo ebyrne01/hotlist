@@ -139,7 +139,7 @@ export default async function ReadingPage({ searchParams }: PageProps) {
           >
             {TAB_LABELS[tab]}
             {counts[tab] > 0 && (
-              <span className="ml-1.5 text-[10px] text-muted/60">
+              <span className="ml-1.5 text-xs text-muted/60">
                 {counts[tab]}
               </span>
             )}
@@ -183,7 +183,7 @@ export default async function ReadingPage({ searchParams }: PageProps) {
                         <span className="text-lg font-display font-bold text-ink">
                           {userRating.starRating}.0
                         </span>
-                        <span className="block text-[10px] font-mono text-muted uppercase">
+                        <span className="block text-xs font-mono text-muted uppercase">
                           Your Rating
                         </span>
                       </div>
