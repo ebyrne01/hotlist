@@ -123,8 +123,21 @@ export async function searchBooksInCache(query: string): Promise<BookDetail[]> {
   const meaningfulWords = words.filter((w) => !TITLE_NOISE.has(w.toLowerCase()));
   const looksLikeAuthor = meaningfulWords.length >= 2 && meaningfulWords.length <= 3;
 
-  // Score by title AND author match quality
-  const queryWords = lowerQuery.split(/\s+/);
+  // Filter single-letter words (initials like "L", "J") from scoring —
+  // they cause false positives when matching against titles
+  const queryWords = lowerQuery.split(/\s+/).filter((w) => w.length > 1);
+
+  // Fetch Goodreads rating counts for popularity tiebreaking
+  const bookIds = allBooks.map((b) => b.id as string);
+  const { data: ratingRows } = await supabase
+    .from("book_ratings")
+    .select("book_id, rating_count")
+    .in("book_id", bookIds)
+    .eq("source", "goodreads");
+  const popularityMap = new Map<string, number>();
+  for (const row of ratingRows ?? []) {
+    popularityMap.set(row.book_id as string, (row.rating_count as number) ?? 0);
+  }
 
   function relevanceScore(title: string, author: string): number {
     const lowerTitle = title.toLowerCase();
@@ -135,7 +148,7 @@ export async function searchBooksInCache(query: string): Promise<BookDetail[]> {
     if (lowerTitle === lowerQuery) titleScore = 100;
     else if (lowerTitle.startsWith(lowerQuery)) titleScore = 90;
     else if (lowerTitle.includes(lowerQuery)) titleScore = 80;
-    else {
+    else if (queryWords.length > 0) {
       const matchCount = queryWords.filter((w) => lowerTitle.includes(w)).length;
       if (matchCount === queryWords.length) titleScore = 70;
       else titleScore = (matchCount / queryWords.length) * 50;
@@ -143,24 +156,30 @@ export async function searchBooksInCache(query: string): Promise<BookDetail[]> {
 
     // Author scoring — word-by-word so "danielle jensen" matches "Danielle L. Jensen"
     let authorScore = 0;
-    const authorMatchCount = queryWords.filter((w) => lowerAuthor.includes(w)).length;
-    if (lowerAuthor === lowerQuery) authorScore = 95;
-    else if (authorMatchCount === queryWords.length) {
-      // All query words found in author — strong match
-      // Boost higher if query looks like a person's name
-      authorScore = looksLikeAuthor ? 90 : 75;
-    } else if (authorMatchCount > 0) {
-      authorScore = (authorMatchCount / queryWords.length) * 40;
+    if (queryWords.length > 0) {
+      const authorMatchCount = queryWords.filter((w) => lowerAuthor.includes(w)).length;
+      if (lowerAuthor === lowerQuery) authorScore = 95;
+      else if (authorMatchCount === queryWords.length) {
+        // All query words found in author — strong match
+        // Boost higher if query looks like a person's name
+        authorScore = looksLikeAuthor ? 90 : 75;
+      } else if (authorMatchCount > 0) {
+        authorScore = (authorMatchCount / queryWords.length) * 40;
+      }
     }
 
     return Math.max(titleScore, authorScore);
   }
 
-  // Sort by relevance score descending
+  // Sort by relevance score descending, then by Goodreads popularity as tiebreaker
   allBooks.sort((a, b) => {
     const scoreA = relevanceScore(a.title as string, a.author as string);
     const scoreB = relevanceScore(b.title as string, b.author as string);
-    return scoreB - scoreA;
+    if (scoreB !== scoreA) return scoreB - scoreA;
+    // Tiebreak: more popular books (higher rating count) surface first
+    const popA = popularityMap.get(a.id as string) ?? 0;
+    const popB = popularityMap.get(b.id as string) ?? 0;
+    return popB - popA;
   });
 
   const top = allBooks.slice(0, 12);
