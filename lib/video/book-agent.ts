@@ -153,9 +153,11 @@ CRITICAL RULES:
 - Call submit_books exactly ONCE with ALL books when you are done.
 
 SEARCH STRATEGY when a search returns 0 results:
-- You may have the title wrong. Try the AUTHOR NAME ALONE (e.g. "Katie Reus") — this often surfaces the right book.
+- Try the TITLE ALONE without the author name — Whisper may have garbled the author name, poisoning the query.
+- Try the AUTHOR NAME ALONE (e.g. "Katie Reus") — this often surfaces the right book.
 - Try partial or alternate title spellings. Video audio can be misheard — "Ancients Rising" might be "Ancient Protector".
 - Try shorter queries: just the most distinctive word + author.
+- If author + title together return 0, ALWAYS try the title by itself as one of your retries.
 - Do NOT repeat the same failing query with minor keyword changes — change your approach entirely.
 
 // Examples sourced from BookTok test harness baseline run (March 2026)
@@ -173,6 +175,7 @@ KNOWN WHISPER ERRORS — the transcript may contain these garbled versions:
 - "Kristen Cicirelli" or "Kristen Chiccarelli" → Author is Kristen Ciccarelli
 - "Cynlyn Yu" or "Sinlin Yu" → Author is SenLinYu
 - "Debney Perry" → Author is Devney Perry
+- "Katie Rogan" → Author is Katy Rogan
 - "Court of Thorns and Roses" → Full title is "A Court of Thorns and Roses" (don't drop the article "A")
 - "On a Storm" or "Onyx Store" → Book is "Onyx Storm" by Rebecca Yarros
 - "Iron Frame" → Book is "Iron Flame" by Rebecca Yarros
