@@ -160,6 +160,21 @@ interface BookAgentInput {
   transcript: string;
   creatorHandle?: string;
   debugUrl?: string;
+  captureToolCalls?: boolean;
+}
+
+export interface AgentToolCall {
+  tool: "search_goodreads" | "confirm_book";
+  input: Record<string, unknown>;
+  output: Record<string, unknown> | Record<string, unknown>[];
+  turn: number;
+}
+
+export interface AgentDiagnostics {
+  toolCalls: AgentToolCall[];
+  submittedBooks: SubmittedBook[];
+  turns: number;
+  totalMs: number;
 }
 
 interface SubmittedBook {
@@ -195,9 +210,24 @@ function subsampleFrames(frames: (string | Buffer)[]): (string | Buffer)[] {
  *
  * Falls back to empty array on failure — never throws.
  */
+export async function identifyBooksWithAgentDebug(
+  input: Omit<BookAgentInput, "captureToolCalls">
+): Promise<{ books: ResolvedBook[]; diagnostics: AgentDiagnostics }> {
+  const result = await _identifyBooksWithAgentInternal({ ...input, captureToolCalls: true });
+  return result as { books: ResolvedBook[]; diagnostics: AgentDiagnostics };
+}
+
 export async function identifyBooksWithAgent(
   input: BookAgentInput
 ): Promise<ResolvedBook[]> {
+  const result = await _identifyBooksWithAgentInternal(input);
+  if (Array.isArray(result)) return result;
+  return result.books;
+}
+
+async function _identifyBooksWithAgentInternal(
+  input: BookAgentInput
+): Promise<ResolvedBook[] | { books: ResolvedBook[]; diagnostics: AgentDiagnostics }> {
   const agentStart = Date.now();
   const dbg = new AgentDebugLog(input.debugUrl ?? "unknown");
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -206,6 +236,8 @@ export async function identifyBooksWithAgent(
     await dbg.flush();
     return [];
   }
+
+  const capturedToolCalls: AgentToolCall[] = [];
 
   try {
     const client = new Anthropic({ apiKey });
@@ -321,6 +353,9 @@ Identify every book the creator is recommending or discussing. Use search_goodre
                 rating_count: r.ratingCount,
               }));
               dbg.log(`search_goodreads("${query}") => ${simplified.length} results: ${simplified.map(s => `${s.title} (${s.goodreads_id})`).join(", ")}`);
+              if (input.captureToolCalls) {
+                capturedToolCalls.push({ tool: "search_goodreads", input: { query }, output: simplified, turn });
+              }
               return {
                 type: "tool_result",
                 tool_use_id: toolUse.id,
@@ -331,22 +366,29 @@ Identify every book the creator is recommending or discussing. Use search_goodre
               dbg.log(`confirm_book(${goodreadsId})`);
               const detail = await getBookDetail(goodreadsId);
               if (detail) {
+                const confirmOutput = {
+                  goodreads_id: detail.goodreadsId,
+                  title: detail.title,
+                  author: detail.author,
+                  series_name: detail.seriesName,
+                  series_position: detail.seriesPosition,
+                  genres: detail.genres?.slice(0, 5),
+                  rating: detail.ratings?.[0]?.rating,
+                };
                 dbg.log(`confirm_book(${goodreadsId}) => "${detail.title}" by ${detail.author} (series: ${detail.seriesName} #${detail.seriesPosition})`);
+                if (input.captureToolCalls) {
+                  capturedToolCalls.push({ tool: "confirm_book", input: { goodreads_id: goodreadsId }, output: confirmOutput, turn });
+                }
                 return {
                   type: "tool_result",
                   tool_use_id: toolUse.id,
-                  content: JSON.stringify({
-                    goodreads_id: detail.goodreadsId,
-                    title: detail.title,
-                    author: detail.author,
-                    series_name: detail.seriesName,
-                    series_position: detail.seriesPosition,
-                    genres: detail.genres?.slice(0, 5),
-                    rating: detail.ratings?.[0]?.rating,
-                  }),
+                  content: JSON.stringify(confirmOutput),
                 };
               } else {
                 dbg.log(`confirm_book(${goodreadsId}) => NOT FOUND`);
+                if (input.captureToolCalls) {
+                  capturedToolCalls.push({ tool: "confirm_book", input: { goodreads_id: goodreadsId }, output: { error: "Book not found" }, turn });
+                }
                 return {
                   type: "tool_result",
                   tool_use_id: toolUse.id,
@@ -399,6 +441,9 @@ Identify every book the creator is recommending or discussing. Use search_goodre
     if (!submittedBooks || (submittedBooks as SubmittedBook[]).length === 0) {
       dbg.log(`No books submitted after ${turn} turns`);
       await dbg.flush();
+      if (input.captureToolCalls) {
+        return { books: [], diagnostics: { toolCalls: capturedToolCalls, submittedBooks: [], turns: turn, totalMs: Date.now() - agentStart } };
+      }
       return [];
     }
 
@@ -406,10 +451,16 @@ Identify every book the creator is recommending or discussing. Use search_goodre
     const resolved = await resolveSubmittedBooks(submittedBooks as SubmittedBook[]);
     dbg.log(`Resolved ${resolved.length} books: ${resolved.map(r => r.matched ? r.book.title : r.rawTitle).join(", ")}`);
     await dbg.flush();
+    if (input.captureToolCalls) {
+      return { books: resolved, diagnostics: { toolCalls: capturedToolCalls, submittedBooks: submittedBooks as SubmittedBook[], turns: turn, totalMs: Date.now() - agentStart } };
+    }
     return resolved;
   } catch (err) {
     dbg.log(`FATAL ERROR: ${String(err)}`);
     await dbg.flush();
+    if (input.captureToolCalls) {
+      return { books: [], diagnostics: { toolCalls: capturedToolCalls, submittedBooks: [], turns: 0, totalMs: Date.now() - agentStart } };
+    }
     return [];
   }
 }

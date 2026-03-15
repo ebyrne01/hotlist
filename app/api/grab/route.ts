@@ -25,6 +25,7 @@ const bodySchema = z.object({
       },
       { message: "URL must be a TikTok, Instagram, or YouTube link" }
     ),
+  debug: z.boolean().optional(),
 });
 
 /**
@@ -37,7 +38,7 @@ const bodySchema = z.object({
  * Each line is: { "status": "downloading" } or { "result": {...} }
  */
 export async function POST(req: NextRequest) {
-  let body: { url: string };
+  let body: { url: string; debug?: boolean };
   try {
     const raw = await req.json();
     body = bodySchema.parse(raw);
@@ -47,6 +48,9 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
+
+  const debug =
+    req.nextUrl.searchParams.get("debug") === "true" || body.debug === true;
 
   // Check cache first (instant response, no streaming needed)
   const cached = await getCachedGrab(body.url);
@@ -67,8 +71,15 @@ export async function POST(req: NextRequest) {
       try {
         const result = await grabBooksFromVideo(
           body.url,
-          sendStatus
+          sendStatus,
+          undefined, // userId
+          debug
         );
+        if (debug && result.success && result.diagnostics) {
+          controller.enqueue(
+            encoder.encode(JSON.stringify({ diagnostics: result.diagnostics }) + "\n")
+          );
+        }
         controller.enqueue(
           encoder.encode(JSON.stringify({ result }) + "\n")
         );

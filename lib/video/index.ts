@@ -19,7 +19,7 @@ import { getAdminClient } from "@/lib/supabase/admin";
 import { getVideoDownloadUrl, detectPlatform } from "./downloader";
 import { transcribeAudio } from "./transcription";
 import { extractFrames } from "./frame-extractor";
-import { identifyBooksWithAgent } from "./book-agent";
+import { identifyBooksWithAgent, identifyBooksWithAgentDebug, type AgentDiagnostics } from "./book-agent";
 import type { ResolvedBook } from "./book-resolver";
 import { queueEnrichmentJobs } from "@/lib/enrichment/queue";
 import { registerCreatorMentions } from "@/lib/creators/register";
@@ -38,6 +38,54 @@ export type GrabErrorCode =
   | "transcription_failed"
   | "no_books_found";
 
+/** Diagnostic data captured when debug mode is enabled */
+export interface PipelineDiagnostics {
+  /** Raw transcript text from Whisper */
+  transcript: string;
+
+  /** What the Sonnet agent submitted via submit_books tool */
+  extractedRaw: Array<{
+    title: string;
+    author: string;
+    goodreadsId?: string | null;
+    sentiment?: string;
+    quote?: string;
+  }>;
+
+  /** Agent tool call log — search_goodreads and confirm_book calls */
+  matchAttempts: Array<{
+    tool: "search_goodreads" | "confirm_book";
+    input: Record<string, unknown>;
+    output: Record<string, unknown> | Record<string, unknown>[];
+    turn: number;
+  }>;
+
+  /** Enrichment results for matched books */
+  enrichmentResults: Array<{
+    bookId: string;
+    title: string;
+    hasGoodreadsRating: boolean;
+    hasAmazonRating: boolean;
+    hasSpice: boolean;
+    hasTropes: boolean;
+  }>;
+
+  /** Timing for each pipeline stage in milliseconds */
+  timing: {
+    downloadMs: number;
+    transcriptionMs: number;
+    frameExtractionMs: number;
+    agentIdentificationMs: number;
+    enrichmentMs: number;
+    totalMs: number;
+  };
+
+  /** Number of frames sent to the agent */
+  frameCount: number;
+  /** Number of agent turns (API calls) */
+  agentTurns: number;
+}
+
 export interface GrabResultSuccess {
   success: true;
   platform: "tiktok" | "instagram" | "youtube";
@@ -47,6 +95,7 @@ export interface GrabResultSuccess {
   books: ResolvedBook[];
   transcript: string;
   processingTimeMs: number;
+  diagnostics?: PipelineDiagnostics;
 }
 
 export interface GrabResultError {
@@ -138,9 +187,18 @@ function normalizeUrl(url: string): string {
 export async function grabBooksFromVideo(
   url: string,
   onStatus?: (status: GrabStatus) => void,
-  userId?: string
+  userId?: string,
+  debug?: boolean
 ): Promise<GrabResult> {
   const start = Date.now();
+  const timing = {
+    downloadMs: 0,
+    transcriptionMs: 0,
+    frameExtractionMs: 0,
+    agentIdentificationMs: 0,
+    enrichmentMs: 0,
+    totalMs: 0,
+  };
 
   // Step 1: Validate URL
   const platform = detectPlatform(url);
@@ -154,7 +212,9 @@ export async function grabBooksFromVideo(
 
   // Step 3: Download video/audio
   onStatus?.("downloading");
+  const tDownload = Date.now();
   const download = await getVideoDownloadUrl(url);
+  timing.downloadMs = Date.now() - tDownload;
   if (!download) {
     return { success: false, error: "video_unavailable" };
   }
@@ -169,17 +229,21 @@ export async function grabBooksFromVideo(
 
   // Step 4: Transcribe audio + extract frames in parallel
   onStatus?.("transcribing");
+  const tTranscribe = Date.now();
 
   const framePipeline = (async (): Promise<(string | Buffer)[]> => {
+    const tFrames = Date.now();
     const videoUrl = download.videoUrl;
     if (videoUrl) {
       onStatus?.("scanning");
       const frames = await extractFrames(videoUrl, download.durationSeconds);
+      timing.frameExtractionMs = Date.now() - tFrames;
       if (frames.length > 0) {
         console.log(`[grab] Extracted ${frames.length} frames`);
         return frames;
       }
     }
+    timing.frameExtractionMs = Date.now() - tFrames;
     // Fall back to thumbnail
     if (download.thumbnailUrl) {
       console.log("[grab] Frame extraction unavailable, using thumbnail");
@@ -192,6 +256,7 @@ export async function grabBooksFromVideo(
     transcribeAudio(mediaUrl),
     framePipeline,
   ]);
+  timing.transcriptionMs = Date.now() - tTranscribe;
 
   const transcript = transcription?.text?.trim() ?? "";
 
@@ -202,13 +267,29 @@ export async function grabBooksFromVideo(
   // Step 5: Single Sonnet agent call — vision + transcript + Goodreads tools
   onStatus?.("identifying");
   console.log(`[grab] Starting book agent with ${frames.length} frames and ${transcript.length} chars of transcript`);
+  const tAgent = Date.now();
 
-  const resolved = await identifyBooksWithAgent({
-    frames,
-    transcript: transcript || "(no transcript available — identify books from video frames only)",
-    creatorHandle: creatorHandle ?? undefined,
-    debugUrl: url,
-  });
+  let resolved: ResolvedBook[];
+  let agentDiag: AgentDiagnostics | undefined;
+
+  if (debug) {
+    const result = await identifyBooksWithAgentDebug({
+      frames,
+      transcript: transcript || "(no transcript available — identify books from video frames only)",
+      creatorHandle: creatorHandle ?? undefined,
+      debugUrl: url,
+    });
+    resolved = result.books;
+    agentDiag = result.diagnostics;
+  } else {
+    resolved = await identifyBooksWithAgent({
+      frames,
+      transcript: transcript || "(no transcript available — identify books from video frames only)",
+      creatorHandle: creatorHandle ?? undefined,
+      debugUrl: url,
+    });
+  }
+  timing.agentIdentificationMs = Date.now() - tAgent;
 
   console.log(
     `[grab] Agent identified ${resolved.length} books:`,
@@ -224,7 +305,39 @@ export async function grabBooksFromVideo(
   }
 
   // Step 6: Queue enrichment for all matched books (fire-and-forget)
+  const tEnrich = Date.now();
   queueEnrichmentForResolved(resolved);
+  timing.enrichmentMs = Date.now() - tEnrich;
+  timing.totalMs = Date.now() - start;
+
+  // Build diagnostics if debug mode
+  let diagnostics: PipelineDiagnostics | undefined;
+  if (debug && agentDiag) {
+    diagnostics = {
+      transcript,
+      extractedRaw: agentDiag.submittedBooks.map((b) => ({
+        title: b.title,
+        author: b.author,
+        goodreadsId: b.goodreads_id ?? null,
+        sentiment: b.sentiment,
+        quote: b.creator_quote,
+      })),
+      matchAttempts: agentDiag.toolCalls,
+      enrichmentResults: resolved
+        .filter((r): r is ResolvedBook & { matched: true } => r.matched)
+        .map((r) => ({
+          bookId: r.book.id,
+          title: r.book.title,
+          hasGoodreadsRating: r.book.ratings?.some((rt) => rt.source === "goodreads" && rt.rating != null) ?? false,
+          hasAmazonRating: r.book.ratings?.some((rt) => rt.source === "amazon" && rt.rating != null) ?? false,
+          hasSpice: (r.book.spice?.length ?? 0) > 0,
+          hasTropes: (r.book.tropes?.length ?? 0) > 0,
+        })),
+      timing,
+      frameCount: frames.length,
+      agentTurns: agentDiag.turns,
+    };
+  }
 
   const result: GrabResultSuccess = {
     success: true,
@@ -235,6 +348,7 @@ export async function grabBooksFromVideo(
     books: resolved,
     transcript,
     processingTimeMs: Date.now() - start,
+    diagnostics,
   };
 
   // Step 7: Cache result
