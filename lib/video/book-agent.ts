@@ -291,6 +291,9 @@ Identify every book the creator is recommending or discussing. Use search_goodre
     const maxTurns = 10; // Safety limit
     let turn = 0;
 
+    // Track confirmed books as fallback if the agent never calls submit_books
+    const confirmedBooks = new Map<string, { goodreads_id: string; title: string; author: string }>();
+
     while (turn < maxTurns && !submittedBooks) {
       turn++;
       const turnStart = Date.now();
@@ -389,6 +392,7 @@ Identify every book the creator is recommending or discussing. Use search_goodre
                   rating: detail.ratings?.[0]?.rating,
                 };
                 dbg.log(`confirm_book(${goodreadsId}) => "${detail.title}" by ${detail.author} (series: ${detail.seriesName} #${detail.seriesPosition})`);
+                confirmedBooks.set(goodreadsId, { goodreads_id: goodreadsId, title: detail.title, author: detail.author });
                 if (input.captureToolCalls) {
                   capturedToolCalls.push({ tool: "confirm_book", input: { goodreads_id: goodreadsId }, output: confirmOutput, turn });
                 }
@@ -452,12 +456,25 @@ Identify every book the creator is recommending or discussing. Use search_goodre
     dbg.log(`Agent complete: ${turn} turns, ${totalMs}ms total`);
 
     if (!submittedBooks || (submittedBooks as SubmittedBook[]).length === 0) {
-      dbg.log(`No books submitted after ${turn} turns`);
-      await dbg.flush();
-      if (input.captureToolCalls) {
-        return { books: [], diagnostics: { toolCalls: capturedToolCalls, submittedBooks: [], turns: turn, totalMs: Date.now() - agentStart } };
+      // Fallback: if the agent confirmed books but never submitted (rate limit, max_tokens, etc.),
+      // synthesize a submission from confirmed books
+      if (confirmedBooks.size > 0) {
+        dbg.log(`Agent did not call submit_books, but confirmed ${confirmedBooks.size} books. Using confirmed books as fallback.`);
+        submittedBooks = Array.from(confirmedBooks.values()).map(b => ({
+          goodreads_id: b.goodreads_id,
+          title: b.title,
+          author: b.author,
+          sentiment: "positive",
+          creator_quote: "",
+        }));
+      } else {
+        dbg.log(`No books submitted after ${turn} turns`);
+        await dbg.flush();
+        if (input.captureToolCalls) {
+          return { books: [], diagnostics: { toolCalls: capturedToolCalls, submittedBooks: [], turns: turn, totalMs: Date.now() - agentStart } };
+        }
+        return [];
       }
-      return [];
     }
 
     // Convert submitted books to ResolvedBook format
