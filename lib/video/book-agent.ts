@@ -213,7 +213,20 @@ READING COVERS AND TEXT OVERLAYS:
 - Read book covers CHARACTER BY CHARACTER. Do not assume a title based on cover art style.
 - Text overlays often list books in a numbered format. Read each line carefully.
 - If a cover is partially obscured, search for your best guess of the visible text + the author name from the transcript.
-- Creators sometimes show a stack of books quickly. Each visible cover is a potential recommendation.`;
+- Creators sometimes show a stack of books quickly. Each visible cover is a potential recommendation.
+
+PHOTO/CAROUSEL POSTS:
+- Some posts are photo carousels (slideshows), not videos. The transcript will say "this is a photo/carousel post."
+- Each image is a separate slide — look at ALL of them for book covers, titles, or text overlays.
+- Carousel posts often have text overlays listing book titles and authors. Read these carefully.
+- Do NOT infer books from the creator's username or handle. "@abbysbooks" does NOT mean the book is by an author named Abby.
+- If the transcript is just background music lyrics (love songs, pop music), ignore it entirely and rely only on the images.
+
+ANTI-HALLUCINATION:
+- NEVER guess a book based on the creator's handle or username. The handle "@romancereads" tells you nothing about which specific books are shown.
+- If you can only see a partial or blurry cover and cannot read the title, do NOT guess. Skip that book.
+- Only submit books you can actually read the title of (from covers or text) or hear named in the transcript.
+- If you see a single ambiguous image with no readable text and no useful transcript, it is better to submit 0 books than to guess wrong.`;
 
 interface BookAgentInput {
   frames: (string | Buffer)[];
@@ -332,9 +345,14 @@ async function _identifyBooksWithAgentInternal(
     const handleNote = input.creatorHandle
       ? `Video by ${input.creatorHandle}.\n\n`
       : "";
+    const isCarousel = input.transcript.includes("photo/carousel post");
+    const mediaDescription = isCarousel
+      ? `These are ${frames.length} images from a BookTok photo/carousel post (slideshow). Each image is a separate slide. Look at ALL slides for book covers, titles, or text overlays.`
+      : `These are ${frames.length} sequential frames from a BookTok video. Below is the audio transcript.`;
+
     contentBlocks.push({
       type: "text",
-      text: `${handleNote}These are ${frames.length} sequential frames from a BookTok video. Below is the audio transcript.
+      text: `${handleNote}${mediaDescription}
 
 TRANSCRIPT:
 ${input.transcript.slice(0, 3000)}

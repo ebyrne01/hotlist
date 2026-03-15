@@ -221,7 +221,9 @@ export async function grabBooksFromVideo(
 
   // Prefer audio URL for transcription — fall back to video
   const mediaUrl = download.audioUrl ?? download.videoUrl;
-  if (!mediaUrl) {
+  const isCarousel = download.imageUrls.length > 0 && !download.videoUrl;
+
+  if (!mediaUrl && !isCarousel) {
     return { success: false, error: "video_unavailable" };
   }
 
@@ -233,6 +235,14 @@ export async function grabBooksFromVideo(
 
   const framePipeline = (async (): Promise<(string | Buffer)[]> => {
     const tFrames = Date.now();
+
+    // Photo/carousel posts: use slide images directly, skip ffmpeg
+    if (isCarousel) {
+      console.log(`[grab] Carousel post: using ${download.imageUrls.length} slide images directly`);
+      timing.frameExtractionMs = Date.now() - tFrames;
+      return download.imageUrls;
+    }
+
     const videoUrl = download.videoUrl;
     if (videoUrl) {
       onStatus?.("scanning");
@@ -252,8 +262,13 @@ export async function grabBooksFromVideo(
     return [];
   })();
 
+  // For carousel posts without audio, skip transcription
+  const transcriptionPipeline = mediaUrl
+    ? transcribeAudio(mediaUrl)
+    : Promise.resolve(null);
+
   const [transcription, frames] = await Promise.all([
-    transcribeAudio(mediaUrl),
+    transcriptionPipeline,
     framePipeline,
   ]);
   timing.transcriptionMs = Date.now() - tTranscribe;
@@ -263,6 +278,11 @@ export async function grabBooksFromVideo(
   if (!transcript && frames.length === 0) {
     return { success: false, error: "transcription_failed" };
   }
+
+  // For carousel posts, the transcript is usually just background music — not useful
+  const effectiveTranscript = isCarousel && frames.length > 0
+    ? "(no transcript available — this is a photo/carousel post. Identify books from the images only)"
+    : transcript || "(no transcript available — identify books from video frames only)";
 
   // Step 5: Single Sonnet agent call — vision + transcript + Goodreads tools
   onStatus?.("identifying");
@@ -275,7 +295,7 @@ export async function grabBooksFromVideo(
   if (debug) {
     const result = await identifyBooksWithAgentDebug({
       frames,
-      transcript: transcript || "(no transcript available — identify books from video frames only)",
+      transcript: effectiveTranscript,
       creatorHandle: creatorHandle ?? undefined,
       debugUrl: url,
     });
@@ -284,7 +304,7 @@ export async function grabBooksFromVideo(
   } else {
     resolved = await identifyBooksWithAgent({
       frames,
-      transcript: transcript || "(no transcript available — identify books from video frames only)",
+      transcript: effectiveTranscript,
       creatorHandle: creatorHandle ?? undefined,
       debugUrl: url,
     });

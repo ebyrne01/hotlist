@@ -13,6 +13,8 @@ export interface VideoDownloadResult {
   videoTitle: string | null;
   thumbnailUrl: string | null;
   durationSeconds: number | null;
+  /** For photo/carousel posts: direct URLs to each slide image */
+  imageUrls: string[];
 }
 
 /**
@@ -126,12 +128,21 @@ export async function getVideoDownloadUrl(
       medias.find((m) => m.type === "video" && !m.quality?.includes("watermark")) ??
       medias.find((m) => m.type === "video");
 
+    // Photo/carousel posts: collect all image URLs
+    const imageUrls = medias
+      .filter((m) => m.type === "image" && m.url)
+      .map((m) => m.url as string);
+
     const audioUrl = audioMedia?.url ?? null;
     const videoUrl = videoMedia?.url ?? null;
 
-    if (!audioUrl && !videoUrl) {
+    if (!audioUrl && !videoUrl && imageUrls.length === 0) {
       console.error("[downloader] No download URLs in response:", JSON.stringify(data).slice(0, 500));
       return null;
+    }
+
+    if (imageUrls.length > 0) {
+      console.log(`[downloader] Photo/carousel post detected: ${imageUrls.length} images`);
     }
 
     return {
@@ -146,6 +157,7 @@ export async function getVideoDownloadUrl(
       thumbnailUrl: data.thumbnail ?? null,
       durationSeconds:
         data.duration != null ? Math.round(data.duration / 1000) : null,
+      imageUrls,
     };
   } catch (err) {
     console.error("[downloader] Failed:", err);
