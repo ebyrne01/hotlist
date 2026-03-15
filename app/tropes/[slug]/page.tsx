@@ -1,9 +1,9 @@
 export const dynamic = "force-dynamic";
 
 import { getAdminClient } from "@/lib/supabase/admin";
-import BookCard from "@/components/books/BookCard";
 import { hydrateBookDetail } from "@/lib/books/cache";
 import type { BookDetail } from "@/lib/types";
+import TropeFilterClient from "./TropeFilterClient";
 
 interface TropePageProps {
   params: { slug: string };
@@ -37,6 +37,7 @@ export default async function TropePage({ params }: TropePageProps) {
     .eq("trope_id", trope.id);
 
   const books: BookDetail[] = [];
+  const relatedTropeMap = new Map<string, { slug: string; name: string; count: number }>();
 
   if (bookTropes && bookTropes.length > 0) {
     const bookIds = bookTropes.map((bt) => bt.book_id);
@@ -52,40 +53,58 @@ export default async function TropePage({ params }: TropePageProps) {
         books.push(await hydrateBookDetail(supabase, dbBook));
       }
     }
+
+    // Find related tropes (other tropes that appear on these books)
+    const { data: otherTropes } = await supabase
+      .from("book_tropes")
+      .select("trope_id, tropes(id, slug, name)")
+      .in("book_id", bookIds)
+      .neq("trope_id", trope.id);
+
+    if (otherTropes) {
+      for (const bt of otherTropes as Record<string, unknown>[]) {
+        const t = bt.tropes as Record<string, unknown> | null;
+        if (!t) continue;
+        const slug = t.slug as string;
+        if (!relatedTropeMap.has(slug)) {
+          relatedTropeMap.set(slug, {
+            slug,
+            name: t.name as string,
+            count: 0,
+          });
+        }
+        relatedTropeMap.get(slug)!.count++;
+      }
+    }
   }
 
-  return (
-    <div className="max-w-6xl mx-auto px-4 py-8">
-      <header className="mb-8">
-        <h1 className="font-display text-3xl sm:text-4xl font-bold text-ink italic">
-          {trope.name}
-        </h1>
-        {trope.description && (
-          <p className="mt-2 text-sm font-body text-muted max-w-lg">
-            {trope.description}
-          </p>
-        )}
-        <p className="mt-1 text-xs font-mono text-muted/60">
-          {books.length} book{books.length !== 1 ? "s" : ""} tagged
-        </p>
-      </header>
+  // Sort related tropes by frequency (most common first), take top 15
+  const relatedTropes = Array.from(relatedTropeMap.values())
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 15);
 
-      {books.length === 0 ? (
-        <div className="text-center py-16">
-          <p className="text-lg font-body text-muted">
-            No books tagged with {trope.name} yet
-          </p>
-          <p className="text-sm font-body text-muted/60 mt-2">
-            We&apos;re still tagging our library — check back soon!
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {books.map((book) => (
-            <BookCard key={book.id} book={book} layout="list" />
-          ))}
-        </div>
-      )}
-    </div>
+  // Shape initial books for client
+  const initialBooks = books.map((b) => ({
+    id: b.id,
+    title: b.title,
+    author: b.author,
+    slug: b.slug,
+    coverUrl: b.coverUrl,
+    goodreadsRating: b.ratings.find((r) => r.source === "goodreads")?.rating ?? null,
+    spiceLevel: b.compositeSpice?.score ? Math.round(b.compositeSpice.score) : null,
+    tropes: b.tropes.map((t) => t.name),
+  }));
+
+  return (
+    <TropeFilterClient
+      primaryTrope={{
+        slug: trope.slug as string,
+        name: trope.name as string,
+        description: (trope.description as string) ?? null,
+      }}
+      relatedTropes={relatedTropes}
+      initialBooks={initialBooks}
+      initialBookCount={books.length}
+    />
   );
 }
