@@ -311,7 +311,7 @@ Identify every book the creator is recommending or discussing. Use search_goodre
       try {
         response = await client.messages.create({
           model: MODEL,
-          max_tokens: 2048,
+          max_tokens: 8192,
           temperature: 0,
           system: SYSTEM_PROMPT,
           tools: TOOLS,
