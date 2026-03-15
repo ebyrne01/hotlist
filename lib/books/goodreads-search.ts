@@ -76,6 +76,29 @@ function wordOverlap(a: string, b: string): number {
   return matches / wordsA.length;
 }
 
+/** Patterns that indicate a study guide, summary, or non-original-work listing */
+const JUNK_TITLE_PATTERNS = [
+  /^study guide:/i,
+  /^summary\b/i,
+  /\bstudy guide\b/i,
+  /\bcollection set\b/i,
+  /\bbooks collection\b/i,
+  /\bbook set\b/i,
+  /\bconversation starters\b/i,
+  /\bcritic view\b/i,
+  /\bliterary analysis\b/i,
+  /\bstudent workbook\b/i,
+  /\breading guide\b/i,
+  /\bdiscussion resource\b/i,
+  /\bfigurine\b/i,
+  /\bbookmark\b/i,
+];
+
+/** Returns true if a title looks like a study guide, summary, or box set — not the actual book */
+function isJunkSearchResult(title: string): boolean {
+  return JUNK_TITLE_PATTERNS.some(p => p.test(title));
+}
+
 // ── Search ────────────────────────────────────────────
 
 /**
@@ -158,7 +181,11 @@ export async function searchGoodreads(
     });
   });
 
-  return results;
+  // Filter out study guides, summaries, and box sets — keep only real books
+  const filtered = results.filter(r => !isJunkSearchResult(r.title));
+
+  // If filtering removed everything, return unfiltered (better than empty)
+  return filtered.length > 0 ? filtered : results;
 }
 
 // ── Book detail ───────────────────────────────────────

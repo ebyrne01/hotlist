@@ -156,7 +156,61 @@ SEARCH STRATEGY when a search returns 0 results:
 - You may have the title wrong. Try the AUTHOR NAME ALONE (e.g. "Katie Reus") — this often surfaces the right book.
 - Try partial or alternate title spellings. Video audio can be misheard — "Ancients Rising" might be "Ancient Protector".
 - Try shorter queries: just the most distinctive word + author.
-- Do NOT repeat the same failing query with minor keyword changes — change your approach entirely.`;
+- Do NOT repeat the same failing query with minor keyword changes — change your approach entirely.
+
+// Examples sourced from BookTok test harness baseline run (March 2026)
+// Update when new failure patterns are identified
+
+KNOWN WHISPER ERRORS — the transcript may contain these garbled versions:
+- "Sara J. Mass" or "Sarah J. Moss" → Author is Sarah J. Maas
+- "Rebecca Yarrows" or "Rebecca Yarrose" or "Rebecca Yaros" → Author is Rebecca Yarros
+- "Anna Wong" or "Ana Wong" → Author is Ana Huang
+- "HD Carlton" → Author is H.D. Carlton (use periods in initials)
+- "Kayleen Hoover" or "Colleen Hover" → Author is Colleen Hoover
+- "Kristen Hanna" → Author is Kristin Hannah
+- "McKaylee Smeltzer" or "Micalee Smeltzer" → Author is Micalea Smeltzer
+- "Rachel Gillick" or "Rachel Gillik" → Author is Rachel Gillig
+- "Kristen Cicirelli" or "Kristen Chiccarelli" → Author is Kristen Ciccarelli
+- "Cynlyn Yu" or "Sinlin Yu" → Author is SenLinYu
+- "Debney Perry" → Author is Devney Perry
+- "Court of Thorns and Roses" → Full title is "A Court of Thorns and Roses" (don't drop the article "A")
+- "On a Storm" or "Onyx Store" → Book is "Onyx Storm" by Rebecca Yarros
+- "Iron Frame" → Book is "Iron Flame" by Rebecca Yarros
+- "The Night in the Moth" → Book is "The Knight and the Moth" by Rachel Gillig
+- "Rose and Chains" → Book is "Rose in Chains" by Julie Soto
+- "Infantness of Yesterday" → Book is "The Infiniteness of Yesterday" by Micalea Smeltzer
+- "Alchemized" or "Alchemist" → Book may be "Alchemised" by SenLinYu
+When the transcript contains garbled names, search Goodreads with the CORRECTED version.
+
+COMMON BOOKTOK ABBREVIATIONS — creators use these shorthand names:
+- "ACOTAR" → "A Court of Thorns and Roses" by Sarah J. Maas (Book 1 of the series)
+- "ACOSF" → "A Court of Silver Flames" by Sarah J. Maas (Book 5)
+- "FBAA" → "From Blood and Ash" by Jennifer L. Armentrout
+- "TOG" → "Throne of Glass" by Sarah J. Maas
+- "KOA" → "Kingdom of Ash" by Sarah J. Maas
+- "CC" → "House of Earth and Blood" by Sarah J. Maas (Crescent City Book 1)
+- "TLH" → "The Love Hypothesis" by Ali Hazelwood
+When you hear an abbreviation, search for the full title on Goodreads.
+
+SERIES HANDLING — critical patterns:
+- When a creator says "you HAVE to read [series name]" → find Book 1
+- When a creator holds up Book 3 of a series → still recommend Book 1 unless they specifically say "start with Book 3"
+- When a creator says "I just finished [Book 5]" → they may be recommending the series (Book 1) OR specifically that book. Use context to decide.
+- When a creator says they gave a specific book 5 stars, extract THAT specific book, not Book 1 of its series.
+- Verify series position with confirm_book BEFORE submitting.
+
+DO NOT EXTRACT — these are NOT book recommendations:
+- Brief comparisons: "it's like a dark Twilight" → do NOT extract Twilight
+- Author mentions without a specific book: "anything by Emily Henry" → do NOT extract
+- DNF/negative mentions: "I DNF'd this at chapter 3" → do NOT extract
+- Planners, journals, bookmarks, candles, or non-book products shown on screen
+- Audiobook platform mentions: "I listened on Audible" → do NOT extract "Audible"
+
+READING COVERS AND TEXT OVERLAYS:
+- Read book covers CHARACTER BY CHARACTER. Do not assume a title based on cover art style.
+- Text overlays often list books in a numbered format. Read each line carefully.
+- If a cover is partially obscured, search for your best guess of the visible text + the author name from the transcript.
+- Creators sometimes show a stack of books quickly. Each visible cover is a potential recommendation.`;
 
 interface BookAgentInput {
   frames: (string | Buffer)[];
