@@ -53,6 +53,9 @@ const MODEL = "claude-sonnet-4-6";
 /** Max frames to send to the agent — more frames = slower + more expensive */
 const MAX_AGENT_FRAMES = 8;
 
+/** Time budget for the agent loop (ms). After this, the agent will be asked to submit immediately. */
+const AGENT_TIME_BUDGET_MS = 180_000; // 3 minutes — leaves headroom within the 5-min Vercel timeout
+
 const TOOLS: Anthropic.Messages.Tool[] = [
   {
     name: "search_goodreads",
@@ -291,6 +294,16 @@ Identify every book the creator is recommending or discussing. Use search_goodre
     while (turn < maxTurns && !submittedBooks) {
       turn++;
       const turnStart = Date.now();
+      const elapsed = turnStart - agentStart;
+
+      // If we're running low on time, ask the agent to submit what it has NOW
+      if (elapsed > AGENT_TIME_BUDGET_MS && turn > 2) {
+        dbg.log(`Time budget exceeded (${elapsed}ms > ${AGENT_TIME_BUDGET_MS}ms) at turn ${turn}. Requesting immediate submission.`);
+        messages = [
+          ...messages,
+          { role: "user", content: "TIME LIMIT REACHED. You must call submit_books NOW with whatever books you have verified so far. Do not make any more search or confirm calls." },
+        ];
+      }
 
       dbg.log(`Turn ${turn}: sending request (${messages.length} messages)...`);
 
@@ -473,41 +486,41 @@ Identify every book the creator is recommending or discussing. Use search_goodre
 async function resolveSubmittedBooks(
   books: SubmittedBook[]
 ): Promise<ResolvedBook[]> {
-  const results: ResolvedBook[] = [];
+  // Resolve all books in parallel (was sequential — bottleneck for 30+ book hauls)
+  const resolvedAll = await Promise.all(
+    books.map(async (book): Promise<ResolvedBook | null> => {
+      const base = {
+        creatorSentiment: book.sentiment,
+        creatorQuote: book.creator_quote,
+        confidence: "high" as const,
+      };
 
-  for (const book of books) {
-    const base = {
-      creatorSentiment: book.sentiment,
-      creatorQuote: book.creator_quote,
-      confidence: "high" as const,
-    };
-
-    // Skip junk
-    if (isJunkTitle(book.title)) {
-      console.log(`[book-agent] Skipping junk: "${book.title}"`);
-      continue;
-    }
-
-    if (book.goodreads_id) {
-      const detail = await getBookDetail(book.goodreads_id);
-      if (detail) {
-        results.push({
-          matched: true,
-          book: detail,
-          ...base,
-        } as ResolvedBookMatched);
-        continue;
+      if (isJunkTitle(book.title)) {
+        console.log(`[book-agent] Skipping junk: "${book.title}"`);
+        return null;
       }
-    }
 
-    // Unmatched fallback
-    results.push({
-      matched: false,
-      rawTitle: book.title,
-      rawAuthor: book.author || null,
-      ...base,
-    } as ResolvedBookUnmatched);
-  }
+      if (book.goodreads_id) {
+        const detail = await getBookDetail(book.goodreads_id);
+        if (detail) {
+          return {
+            matched: true,
+            book: detail,
+            ...base,
+          } as ResolvedBookMatched;
+        }
+      }
+
+      return {
+        matched: false,
+        rawTitle: book.title,
+        rawAuthor: book.author || null,
+        ...base,
+      } as ResolvedBookUnmatched;
+    })
+  );
+
+  const results = resolvedAll.filter((r): r is ResolvedBook => r !== null);
 
   // Dedup by goodreads_id
   const seen = new Set<string>();
