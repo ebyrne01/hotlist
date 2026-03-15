@@ -116,7 +116,27 @@ export async function searchBooksInCache(query: string): Promise<BookDetail[]> {
     }
   }
 
+  // If exact queries returned nothing, try fuzzy (trigram) search for typo tolerance
+  // e.g. "armentraut" → matches "Armentrout" via pg_trgm similarity
+  if (allBooks.length === 0) {
+    const { data: fuzzyResults } = await supabase.rpc("fuzzy_book_search", {
+      search_query: trimmed,
+      result_limit: 15,
+    });
+
+    if (fuzzyResults && fuzzyResults.length > 0) {
+      for (const book of fuzzyResults as Record<string, unknown>[]) {
+        const id = book.id as string;
+        if (!seen.has(id)) {
+          seen.add(id);
+          allBooks.push(book);
+        }
+      }
+    }
+  }
+
   if (allBooks.length === 0) return [];
+
 
   // Detect if the query looks like an author name (2-3 words, no common title words)
   const TITLE_NOISE = new Set(["the", "of", "and", "a", "an", "in", "to", "for", "is", "on", "at", "by"]);
