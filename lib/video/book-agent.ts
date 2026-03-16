@@ -244,6 +244,8 @@ interface BookAgentInput {
   creatorHandle?: string;
   debugUrl?: string;
   captureToolCalls?: boolean;
+  /** Pre-extracted series hints from Haiku preprocessing (series mode) */
+  seriesHints?: { seriesName: string; author: string; bookCount?: number }[];
 }
 
 export interface AgentToolCall {
@@ -360,12 +362,29 @@ async function _identifyBooksWithAgentInternal(
       ? `These are ${frames.length} images from a BookTok photo/carousel post (slideshow). Each image is a separate slide. Look at ALL slides for book covers, titles, or text overlays.`
       : `These are ${frames.length} sequential frames from a BookTok video. Below is the audio transcript.`;
 
+    // Build series mode instructions if we have pre-extracted series hints
+    let seriesInstructions = "";
+    if (input.seriesHints && input.seriesHints.length > 0) {
+      const seriesList = input.seriesHints
+        .map((s) => `- "${s.seriesName}"${s.author ? ` by ${s.author}` : ""}${s.bookCount ? ` (${s.bookCount} books)` : ""}`)
+        .join("\n");
+      seriesInstructions = `
+
+SERIES MODE — This video recommends complete series/trilogies. The following series were identified from the transcript:
+${seriesList}
+
+YOUR TASK: Find ALL individual books in each series on Goodreads. Do NOT submit just Book 1 — submit every book.
+STRATEGY: For each series, search for the series name + author. Confirm Book 1 to get the exact series name, then search for "Book 2 [series name]", "Book 3 [series name]", etc. Confirm each book to verify it belongs to the series.
+EFFICIENCY: Search for ALL series in your first turn. Then confirm all Book 1s. Then search for remaining books in each series. Batch aggressively.`;
+    }
+
     contentBlocks.push({
       type: "text",
       text: `${handleNote}${mediaDescription}
 
 TRANSCRIPT:
 ${input.transcript.slice(0, 3000)}
+${seriesInstructions}
 
 Identify every book the creator is recommending or discussing. Use search_goodreads to verify each one, then call submit_books with your final list. IMPORTANT: Batch all search_goodreads calls into a single turn for efficiency.`,
     });

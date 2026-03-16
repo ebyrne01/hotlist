@@ -21,6 +21,7 @@ import { transcribeAudio } from "./transcription";
 import { extractFrames } from "./frame-extractor";
 import { identifyBooksWithAgent, identifyBooksWithAgentDebug, type AgentDiagnostics } from "./book-agent";
 import type { ResolvedBook } from "./book-resolver";
+import { preprocessTranscript } from "./transcript-preprocessor";
 import { queueEnrichmentJobs } from "@/lib/enrichment/queue";
 import { processEnrichmentQueue } from "@/lib/enrichment/worker";
 import { registerCreatorMentions } from "@/lib/creators/register";
@@ -310,9 +311,16 @@ async function grabPipeline(
     ? "(no transcript available — this is a photo/carousel post. Identify books from the images only)"
     : transcript || "(no transcript available — identify books from video frames only)";
 
+  // Step 4b: Preprocess transcript — apply Whisper corrections + detect series mode
+  const preprocessed = transcript
+    ? await preprocessTranscript(effectiveTranscript)
+    : { correctedText: effectiveTranscript, isSeriesVideo: false, seriesHints: [] };
+
+  const agentTranscript = preprocessed.correctedText;
+
   // Step 5: Single Sonnet agent call — vision + transcript + Goodreads tools
   onStatus?.("identifying");
-  console.log(`[grab] Starting book agent with ${frames.length} frames and ${transcript.length} chars of transcript`);
+  console.log(`[grab] Starting book agent with ${frames.length} frames and ${agentTranscript.length} chars of transcript (series mode: ${preprocessed.isSeriesVideo}, hints: ${preprocessed.seriesHints.length})`);
   const tAgent = Date.now();
 
   let resolved: ResolvedBook[];
@@ -321,18 +329,20 @@ async function grabPipeline(
   if (debug) {
     const result = await identifyBooksWithAgentDebug({
       frames,
-      transcript: effectiveTranscript,
+      transcript: agentTranscript,
       creatorHandle: creatorHandle ?? undefined,
       debugUrl: url,
+      seriesHints: preprocessed.seriesHints,
     });
     resolved = result.books;
     agentDiag = result.diagnostics;
   } else {
     resolved = await identifyBooksWithAgent({
       frames,
-      transcript: effectiveTranscript,
+      transcript: agentTranscript,
       creatorHandle: creatorHandle ?? undefined,
       debugUrl: url,
+      seriesHints: preprocessed.seriesHints,
     });
   }
   timing.agentIdentificationMs = Date.now() - tAgent;
