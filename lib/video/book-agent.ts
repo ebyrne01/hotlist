@@ -54,7 +54,7 @@ const MODEL = "claude-sonnet-4-6";
 const MAX_AGENT_FRAMES = 8;
 
 /** Time budget for the agent loop (ms). After this, the agent will be asked to submit immediately. */
-const AGENT_TIME_BUDGET_MS = 180_000; // 3 minutes — leaves headroom within the 5-min Vercel timeout
+const AGENT_TIME_BUDGET_MS = 220_000; // 3m 40s — leaves headroom within the 4.5-min pipeline timeout
 
 const TOOLS: Anthropic.Messages.Tool[] = [
   {
@@ -392,7 +392,7 @@ Identify every book the creator is recommending or discussing. Use search_goodre
     // Agentic loop — process tool calls until submit_books is called
     let messages: Anthropic.Messages.MessageParam[] = [{ role: "user", content: contentBlocks }];
     let submittedBooks: SubmittedBook[] | null = null;
-    const maxTurns = 10; // Safety limit
+    const maxTurns = 20; // Safety limit — time budget is the real limiter
     let turn = 0;
 
     // Track confirmed books as fallback if the agent never calls submit_books

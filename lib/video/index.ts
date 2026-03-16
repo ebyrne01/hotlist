@@ -189,8 +189,8 @@ function normalizeUrl(url: string): string {
  * 5. Queue enrichment for matched books
  * 6. Cache result
  */
-/** Pipeline timeout: 4 minutes (leaves margin before Vercel's 5-min limit) */
-const PIPELINE_TIMEOUT_MS = 4 * 60 * 1000;
+/** Pipeline timeout: 4.5 minutes (leaves margin before Vercel's 5-min limit) */
+const PIPELINE_TIMEOUT_MS = 270_000;
 
 export async function grabBooksFromVideo(
   url: string,
