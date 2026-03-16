@@ -41,6 +41,7 @@ NEXT_PUBLIC_APP_URL=
 SERPER_API_KEY=                # from serper.dev — Google search API for romance.io spice + Amazon ratings
 RAPIDAPI_KEY=                  # from rapidapi.com — video downloader for BookTok
 RAPIDAPI_VIDEO_HOST=           # specific host for chosen downloader API
+RAPIDAPI_TIKTOK_HOST=          # optional — specialized TikTok downloader API host (e.g. tiktok-downloader...p.rapidapi.com)
 OPENAI_API_KEY=                # from platform.openai.com — Whisper transcription
 CRON_SECRET=                   # shared secret for Vercel cron job auth
 SPICE_LLM_DAILY_LIMIT=        # optional, default 100 — max LLM spice inferences per day
