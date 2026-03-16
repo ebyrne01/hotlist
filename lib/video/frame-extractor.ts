@@ -24,11 +24,11 @@ const readdir = promisify(fs.readdir);
 const mkdir = promisify(fs.mkdir);
 const rm = promisify(fs.rm);
 
-/** Max frames to extract (cost control — each frame ≈ $0.003-0.005 in Sonnet vision) */
-const MAX_FRAMES = 20;
+/** Max frames to extract — more frames = better coverage of fast-moving haul videos */
+const MAX_FRAMES = 30;
 
-/** Extract 1 frame every N seconds */
-const FRAME_INTERVAL_SECONDS = 2;
+/** Extract 1 frame every N seconds (1 = every second, catches fast-scrolling titles) */
+const FRAME_INTERVAL_SECONDS = 1;
 
 /** Resize frames to this width (pixels) — higher res = better OCR on book covers */
 const FRAME_WIDTH = 768;

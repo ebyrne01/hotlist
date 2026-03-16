@@ -52,8 +52,8 @@ class AgentDebugLog {
 
 const MODEL = "claude-sonnet-4-6";
 
-/** Max frames to send to the agent — more frames = slower + more expensive */
-const MAX_AGENT_FRAMES = 8;
+/** Max frames to send to the agent — 16 covers most 30s haul videos at 1fps */
+const MAX_AGENT_FRAMES = 16;
 
 /** Time budget for the agent loop (ms). After this, the agent will be asked to submit immediately. */
 const AGENT_TIME_BUDGET_MS = 220_000; // 3m 40s — leaves headroom within the 4.5-min pipeline timeout
