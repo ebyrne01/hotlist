@@ -7,7 +7,13 @@
       "maxDuration": 120
     },
     "app/api/cron/enrichment-worker/route.ts": {
-      "maxDuration": 60
+      "maxDuration": 300
+    },
+    "app/api/cron/seed-lists/route.ts": {
+      "maxDuration": 300
+    },
+    "app/api/cron/openlibrary-discovery/route.ts": {
+      "maxDuration": 300
     }
   },
   "crons": [
@@ -21,15 +27,15 @@
     },
     {
       "path": "/api/cron/seed-lists",
-      "schedule": "0 6 * * 0"
+      "schedule": "0 6 * * *"
     },
     {
       "path": "/api/cron/openlibrary-discovery",
-      "schedule": "0 4 * * 3"
+      "schedule": "0 4 * * *"
     },
     {
       "path": "/api/cron/enrichment-worker",
-      "schedule": "*/5 * * * *"
+      "schedule": "*/2 * * * *"
     },
     {
       "path": "/api/cron/spice-backfill",
@@ -38,6 +44,14 @@
     {
       "path": "/api/cron/refresh-spice",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/new-releases-discovery",
+      "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/author-expansion",
+      "schedule": "0 3 * * 1"
     }
   ]
 }

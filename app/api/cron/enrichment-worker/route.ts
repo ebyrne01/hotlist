@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { processEnrichmentQueue } from "@/lib/enrichment/worker";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300; // Vercel Pro: up to 300s
 
 export async function GET(request: Request) {
   // Verify cron secret to prevent unauthorized access
@@ -12,8 +12,8 @@ export async function GET(request: Request) {
   }
 
   try {
-    // 50s time budget (10s buffer for Vercel's 60s limit)
-    const result = await processEnrichmentQueue(50_000);
+    // 240s time budget (60s buffer for Vercel's 300s Pro limit)
+    const result = await processEnrichmentQueue(240_000);
     return NextResponse.json(result);
   } catch (error) {
     console.error("[cron/enrichment-worker] Fatal error:", error);

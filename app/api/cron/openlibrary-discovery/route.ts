@@ -16,9 +16,9 @@ import {
 } from "@/lib/books/open-library-discovery";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 300; // Vercel Pro
 
-const TIME_BUDGET_MS = 55_000;
+const TIME_BUDGET_MS = 240_000;
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");

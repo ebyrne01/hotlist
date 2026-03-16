@@ -31,7 +31,9 @@ import { runAuthorCrawl } from "@/lib/books/author-crawl";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-const JOB_DELAY_MS = 500; // Delay between jobs to respect rate limits
+const JOB_DELAY_MS = 300; // Delay between jobs to respect rate limits
+const CONCURRENCY = 3; // Max parallel jobs within a tier
+const STUCK_JOB_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes — reset jobs stuck in "running"
 
 /**
  * Fetch genres for a book and upsert a genre_bucketing spice signal.
@@ -72,13 +74,46 @@ async function upsertGenreBucketing(supabase: SupabaseClient, bookId: string) {
 }
 
 /**
+ * Reset jobs stuck in "running" for longer than STUCK_JOB_THRESHOLD_MS.
+ * This handles workers that crashed mid-job (Vercel timeout, OOM, etc.).
+ */
+async function recoverStuckJobs(): Promise<number> {
+  const supabase = getAdminClient();
+  const cutoff = new Date(Date.now() - STUCK_JOB_THRESHOLD_MS).toISOString();
+
+  const { data, error } = await supabase
+    .from("enrichment_queue")
+    .update({
+      status: "pending",
+      error_message: "auto-recovered: stuck in running state",
+      next_retry_at: new Date().toISOString(),
+    })
+    .eq("status", "running")
+    .lt("updated_at", cutoff)
+    .select("id");
+
+  if (error) {
+    console.warn("[enrichment-worker] Failed to recover stuck jobs:", error.message);
+    return 0;
+  }
+
+  const count = data?.length ?? 0;
+  if (count > 0) {
+    console.log(`[enrichment-worker] Recovered ${count} stuck jobs`);
+  }
+  return count;
+}
+
+/**
  * Process pending enrichment jobs in priority order.
  * Tier 1 (ratings + spice) runs first, then tier 2 (tropes + reviews),
  * then tier 3 (metadata + synopsis). Newest jobs first within each tier.
+ *
+ * Jobs within a tier run in parallel (up to CONCURRENCY at once).
  */
 export async function processEnrichmentQueue(
   timeBudgetMs: number = 50_000
-): Promise<{ processed: number; failed: number }> {
+): Promise<{ processed: number; failed: number; recovered: number }> {
   const startTime = Date.now();
   let processed = 0;
   let failed = 0;
@@ -87,37 +122,49 @@ export async function processEnrichmentQueue(
     return timeBudgetMs - (Date.now() - startTime);
   }
 
+  // Auto-recover stuck jobs before processing
+  const recovered = await recoverStuckJobs();
+
   // Process each priority tier in order
   for (const tier of JOB_TYPE_PRIORITY) {
     if (timeLeft() < 5000) break;
 
     while (timeLeft() > 5000) {
-      // Atomically claim jobs — prevents race conditions between concurrent workers
-      const jobs = await claimJobs(5, tier);
+      // Claim a batch of jobs for this tier
+      const jobs = await claimJobs(CONCURRENCY, tier);
       if (jobs.length === 0) break;
 
-      for (const job of jobs) {
-        if (timeLeft() < 5000) break;
+      // Process the batch in parallel
+      const results = await Promise.allSettled(
+        jobs.map(async (job) => {
+          try {
+            await processJob(job);
+            await markJobCompleted(job.id);
+            await updateBookEnrichmentStatus(job.book_id);
+            return { success: true } as const;
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            await markJobFailed(job.id, msg, job.attempts);
+            console.warn(`[enrichment-worker] Job ${job.job_type} failed for "${job.book_title}": ${msg}`);
+            return { success: false } as const;
+          }
+        })
+      );
 
-        try {
-          await processJob(job);
-          await markJobCompleted(job.id);
-          await updateBookEnrichmentStatus(job.book_id);
+      for (const r of results) {
+        if (r.status === "fulfilled" && r.value.success) {
           processed++;
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          await markJobFailed(job.id, msg, job.attempts);
+        } else {
           failed++;
-          console.warn(`[enrichment-worker] Job ${job.job_type} failed for "${job.book_title}": ${msg}`);
         }
-
-        // Small delay between jobs
-        await new Promise((r) => setTimeout(r, JOB_DELAY_MS));
       }
+
+      // Small delay between batches to respect rate limits
+      await new Promise((r) => setTimeout(r, JOB_DELAY_MS));
     }
   }
 
-  return { processed, failed };
+  return { processed, failed, recovered };
 }
 
 /**
