@@ -1,8 +1,14 @@
 /**
  * Video Downloader — RapidAPI integration
  *
- * Given a TikTok, Instagram, or YouTube URL, returns a direct
- * URL to the video/audio file via a third-party RapidAPI service.
+ * Platform-specific downloaders for reliability, with all-in-one fallback.
+ *
+ * TikTok: specialized API (RAPIDAPI_TIKTOK_HOST) → all-in-one fallback
+ * Instagram/YouTube: all-in-one only (for now)
+ *
+ * The specialized TikTok downloader connects directly to TikTok's backend
+ * and returns full-length videos, avoiding the truncation issues common
+ * with all-in-one downloaders' re-encoded no-watermark versions.
  */
 
 export interface VideoDownloadResult {
@@ -61,12 +67,10 @@ function extractCreatorHandle(url: string, platform: string): string | null {
 }
 
 /**
- * Download video/audio URL via RapidAPI.
+ * Main entry point — download video/audio URL via RapidAPI.
  *
- * Supports "social-download-all-in-one" API (POST /v1/social/autolink).
- * Response contains a `medias` array with video/audio download links.
- *
- * Returns null on any failure — never throws.
+ * For TikTok: tries specialized downloader first, then falls back to all-in-one.
+ * For other platforms: uses all-in-one directly.
  */
 export async function getVideoDownloadUrl(
   url: string
@@ -78,14 +82,200 @@ export async function getVideoDownloadUrl(
   }
 
   const apiKey = process.env.RAPIDAPI_KEY;
-  const apiHost =
-    process.env.RAPIDAPI_VIDEO_HOST ??
-    "social-download-all-in-one.p.rapidapi.com";
-
   if (!apiKey) {
     console.error("[downloader] Missing RAPIDAPI_KEY");
     return null;
   }
+
+  // TikTok: try specialized downloader first
+  if (platform === "tiktok") {
+    const tiktokHost = process.env.RAPIDAPI_TIKTOK_HOST;
+    if (tiktokHost) {
+      console.log(`[downloader] Trying specialized TikTok API: ${tiktokHost}`);
+      const result = await downloadViaTikTokApi(url, apiKey, tiktokHost);
+      if (result) {
+        console.log(`[downloader] Specialized TikTok API succeeded: video=${!!result.videoUrl}, audio=${!!result.audioUrl}, duration=${result.durationSeconds}s`);
+        return result;
+      }
+      console.warn("[downloader] Specialized TikTok API failed, falling back to all-in-one");
+    }
+  }
+
+  // All platforms: all-in-one downloader
+  return downloadViaAllInOne(url, platform, apiKey);
+}
+
+/**
+ * Specialized TikTok downloader.
+ *
+ * Supports two common API patterns:
+ * - GET /getVideo?url=... (tikwm-style APIs)
+ * - GET /?url=... (7scorp-style APIs)
+ *
+ * Both return JSON with video download URLs. The response format varies
+ * but we handle the common patterns.
+ */
+async function downloadViaTikTokApi(
+  url: string,
+  apiKey: string,
+  apiHost: string
+): Promise<VideoDownloadResult | null> {
+  const platform = "tiktok" as const;
+  const creatorHandle = extractCreatorHandle(url, platform);
+
+  try {
+    // Try the common endpoint patterns
+    const endpoints = [
+      `https://${apiHost}/getVideo?url=${encodeURIComponent(url)}`,
+      `https://${apiHost}/?url=${encodeURIComponent(url)}`,
+      `https://${apiHost}/dl?url=${encodeURIComponent(url)}`,
+    ];
+
+    let data: Record<string, unknown> | null = null;
+
+    for (const endpoint of endpoints) {
+      try {
+        const response = await fetch(endpoint, {
+          method: "GET",
+          headers: {
+            "x-rapidapi-key": apiKey,
+            "x-rapidapi-host": apiHost,
+          },
+        });
+
+        if (response.ok) {
+          data = await response.json();
+          console.log(`[downloader] TikTok API responded from: ${endpoint.split("?")[0]}`);
+          break;
+        }
+
+        // 404 means wrong endpoint, try next
+        if (response.status === 404) continue;
+
+        // Other errors: log and try next
+        console.warn(`[downloader] TikTok API ${response.status} from ${endpoint.split("?")[0]}`);
+      } catch {
+        continue;
+      }
+    }
+
+    if (!data) return null;
+
+    // Parse the response — handle common TikTok downloader formats
+    return parseTikTokResponse(data, platform, creatorHandle);
+  } catch (err) {
+    console.error("[downloader] TikTok API failed:", err);
+    return null;
+  }
+}
+
+/**
+ * Parse TikTok API response — handles multiple common formats:
+ *
+ * Format A (tikwm-style): { data: { play, hdplay, wmplay, music, title, duration, ... } }
+ * Format B (7scorp-style): { video: ["url1", "url2"], audio: "url", title, ... }
+ * Format C (flat): { video_url, audio_url, title, duration, ... }
+ */
+function parseTikTokResponse(
+  raw: Record<string, unknown>,
+  platform: "tiktok",
+  creatorHandle: string | null
+): VideoDownloadResult | null {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const data = raw as any;
+
+  let videoUrl: string | null = null;
+  let audioUrl: string | null = null;
+  let title: string | null = null;
+  let thumbnail: string | null = null;
+  let durationSeconds: number | null = null;
+  const allVideoUrls: string[] = [];
+  const imageUrls: string[] = [];
+
+  // Format A: { data: { play, hdplay, wmplay, music, ... } }
+  if (data.data && typeof data.data === "object") {
+    const d = data.data;
+    // Prefer hdplay (HD no watermark) > play (SD no watermark) > wmplay (watermarked)
+    videoUrl = d.hdplay || d.play || d.wmplay || null;
+    if (d.hdplay) allVideoUrls.push(d.hdplay);
+    if (d.play && d.play !== d.hdplay) allVideoUrls.push(d.play);
+    if (d.wmplay) allVideoUrls.push(d.wmplay);
+    audioUrl = d.music || d.music_info?.play || null;
+    title = d.title || null;
+    thumbnail = d.origin_cover || d.cover || null;
+    durationSeconds = d.duration != null ? Math.round(Number(d.duration)) : null;
+    // Carousel/slideshow images
+    if (Array.isArray(d.images)) {
+      for (const img of d.images) {
+        if (typeof img === "string") imageUrls.push(img);
+        else if (img?.url) imageUrls.push(img.url);
+      }
+    }
+  }
+  // Format B: { video: [...], audio: "...", ... }
+  else if (data.video || data.video_url || data.videoUrl) {
+    const videos = data.video;
+    if (Array.isArray(videos)) {
+      for (const v of videos) {
+        if (typeof v === "string") allVideoUrls.push(v);
+        else if (v?.url) allVideoUrls.push(v.url);
+      }
+      videoUrl = allVideoUrls[0] ?? null;
+    } else {
+      videoUrl = (typeof videos === "string" ? videos : null)
+        ?? data.video_url ?? data.videoUrl ?? null;
+      if (videoUrl) allVideoUrls.push(videoUrl);
+    }
+    audioUrl = data.audio ?? data.audio_url ?? data.audioUrl ?? data.music ?? null;
+    title = data.title ?? data.desc ?? null;
+    thumbnail = data.thumbnail ?? data.cover ?? data.origin_cover ?? null;
+    durationSeconds = data.duration != null ? Math.round(Number(data.duration)) : null;
+  }
+  // Format C: response has a nested result
+  else if (data.result && typeof data.result === "object") {
+    return parseTikTokResponse(data.result as Record<string, unknown>, platform, creatorHandle);
+  }
+
+  if (!videoUrl && !audioUrl && imageUrls.length === 0) {
+    console.warn("[downloader] TikTok API: no usable URLs in response, keys:", Object.keys(data).join(", "));
+    return null;
+  }
+
+  // Extract handle from response if available
+  const responseHandle = data.data?.author?.unique_id
+    ?? data.author?.unique_id
+    ?? data.unique_id
+    ?? null;
+
+  console.log(`[downloader] TikTok API parsed: ${allVideoUrls.length} video URLs, duration=${durationSeconds}s, images=${imageUrls.length}`);
+
+  return {
+    audioUrl,
+    videoUrl,
+    platform,
+    creatorHandle: creatorHandle ?? (responseHandle ? `@${responseHandle}` : null),
+    videoTitle: title,
+    thumbnailUrl: thumbnail,
+    durationSeconds,
+    imageUrls,
+    allVideoUrls,
+  };
+}
+
+/**
+ * All-in-one downloader (current approach).
+ *
+ * Uses "social-download-all-in-one" API (POST /v1/social/autolink).
+ * Works for TikTok, Instagram, YouTube.
+ */
+async function downloadViaAllInOne(
+  url: string,
+  platform: "tiktok" | "instagram" | "youtube",
+  apiKey: string
+): Promise<VideoDownloadResult | null> {
+  const apiHost =
+    process.env.RAPIDAPI_VIDEO_HOST ??
+    "social-download-all-in-one.p.rapidapi.com";
 
   const creatorHandle = extractCreatorHandle(url, platform);
 
@@ -105,7 +295,7 @@ export async function getVideoDownloadUrl(
 
     if (!response.ok) {
       console.error(
-        `[downloader] RapidAPI returned ${response.status}:`,
+        `[downloader] All-in-one API returned ${response.status}:`,
         await response.text()
       );
       return null;
@@ -152,7 +342,7 @@ export async function getVideoDownloadUrl(
       console.log(`[downloader] Photo/carousel post detected: ${imageUrls.length} images`);
     }
 
-    console.log(`[downloader] Found ${allVideoUrls.length} video URLs, ${medias.length} total medias, qualities: ${medias.filter(m => m.type === "video").map(m => m.quality).join(", ")}`);
+    console.log(`[downloader] All-in-one: ${allVideoUrls.length} video URLs, qualities: ${medias.filter(m => m.type === "video").map(m => m.quality).join(", ")}`);
 
     return {
       audioUrl,
@@ -170,7 +360,7 @@ export async function getVideoDownloadUrl(
       allVideoUrls,
     };
   } catch (err) {
-    console.error("[downloader] Failed:", err);
+    console.error("[downloader] All-in-one failed:", err);
     return null;
   }
 }
