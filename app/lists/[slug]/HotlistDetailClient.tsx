@@ -333,6 +333,17 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
             </h1>
           )}
           <p className="text-xs font-mono text-muted mt-1">
+            {hotlist.sourceCreatorHandle && (
+              <>
+                <Link
+                  href={`/discover/${encodeURIComponent(hotlist.sourceCreatorHandle)}`}
+                  className="text-fire/70 hover:text-fire transition-colors"
+                >
+                  {hotlist.sourceCreatorHandle}
+                </Link>
+                {" · "}
+              </>
+            )}
             {books.length} {books.length === 1 ? "book" : "books"}
           </p>
         </div>

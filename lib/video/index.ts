@@ -92,6 +92,7 @@ export interface GrabResultSuccess {
   platform: "tiktok" | "instagram" | "youtube";
   creatorHandle: string | null;
   thumbnailUrl: string | null;
+  videoTitle: string | null;
   booksFound: number;
   books: ResolvedBook[];
   transcript: string;
@@ -125,6 +126,7 @@ export async function getCachedGrab(url: string): Promise<GrabResultSuccess | nu
     platform: data.platform as "tiktok" | "instagram" | "youtube",
     creatorHandle: data.creator_handle,
     thumbnailUrl: data.thumbnail_url,
+    videoTitle: data.video_title ?? null,
     booksFound: (data.extracted_books as ResolvedBook[])?.length ?? 0,
     books: (data.extracted_books as ResolvedBook[]) ?? [],
     transcript: data.transcript ?? "",
@@ -147,6 +149,7 @@ async function cacheGrabResult(
       platform: result.platform,
       creator_handle: result.creatorHandle,
       thumbnail_url: result.thumbnailUrl,
+      video_title: result.videoTitle,
       transcript: result.transcript,
       extracted_books: result.books as unknown as Record<string, unknown>[],
       user_id: userId ?? null,
@@ -370,6 +373,7 @@ export async function grabBooksFromVideo(
     platform,
     creatorHandle,
     thumbnailUrl: download.thumbnailUrl,
+    videoTitle: download.videoTitle ?? null,
     booksFound: resolved.length,
     books: resolved,
     transcript,

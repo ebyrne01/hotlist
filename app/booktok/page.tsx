@@ -200,10 +200,18 @@ function BookTokPageInner() {
 
       const isCreator = creatorProfile?.is_creator === true;
 
-      // Create a new hotlist named after the creator
-      const listName = result.creatorHandle
-        ? `${result.creatorHandle} picks`
-        : "Video picks";
+      // Use the video title/caption as the hotlist name, falling back to creator handle
+      // Strip hashtags and trim — TikTok captions often end with #booktok #romancebooks etc.
+      const cleanTitle = result.videoTitle
+        ?.replace(/#\S+/g, "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 100) || null;
+      const listName = cleanTitle
+        ? cleanTitle
+        : result.creatorHandle
+          ? `${result.creatorHandle} picks`
+          : "Video picks";
       const shareSlug =
         listName
           .toLowerCase()

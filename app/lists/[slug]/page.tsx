@@ -16,12 +16,18 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     return { title: "Hotlist Not Found" };
   }
 
+  const byline = hotlist.sourceCreatorHandle
+    ? `${hotlist.sourceCreatorHandle}'s`
+    : hotlist.ownerName
+      ? `${hotlist.ownerName}'s`
+      : "a reader's";
+
   return {
     title: `${hotlist.name} — Hotlist`,
-    description: `Check out ${hotlist.ownerName ?? "a reader"}'s Hotlist: ${hotlist.name} — ${hotlist.books.length} books compared`,
+    description: `Check out ${byline} Hotlist: ${hotlist.name} — ${hotlist.books.length} books compared`,
     openGraph: {
       title: `${hotlist.name} — Hotlist`,
-      description: `${hotlist.ownerName ?? "A reader"}'s Hotlist with ${hotlist.books.length} books compared side by side`,
+      description: `${byline} Hotlist with ${hotlist.books.length} books compared side by side`,
       type: "website",
     },
   };

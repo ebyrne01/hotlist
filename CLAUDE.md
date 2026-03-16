@@ -112,14 +112,14 @@ All tables in the public schema:
 | `book_tropes` | Junction: books ↔ tropes |
 | `user_ratings` | Per-user star_rating (1–5) + spice_rating (1–5) per book. DB trigger `trg_refresh_community_spice` auto-aggregates into spice_signals. |
 | `reading_status` | want_to_read / reading / read per user per book |
-| `hotlists` | User-created comparison lists |
+| `hotlists` | User-created comparison lists. BookTok grabs store `source_creator_handle`, `source_video_url`, `source_video_thumbnail`, `source_platform`. |
 | `hotlist_books` | Books within a hotlist (position, added_at) |
 | `profiles` | Extended user data. Creator fields: `is_creator`, `creator_verified_at`, `vanity_slug` (UNIQUE), `bio`, `tiktok_handle`, `instagram_handle`, `youtube_handle`, `blog_url`, `amazon_affiliate_tag`, `bookshop_affiliate_id` |
 | `creator_applications` | Self-serve creator verification requests. Status: pending → approved / rejected |
 | `analytics_events` | Lightweight event tracking (profile_view, affiliate_click, etc.) |
 | `homepage_cache` | Cached book ID lists for homepage rows (24h TTL) |
 | `nyt_trending` | NYT bestseller entries with rank + weeks_on_list |
-| `video_grabs` | BookTok pipeline cache — never process the same URL twice |
+| `video_grabs` | BookTok pipeline cache — never process the same URL twice. Stores `video_title` (TikTok caption) for hotlist naming. |
 | `grab_feedback` | User feedback on BookTok results (wrong_book, wrong_edition, missing_book). Anonymous inserts via RLS. |
 | `agent_debug_logs` | Debug traces from BookTok agent runs (url, log_entries JSONB) |
 | `creator_handles` | Auto-populated from video grabs. Tracks every BookTok creator. Unique on (handle, platform). |
@@ -192,9 +192,11 @@ All tables in the public schema:
 
 ## BookTok feature (formerly "Grab from Video")
 - Video download: RapidAPI (third-party TikTok/Instagram/YouTube downloader)
-- Transcription: OpenAI Whisper API (model: whisper-1) — NOT Claude
-- Frame extraction: ffmpeg via ffmpeg-static (up to 20 frames, subsampled to 8 for agent)
-- **Book identification: Single Claude Sonnet (`claude-sonnet-4-6`) agent with tool use — sees video frames, reads transcript, searches & confirms books on Goodreads in real time**
+- **Supports videos AND photo/carousel posts** (TikTok `/photo/` URLs with multiple slide images)
+- Transcription: OpenAI Whisper API (model: whisper-1) — NOT Claude. Skipped for carousel posts.
+- Frame extraction: ffmpeg for videos (up to 20 frames, subsampled to 8). Carousel posts use slide image URLs directly.
+- **Book identification: Single Claude Sonnet (`claude-sonnet-4-6`) agent with vision + tool use — reads covers, understands transcript, searches & confirms books on Goodreads in real time**
+- **Anti-hallucination rules**: Agent never guesses books from creator handles, partial/blurry covers, or music lyrics
 - Cache: `video_grabs` Supabase table — never process the same URL twice
 - UI: `/app/booktok/page.tsx` (old `/app/grab/page.tsx` redirects here)
 - API: `/app/api/grab/route.ts` (streaming)
@@ -203,13 +205,19 @@ All tables in the public schema:
 
 ### BookTok pipeline (in order):
 1. Validate URL + check cache
-2. Download video/audio via RapidAPI
-3. Transcribe audio via Whisper + extract frames via ffmpeg (parallel)
+2. Download video/audio via RapidAPI (detects carousel vs video posts)
+3. Transcribe audio via Whisper + extract frames via ffmpeg (parallel). Carousel posts skip Whisper, use slide images directly.
 4. Single Sonnet agent call: vision + transcript + Goodreads tool use
    → Agent reads covers, understands transcript, searches Goodreads, confirms editions, returns verified canonical results
-5. Queue enrichment for all matched books (fire-and-forget via `queueEnrichmentJobs`)
-6. Cache result in `video_grabs` table
+5. Queue enrichment for all matched books + **kick off enrichment worker immediately** (fire-and-forget, no 5-min wait)
+6. Cache result in `video_grabs` table (includes `video_title` from RapidAPI)
 7. Register creator handle + book mentions in `creator_handles` / `creator_book_mentions` (fire-and-forget)
+
+### Hotlist creation from grabs
+- Hotlist name uses the **video title/caption** (hashtags stripped), e.g. "All the books we gave 5 stars in 2025"
+- Falls back to `"@handle picks"` if no video title available
+- Creator handle stored as `source_creator_handle` and displayed as a byline linking to `/discover/@handle`
+- Both theme and creator handle are searchable
 
 ## Creator Discovery
 
@@ -219,7 +227,7 @@ All tables in the public schema:
 - `/discover` — browseable index of all discovered creators, with trending section
 - `/discover/[handle]` — auto-generated page showing all books recommended by a creator, with follow button
 - "Seen on BookTok" section on book detail pages shows which creators recommended each book
-- Hotlists created from BookTok grabs store `source_creator_handle`, `source_video_url`, `source_platform`
+- Hotlists created from BookTok grabs use video title as name + creator handle as byline (see "Hotlist creation from grabs" above)
 - Creators can claim their handle (future: upgrade to full creator profile)
 
 ## Creator Platform
@@ -262,7 +270,7 @@ Book data flows through two independent systems:
 - Cron worker runs every 5 minutes (`/api/cron/enrichment-worker`)
 - `enrichment_status` on books table: "pending" → "partial" → "complete"
 - Book detail pages poll for updates when enrichment is incomplete
-- **Grab pipeline queues enrichment at grab time** (step 9) so data is ready before books hit a hotlist
+- **Grab pipeline queues enrichment at grab time AND kicks off the worker immediately** (fire-and-forget `processEnrichmentQueue(30_000)`) so data is ready within seconds, not at the next 5-min cron tick
 - **Hotlist pages poll** `/api/books/refresh-batch` every 8s when un-enriched books are detected, auto-stopping when data arrives
 - Enrichment banner shows above the hotlist table while books are being enriched
 

@@ -150,6 +150,9 @@ export async function getHotlistWithBooks(
     updatedAt: hotlistRow.updated_at as string,
     ownerName: ownerProfile?.display_name ?? null,
     ownerAffiliateTag: (ownerProfile?.is_creator && ownerProfile?.amazon_affiliate_tag) || null,
+    sourceCreatorHandle: (hotlistRow.source_creator_handle as string) ?? null,
+    sourceVideoUrl: (hotlistRow.source_video_url as string) ?? null,
+    sourcePlatform: (hotlistRow.source_platform as string) ?? null,
     books,
   };
 }

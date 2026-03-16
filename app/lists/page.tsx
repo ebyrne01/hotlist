@@ -12,6 +12,7 @@ interface HotlistCard {
   shareSlug: string | null;
   updatedAt: string;
   bookCount: number;
+  sourceCreatorHandle: string | null;
 }
 
 export default function MyHotlistsPage() {
@@ -34,7 +35,7 @@ export default function MyHotlistsPage() {
       const supabase = createClient();
       const { data } = await supabase
         .from("hotlists")
-        .select("id, name, is_public, share_slug, updated_at, hotlist_books(count)")
+        .select("id, name, is_public, share_slug, updated_at, source_creator_handle, hotlist_books(count)")
         .eq("user_id", user!.id)
         .order("updated_at", { ascending: false });
 
@@ -47,6 +48,7 @@ export default function MyHotlistsPage() {
           shareSlug: (row.share_slug as string) ?? null,
           updatedAt: row.updated_at as string,
           bookCount: countData?.[0]?.count ?? 0,
+          sourceCreatorHandle: (row.source_creator_handle as string) ?? null,
         };
       });
 
@@ -89,6 +91,7 @@ export default function MyHotlistsPage() {
             shareSlug: data.share_slug,
             updatedAt: data.updated_at,
             bookCount: 0,
+            sourceCreatorHandle: null,
           },
           ...prev,
         ]);
@@ -283,7 +286,11 @@ export default function MyHotlistsPage() {
                       </button>
                     </div>
                     <p className="text-xs font-mono text-muted mt-0.5">
-                      {hl.bookCount} {hl.bookCount === 1 ? "book" : "books"} &middot; updated {timeAgo(hl.updatedAt)}
+                      {hl.sourceCreatorHandle && (
+                        <span className="text-fire/70">{hl.sourceCreatorHandle}</span>
+                      )}
+                      {hl.sourceCreatorHandle && " · "}
+                      {hl.bookCount} {hl.bookCount === 1 ? "book" : "books"} · updated {timeAgo(hl.updatedAt)}
                     </p>
                   </Link>
                 )}

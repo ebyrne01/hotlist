@@ -108,6 +108,9 @@ export interface HotlistDetail {
   updatedAt: string;
   ownerName: string | null;
   ownerAffiliateTag: string | null;
+  sourceCreatorHandle: string | null;
+  sourceVideoUrl: string | null;
+  sourcePlatform: string | null;
   books: HotlistBookDetail[];
 }
 
