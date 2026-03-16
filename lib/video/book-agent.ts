@@ -19,6 +19,8 @@ import { getBookDetail } from "@/lib/books";
 import { isJunkTitle } from "@/lib/books/romance-filter";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { searchBooksForAgent } from "./agent-search";
+import { searchGoogleBooks } from "@/lib/books/google-books";
+import { saveProvisionalBook } from "@/lib/books/cache";
 import type { ResolvedBook, ResolvedBookMatched, ResolvedBookUnmatched } from "./book-resolver";
 
 /** Collects debug log entries and flushes to Supabase at the end */
@@ -635,6 +637,57 @@ async function resolveSubmittedBooks(
         }
       }
 
+      // No Goodreads ID — check local DB first, then try Google Books
+      if (book.title && book.author) {
+        try {
+          const supabase = getAdminClient();
+          const authorLast = (book.author || "").split(" ").pop()?.toLowerCase() || "";
+          const titleBase = book.title.split(":")[0].trim();
+
+          // Check if already in our DB by title + author
+          const { data: existingBook } = await supabase
+            .from("books")
+            .select("*")
+            .ilike("title", `%${titleBase}%`)
+            .ilike("author", `%${authorLast}%`)
+            .not("cover_url", "is", null)
+            .limit(1)
+            .single();
+
+          if (existingBook) {
+            const mapped = mapDbBookInline(existingBook as Record<string, unknown>);
+            return {
+              matched: true,
+              book: { ...mapped, ratings: [], spice: [], compositeSpice: null, tropes: [] },
+              ...base,
+            } as ResolvedBookMatched;
+          }
+
+          // Not in DB — search Google Books for cover + save provisional
+          const query = `${book.title} ${book.author}`;
+          const gbResults = await searchGoogleBooks(query);
+          const bestMatch = gbResults.find((gb) => {
+            const titleMatch = gb.title.toLowerCase().includes(titleBase.toLowerCase()) ||
+              titleBase.toLowerCase().includes(gb.title.toLowerCase().split(":")[0]);
+            const authorMatch = gb.author.toLowerCase().includes(authorLast);
+            return titleMatch && authorMatch;
+          });
+
+          if (bestMatch) {
+            const saved = await saveProvisionalBook(bestMatch);
+            if (saved) {
+              return {
+                matched: true,
+                book: { ...saved, ratings: [], spice: [], compositeSpice: null, tropes: [] },
+                ...base,
+              } as ResolvedBookMatched;
+            }
+          }
+        } catch (err) {
+          console.warn(`[book-agent] Fallback resolution failed for "${book.title}":`, err);
+        }
+      }
+
       return {
         matched: false,
         rawTitle: book.title,
@@ -655,4 +708,40 @@ async function resolveSubmittedBooks(
     seen.add(gid);
     return true;
   });
+}
+
+/**
+ * Lightweight DB row → Book mapper for fallback resolution.
+ * Avoids circular import with cache.ts.
+ */
+function mapDbBookInline(row: Record<string, unknown>): import("@/lib/types").Book {
+  return {
+    id: row.id as string,
+    isbn: (row.isbn as string) ?? null,
+    isbn13: (row.isbn13 as string) ?? null,
+    googleBooksId: (row.google_books_id as string) ?? null,
+    title: row.title as string,
+    author: row.author as string,
+    seriesName: (row.series_name as string) ?? null,
+    seriesPosition: (row.series_position as number) ?? null,
+    coverUrl: (row.cover_url as string) ?? null,
+    pageCount: (row.page_count as number) ?? null,
+    publishedYear: (row.published_year as number) ?? null,
+    publisher: (row.publisher as string) ?? null,
+    description: (row.description as string) ?? null,
+    aiSynopsis: (row.ai_synopsis as string) ?? null,
+    goodreadsId: (row.goodreads_id as string) ?? null,
+    goodreadsUrl: (row.goodreads_url as string) ?? null,
+    amazonAsin: (row.amazon_asin as string) ?? null,
+    romanceIoSlug: (row.romance_io_slug as string) ?? null,
+    romanceIoHeatLabel: (row.romance_io_heat_label as string) ?? null,
+    genres: (row.genres as string[]) ?? [],
+    subgenre: (row.subgenre as string) ?? null,
+    metadataSource: (row.metadata_source as import("@/lib/types").Book["metadataSource"]) ?? "google_books",
+    slug: (row.slug as string) ?? `book-${row.id}`,
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
+    dataRefreshedAt: (row.data_refreshed_at as string) ?? null,
+    enrichmentStatus: (row.enrichment_status as import("@/lib/types").Book["enrichmentStatus"]) ?? null,
+  };
 }
