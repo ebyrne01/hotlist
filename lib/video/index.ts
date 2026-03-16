@@ -22,6 +22,7 @@ import { extractFrames } from "./frame-extractor";
 import { identifyBooksWithAgent, identifyBooksWithAgentDebug, type AgentDiagnostics } from "./book-agent";
 import type { ResolvedBook } from "./book-resolver";
 import { queueEnrichmentJobs } from "@/lib/enrichment/queue";
+import { processEnrichmentQueue } from "@/lib/enrichment/worker";
 import { registerCreatorMentions } from "@/lib/creators/register";
 
 export type GrabStatus =
@@ -324,10 +325,15 @@ export async function grabBooksFromVideo(
     };
   }
 
-  // Step 6: Queue enrichment for all matched books (fire-and-forget)
+  // Step 6: Queue enrichment for all matched books, then kick off the worker immediately
   const tEnrich = Date.now();
   queueEnrichmentForResolved(resolved);
   timing.enrichmentMs = Date.now() - tEnrich;
+
+  // Kick off enrichment worker immediately so ratings appear within seconds, not 5 minutes
+  processEnrichmentQueue(30_000).catch((err) => {
+    console.warn("[grab] Fire-and-forget enrichment worker failed:", err);
+  });
   timing.totalMs = Date.now() - start;
 
   // Build diagnostics if debug mode
