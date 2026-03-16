@@ -8,6 +8,7 @@
 
 import {
   fetchPendingJobs,
+  JOB_TYPE_PRIORITY,
   markJobRunning,
   markJobCompleted,
   markJobFailed,
@@ -72,8 +73,9 @@ async function upsertGenreBucketing(supabase: SupabaseClient, bookId: string) {
 }
 
 /**
- * Process pending enrichment jobs.
- * Returns the number of jobs processed.
+ * Process pending enrichment jobs in priority order.
+ * Tier 1 (ratings + spice) runs first, then tier 2 (tropes + reviews),
+ * then tier 3 (metadata + synopsis). Newest jobs first within each tier.
  */
 export async function processEnrichmentQueue(
   timeBudgetMs: number = 50_000
@@ -82,28 +84,37 @@ export async function processEnrichmentQueue(
   let processed = 0;
   let failed = 0;
 
-  while (Date.now() - startTime < timeBudgetMs) {
-    const jobs = await fetchPendingJobs(5);
-    if (jobs.length === 0) break;
+  function timeLeft() {
+    return timeBudgetMs - (Date.now() - startTime);
+  }
 
-    for (const job of jobs) {
-      if (Date.now() - startTime > timeBudgetMs - 5000) break; // Leave 5s buffer
+  // Process each priority tier in order
+  for (const tier of JOB_TYPE_PRIORITY) {
+    if (timeLeft() < 5000) break;
 
-      try {
-        await markJobRunning(job.id);
-        await processJob(job);
-        await markJobCompleted(job.id);
-        await updateBookEnrichmentStatus(job.book_id);
-        processed++;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        await markJobFailed(job.id, msg, job.attempts);
-        failed++;
-        console.warn(`[enrichment-worker] Job ${job.job_type} failed for "${job.book_title}": ${msg}`);
+    while (timeLeft() > 5000) {
+      const jobs = await fetchPendingJobs(5, tier);
+      if (jobs.length === 0) break;
+
+      for (const job of jobs) {
+        if (timeLeft() < 5000) break;
+
+        try {
+          await markJobRunning(job.id);
+          await processJob(job);
+          await markJobCompleted(job.id);
+          await updateBookEnrichmentStatus(job.book_id);
+          processed++;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          await markJobFailed(job.id, msg, job.attempts);
+          failed++;
+          console.warn(`[enrichment-worker] Job ${job.job_type} failed for "${job.book_title}": ${msg}`);
+        }
+
+        // Small delay between jobs
+        await new Promise((r) => setTimeout(r, JOB_DELAY_MS));
       }
-
-      // Small delay between jobs
-      await new Promise((r) => setTimeout(r, JOB_DELAY_MS));
     }
   }
 

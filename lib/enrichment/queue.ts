@@ -83,16 +83,30 @@ export async function queueEnrichmentJobs(
 }
 
 /**
+ * Job type priority tiers — processed in order so users see
+ * the most valuable data (ratings, spice) first.
+ */
+export const JOB_TYPE_PRIORITY: JobType[][] = [
+  // Tier 1: Ratings + spice — what users see immediately
+  ["goodreads_rating", "amazon_rating", "romance_io_spice", "llm_spice"],
+  // Tier 2: Tropes + review-based spice
+  ["trope_inference", "review_classifier"],
+  // Tier 3: Supplementary data
+  ["goodreads_detail", "metadata", "ai_synopsis", "author_crawl"],
+];
+
+/**
  * Fetch the next batch of jobs to process.
- * Returns jobs that are pending or failed (with retries remaining)
- * and whose next_retry_at is in the past.
+ * Newest jobs first (so fresh grabs get enriched fast).
+ * Optionally filter to specific job types (for priority processing).
  */
 export async function fetchPendingJobs(
-  limit: number = 10
+  limit: number = 10,
+  jobTypes?: JobType[]
 ): Promise<QueuedJob[]> {
   const supabase = getAdminClient();
 
-  const { data } = await supabase
+  let query = supabase
     .from("enrichment_queue")
     .select(`
       id, book_id, job_type, attempts,
@@ -101,8 +115,14 @@ export async function fetchPendingJobs(
     .in("status", ["pending", "failed"])
     .lt("attempts", 3)
     .lte("next_retry_at", new Date().toISOString())
-    .order("created_at", { ascending: true })
+    .order("created_at", { ascending: false })
     .limit(limit);
+
+  if (jobTypes && jobTypes.length > 0) {
+    query = query.in("job_type", jobTypes);
+  }
+
+  const { data } = await query;
 
   if (!data) return [];
 
