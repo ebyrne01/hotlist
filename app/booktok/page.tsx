@@ -266,14 +266,31 @@ function BookTokPageInner() {
 
       if (!hotlist) throw new Error("Failed to create hotlist");
 
-      // Add all matched books
-      const bookRows = matchedBooks.map((b, i) => ({
-        hotlist_id: hotlist.id,
-        book_id: b.book.id,
-        position: i,
-      }));
+      // Add all matched books — verify each book still exists in DB first
+      // (cached grabs may reference books that were deleted/recreated)
+      const bookIds = matchedBooks.map((b) => b.book.id);
+      const { data: existingBooks } = await supabase
+        .from("books")
+        .select("id")
+        .in("id", bookIds);
+      const validIds = new Set((existingBooks ?? []).map((b) => b.id));
 
-      await supabase.from("hotlist_books").insert(bookRows);
+      const bookRows = matchedBooks
+        .filter((b) => validIds.has(b.book.id))
+        .map((b, i) => ({
+          hotlist_id: hotlist.id,
+          book_id: b.book.id,
+          position: i,
+        }));
+
+      if (bookRows.length > 0) {
+        const { error: insertErr } = await supabase
+          .from("hotlist_books")
+          .insert(bookRows);
+        if (insertErr) {
+          console.error("[handleAddAllToHotlist] book insert failed:", insertErr);
+        }
+      }
       setAddedHotlistSlug(hotlist.share_slug);
     } catch (err) {
       console.error("[handleAddAllToHotlist] failed:", err);
