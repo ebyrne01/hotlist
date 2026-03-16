@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
+// Using <img> instead of next/image to avoid needing remotePatterns config for external cover URLs
 
 interface BookData {
   id: string;
@@ -40,14 +40,14 @@ const HEAT_LABELS: Record<number, string> = {
 };
 
 function PepperSvg({ filled, size = 28 }: { filled: boolean; size?: number }) {
+  const color = filled ? "#D85A30" : undefined;
+  const emptyProps = filled
+    ? {}
+    : { className: "fill-border-tertiary opacity-50", style: { fill: "#c4b5a4", opacity: 0.35 } };
   return (
-    <svg width={size} height={size} viewBox="0 0 16 16">
-      <path
-        d="M8 1c1.5 2.5 4 4 4 7.5a4 4 0 0 1-8 0C4 5 6.5 3.5 8 1z"
-        fill={filled ? "#D85A30" : undefined}
-        className={filled ? "" : "fill-border-tertiary opacity-50"}
-        style={filled ? undefined : { fill: "#c4b5a4", opacity: 0.35 }}
-      />
+    <svg width={size} height={size} viewBox="0 0 24 24">
+      <path d="M12 2C12 2 11 4 11 5C11 5.5 11.5 6 12 6C12.5 6 13 5.5 13 5C13 4 12 2 12 2Z" fill={color} {...emptyProps} />
+      <path d="M8 7C6 8 5 11 5 14C5 18 8 22 10 22C11 22 11.5 21 12 21C12.5 21 13 22 14 22C16 22 19 18 19 14C19 11 18 8 16 7C14.5 6 9.5 6 8 7Z" fill={color} {...emptyProps} />
     </svg>
   );
 }
@@ -174,7 +174,8 @@ export default function CardEditorClient({ book, creatorHandle, existingCard }: 
       {/* Book summary (read-only) */}
       <div className="flex gap-4 items-start">
         {book.coverUrl ? (
-          <Image
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
             src={book.coverUrl}
             alt={book.title}
             width={80}

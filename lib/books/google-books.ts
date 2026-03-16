@@ -32,9 +32,13 @@ function mapVolume(vol: GoogleVolume): BookData {
     ? parseInt(info.publishedDate.substring(0, 4), 10) || null
     : null;
 
+  // Clean title: strip "[Author Name]" prefixes that Google Books sometimes returns
+  let title = info.title ?? "Unknown Title";
+  title = title.replace(/^\[[^\]]+\]\s*/, "").trim() || title;
+
   return {
     googleBooksId: vol.id,
-    title: info.title ?? "Unknown Title",
+    title,
     author: info.authors?.join(", ") ?? "Unknown Author",
     isbn: isbn10,
     isbn13,

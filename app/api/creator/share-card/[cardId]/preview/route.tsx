@@ -36,12 +36,11 @@ const C = {
 };
 
 function PepperIcon({ filled }: { filled: boolean }) {
+  const c = filled ? C.coral : C.darkest;
   return (
-    <svg width="18" height="18" viewBox="0 0 16 16" style={{ marginRight: "2px" }}>
-      <path
-        d="M8 1c1.5 2.5 4 4 4 7.5a4 4 0 0 1-8 0C4 5 6.5 3.5 8 1z"
-        fill={filled ? C.coral : C.darkest}
-      />
+    <svg width="18" height="18" viewBox="0 0 24 24" style={{ marginRight: "2px" }}>
+      <path d="M12 2C12 2 11 4 11 5C11 5.5 11.5 6 12 6C12.5 6 13 5.5 13 5C13 4 12 2 12 2Z" fill={c} />
+      <path d="M8 7C6 8 5 11 5 14C5 18 8 22 10 22C11 22 11.5 21 12 21C12.5 21 13 22 14 22C16 22 19 18 19 14C19 11 18 8 16 7C14.5 6 9.5 6 8 7Z" fill={c} />
     </svg>
   );
 }
