@@ -157,6 +157,7 @@ All tables in the public schema:
   metadata-enrichment.ts      — supplementary metadata from Google/OL
   romance-filter.ts           — romance genre guard + junk title filter
   ai-synopsis.ts              — Claude-generated synopses
+  author-crawl.ts             — Crawl author's full bibliography
 
 /lib/creators/                — Creator discovery system
   register.ts                 — Upsert creator handle + book mentions after each grab
@@ -171,6 +172,8 @@ All tables in the public schema:
   romance-io-search.ts        — Romance.io spice via Serper Google search
   amazon.ts                   — DEPRECATED: direct Amazon scraping (returns 503)
 
+/lib/hotlists.ts              — Hotlist CRUD operations (getUserHotlists, getHotlistWithBooks)
+
 /lib/spice/                   — Composite spice scoring system (see above)
 
 /lib/video/                   — BookTok pipeline
@@ -180,10 +183,6 @@ All tables in the public schema:
   book-agent.ts               — Single Sonnet agent (vision + transcript + Goodreads tool use)
   book-resolver.ts            — Types only (ResolvedBook, etc.)
   index.ts                    — Pipeline orchestrator
-  vision-extractor.ts         — DEPRECATED (replaced by book-agent.ts)
-  book-extractor.ts           — DEPRECATED (replaced by book-agent.ts)
-  reconciler.ts               — DEPRECATED (replaced by book-agent.ts)
-
 /components/books/            — Book-specific components (BookCard, SpiceDisplay, SpiceAttribution)
 /components/ui/               — Base UI primitives (Badge, BookCover, SpiceIndicator)
 /components/hotlists/         — Hotlist table + detail components
@@ -218,6 +217,12 @@ All tables in the public schema:
 - Falls back to `"@handle picks"` if no video title available
 - Creator handle stored as `source_creator_handle` and displayed as a byline linking to `/discover/@handle`
 - Both theme and creator handle are searchable
+
+### Grab results UI
+- Results page shows identified books (cover, title, author, series) without enrichment data
+- Repeated creator quotes (themed lists) are deduplicated and shown as a list-level summary
+- Per-book quotes display only when unique to each book
+- CTA: "Add all N to a Hotlist" → hotlist page shows enriched data with live polling
 
 ## Creator Discovery
 
@@ -267,6 +272,7 @@ Book data flows through two independent systems:
 - `enrichment_queue` table tracks jobs per book per source
 - Job types: goodreads_detail, goodreads_rating, amazon_rating, romance_io_spice, metadata, ai_synopsis, trope_inference, review_classifier, llm_spice
 - Each job retries up to 3 times with exponential backoff (30s, 2min, 10min)
+- **Priority tiers**: Tier 1 (goodreads_rating, amazon_rating, romance_io_spice, llm_spice) → Tier 2 (trope_inference, review_classifier) → Tier 3 (goodreads_detail, metadata, ai_synopsis, author_crawl). Newest jobs first within each tier.
 - Cron worker runs every 5 minutes (`/api/cron/enrichment-worker`)
 - `enrichment_status` on books table: "pending" → "partial" → "complete"
 - Book detail pages poll for updates when enrichment is incomplete

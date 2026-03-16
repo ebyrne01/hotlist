@@ -151,7 +151,7 @@ async function cacheGrabResult(
       thumbnail_url: result.thumbnailUrl,
       video_title: result.videoTitle,
       transcript: result.transcript,
-      extracted_books: result.books as unknown as Record<string, unknown>[],
+      extracted_books: JSON.parse(JSON.stringify(result.books)),
       user_id: userId ?? null,
     },
     { onConflict: "url" }

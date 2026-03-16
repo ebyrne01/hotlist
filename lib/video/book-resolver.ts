@@ -3,11 +3,10 @@
  */
 
 import { getAdminClient } from "@/lib/supabase/admin";
-import { resolveToGoodreadsId, searchGoodreads } from "@/lib/books/goodreads-search";
+import { searchGoodreads } from "@/lib/books/goodreads-search";
 import { getBookDetail } from "@/lib/books";
 import { isJunkTitle } from "@/lib/books/romance-filter";
 import type { BookDetail } from "@/lib/types";
-import type { ExtractedBook } from "./book-extractor";
 
 export interface ResolvedBookMatched {
   matched: true;
@@ -27,138 +26,6 @@ export interface ResolvedBookUnmatched {
 }
 
 export type ResolvedBook = ResolvedBookMatched | ResolvedBookUnmatched;
-
-/**
- * Resolve extracted book mentions to canonical database records.
- *
- * Pipeline:
- * 1. Pre-filter junk titles (box sets, omnibus editions, compilations)
- * 2. Resolve each book via cache → Goodreads multi-strategy search
- * 3. Post-resolution dedup (by goodreads_id, by title substring)
- */
-export async function resolveExtractedBooks(
-  extracted: ExtractedBook[]
-): Promise<ResolvedBook[]> {
-  // Step 1: Pre-filter junk titles (but keep descriptionOnly books — they're descriptions, not real titles)
-  const filtered = extracted.filter((book) => {
-    if (!book.descriptionOnly && isJunkTitle(book.title)) {
-      console.log(`[book-resolver] Skipping junk title: "${book.title}"`);
-      return false;
-    }
-    return true;
-  });
-
-  // Step 2: Resolve each book
-  const results: ResolvedBook[] = [];
-  for (const book of filtered) {
-    try {
-      // Description-only books: the "title" is a description, not a real title.
-      // Don't try to resolve — it would match the wrong book.
-      if (book.descriptionOnly) {
-        console.log(`[book-resolver] Skipping description-only: "${book.title}"`);
-        results.push({
-          matched: false,
-          rawTitle: book.title,
-          rawAuthor: book.author,
-          creatorSentiment: book.sentiment,
-          creatorQuote: book.creatorQuote,
-          confidence: book.confidence as "high" | "medium",
-        });
-        continue;
-      }
-
-      const resolved = await resolveOneBook(book);
-      // Post-resolution junk check — the resolved title may be a box set
-      if (resolved.matched && isJunkTitle(resolved.book.title)) {
-        console.log(`[book-resolver] Resolved to junk title, skipping: "${resolved.book.title}"`);
-        continue;
-      }
-      results.push(resolved);
-    } catch (err) {
-      console.error(`[book-resolver] Failed to resolve "${book.title}":`, err);
-      results.push({
-        matched: false,
-        rawTitle: book.title,
-        rawAuthor: book.author,
-        creatorSentiment: book.sentiment,
-        creatorQuote: book.creatorQuote,
-        confidence: book.confidence as "high" | "medium",
-      });
-    }
-  }
-
-  // Step 3: Prefer Book 1 — if we resolved to a later book in a series,
-  // swap to Book 1 (BookTok creators typically recommend entry points)
-  const corrected = await preferSeriesBook1(results);
-
-  // Step 4: Post-resolution dedup
-  return deduplicateResults(corrected);
-}
-
-async function resolveOneBook(
-  extracted: ExtractedBook
-): Promise<ResolvedBook> {
-  const base = {
-    creatorSentiment: extracted.sentiment,
-    creatorQuote: extracted.creatorQuote,
-    confidence: extracted.confidence as "high" | "medium",
-  };
-
-  // Step 1: Search our Supabase cache first (fast, no external call)
-  const cachedBook = await searchCache(extracted.title, extracted.author);
-  if (cachedBook) {
-    return { matched: true, book: cachedBook, ...base };
-  }
-
-  // Step 2: Resolve via Goodreads (fuzzy mode for Whisper typos)
-  const goodreadsId = await resolveToGoodreadsId(
-    extracted.title,
-    extracted.author ?? "",
-    { fuzzy: true }
-  );
-
-  if (goodreadsId) {
-    const bookDetail = await getBookDetail(goodreadsId);
-    if (bookDetail) {
-      return { matched: true, book: bookDetail, ...base };
-    }
-  }
-
-  // Step 3: Fallback — title-only search on Goodreads with author matching
-  if (extracted.author) {
-    const titleOnlyResults = await searchGoodreads(extracted.title);
-    for (const result of titleOnlyResults.slice(0, 3)) {
-      const authorLower = extracted.author.toLowerCase();
-      const resultAuthorLower = result.author.toLowerCase();
-      const authorWords = authorLower.split(/\s+/).filter((w) => w.length > 1);
-      const hasAuthorMatch = authorWords.some((w) => resultAuthorLower.includes(w));
-      if (hasAuthorMatch) {
-        const bookDetail = await getBookDetail(result.goodreadsId);
-        if (bookDetail) {
-          return { matched: true, book: bookDetail, ...base };
-        }
-      }
-    }
-  }
-
-  // Step 4: Series name search — if the title looks like a series name,
-  // search for the series and try to find Book 1
-  if (looksLikeSeriesName(extracted.title)) {
-    console.log(`[book-resolver] Title looks like series name: "${extracted.title}", searching for Book 1`);
-    const seriesBook = await resolveSeriesName(extracted.title, extracted.author);
-    if (seriesBook) {
-      return { matched: true, book: seriesBook, ...base };
-    }
-  }
-
-  // Step 5: Unmatched
-  return {
-    matched: false,
-    rawTitle: extracted.title,
-    rawAuthor: extracted.author,
-    ...base,
-  };
-}
 
 /**
  * Post-resolution: if a resolved book is NOT Book 1 in its series,
