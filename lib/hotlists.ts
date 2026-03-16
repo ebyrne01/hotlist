@@ -6,7 +6,7 @@
  */
 
 import { getAdminClient } from "@/lib/supabase/admin";
-import { hydrateBookDetail } from "@/lib/books/cache";
+import { hydrateBookDetailBatch } from "@/lib/books/cache";
 import type { Hotlist, HotlistDetail, HotlistBookDetail, UserRating } from "@/lib/types";
 
 // ── Helpers ──────────────────────────────────────────
@@ -103,40 +103,46 @@ export async function getHotlistWithBooks(
     .eq("id", hotlistRow.user_id as string)
     .single();
 
-  // Hydrate each book with ratings, spice, tropes
+  // Batch-hydrate all books (4 queries total instead of 4 per book)
+  const hotlistBookRows = (hotlistBooks ?? []) as Record<string, unknown>[];
+  const rawBooks = hotlistBookRows
+    .map((hb) => hb.books as Record<string, unknown>)
+    .filter(Boolean);
+
+  const [bookDetailMap, userRatingsRes] = await Promise.all([
+    hydrateBookDetailBatch(supabase, rawBooks),
+    userId && rawBooks.length > 0
+      ? supabase
+          .from("user_ratings")
+          .select("book_id, star_rating, spice_rating, note")
+          .eq("user_id", userId)
+          .in("book_id", rawBooks.map((b) => b.id as string))
+      : Promise.resolve({ data: null }),
+  ]);
+
+  // Index user ratings by book_id
+  const userRatingMap = new Map<string, UserRating>();
+  for (const r of (userRatingsRes.data ?? []) as Record<string, unknown>[]) {
+    userRatingMap.set(r.book_id as string, {
+      starRating: r.star_rating as number | null,
+      spiceRating: r.spice_rating as number | null,
+      note: (r.note as string) ?? null,
+    });
+  }
+
   const books: HotlistBookDetail[] = [];
-  for (const hb of (hotlistBooks ?? []) as Record<string, unknown>[]) {
+  for (const hb of hotlistBookRows) {
     const rawBook = hb.books as Record<string, unknown>;
     if (!rawBook) continue;
-
-    const bookDetail = await hydrateBookDetail(supabase, rawBook);
-
-    // Fetch user's own rating for this book (if owner)
-    let userRating: UserRating | null = null;
-    if (userId) {
-      const { data: rating } = await supabase
-        .from("user_ratings")
-        .select("star_rating, spice_rating, note")
-        .eq("user_id", userId)
-        .eq("book_id", rawBook.id as string)
-        .single();
-
-      if (rating) {
-        userRating = {
-          starRating: rating.star_rating,
-          spiceRating: rating.spice_rating,
-          note: rating.note,
-        };
-      }
-    }
+    const bookId = rawBook.id as string;
 
     books.push({
       id: hb.id as string,
-      bookId: rawBook.id as string,
+      bookId,
       position: hb.position as number,
       addedAt: hb.added_at as string,
-      book: bookDetail,
-      userRating,
+      book: bookDetailMap.get(bookId)!,
+      userRating: userRatingMap.get(bookId) ?? null,
     });
   }
 

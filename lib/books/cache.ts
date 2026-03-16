@@ -1,6 +1,6 @@
 import { getAdminClient } from "@/lib/supabase/admin";
 import type { Book, BookData, BookDetail, Rating, SpiceRating, Trope } from "@/lib/types";
-import { getCompositeSpice } from "@/lib/spice/compute-composite";
+import { getCompositeSpice, getCompositeSpiceBatch } from "@/lib/spice/compute-composite";
 import { generateBookSlug } from "./goodreads-search";
 import { isJunkTitle } from "./romance-filter";
 import { deduplicateBooks } from "./utils";
@@ -437,6 +437,85 @@ export async function hydrateBookDetail(
   }
 
   return { ...book, ratings, spice, compositeSpice, tropes };
+}
+
+/**
+ * Batch-hydrate multiple books in 4 queries total (instead of 4 per book).
+ * Returns a Map of bookId → BookDetail.
+ */
+export async function hydrateBookDetailBatch(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  dbBooks: Record<string, unknown>[]
+): Promise<Map<string, BookDetail>> {
+  if (dbBooks.length === 0) return new Map();
+
+  const books = dbBooks.map(mapDbBook);
+  const bookIds = books.map((b) => b.id);
+
+  // 4 parallel batch queries instead of 4N sequential queries
+  const [ratingsRes, spiceRes, compositeMap, tropesRes] = await Promise.all([
+    supabase.from("book_ratings").select("*").in("book_id", bookIds),
+    supabase.from("book_spice").select("*").in("book_id", bookIds),
+    getCompositeSpiceBatch(bookIds),
+    supabase
+      .from("book_tropes")
+      .select("book_id, trope_id, tropes(id, slug, name, description)")
+      .in("book_id", bookIds),
+  ]);
+
+  // Index ratings by book_id
+  const ratingsMap = new Map<string, Rating[]>();
+  for (const r of (ratingsRes.data ?? []) as Record<string, unknown>[]) {
+    const bid = r.book_id as string;
+    if (!ratingsMap.has(bid)) ratingsMap.set(bid, []);
+    ratingsMap.get(bid)!.push({
+      source: r.source as Rating["source"],
+      rating: r.rating ? parseFloat(r.rating as string) : null,
+      ratingCount: r.rating_count as number | null,
+    });
+  }
+
+  // Index spice by book_id
+  const spiceMap = new Map<string, SpiceRating[]>();
+  for (const s of (spiceRes.data ?? []) as Record<string, unknown>[]) {
+    const bid = s.book_id as string;
+    if (!spiceMap.has(bid)) spiceMap.set(bid, []);
+    spiceMap.get(bid)!.push({
+      source: s.source as SpiceRating["source"],
+      spiceLevel: s.spice_level as number,
+      ratingCount: (s.rating_count as number) ?? 0,
+      confidence: (s.confidence as SpiceRating["confidence"]) ?? undefined,
+    });
+  }
+
+  // Index tropes by book_id
+  const tropesMap = new Map<string, Trope[]>();
+  for (const bt of (tropesRes.data ?? []) as Record<string, unknown>[]) {
+    const bid = bt.book_id as string;
+    const t = bt.tropes as Record<string, unknown> | null;
+    if (!t) continue;
+    if (!tropesMap.has(bid)) tropesMap.set(bid, []);
+    tropesMap.get(bid)!.push({
+      id: t.id as string,
+      slug: t.slug as string,
+      name: t.name as string,
+      description: (t.description as string) ?? null,
+    });
+  }
+
+  const result = new Map<string, BookDetail>();
+  for (const book of books) {
+    result.set(book.id, {
+      ...book,
+      ratings: ratingsMap.get(book.id) ?? [],
+      spice: spiceMap.get(book.id) ?? [],
+      compositeSpice: compositeMap.get(book.id) ?? null,
+      tropes: tropesMap.get(book.id) ?? [],
+    });
+  }
+
+  return result;
 }
 
 export function mapDbBook(row: Record<string, unknown>): Book {

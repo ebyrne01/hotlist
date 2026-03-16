@@ -7,7 +7,7 @@
  */
 
 import { getAdminClient } from "@/lib/supabase/admin";
-import { hydrateBookDetail } from "@/lib/books/cache";
+import { hydrateBookDetailBatch } from "@/lib/books/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -40,14 +40,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ books: {} });
     }
 
-    // Hydrate each book with ratings, spice, tropes
+    // Batch-hydrate all books (4 queries total instead of 4 per book)
+    const detailMap = await hydrateBookDetailBatch(supabase, rows as Record<string, unknown>[]);
     const books: Record<string, unknown> = {};
-    await Promise.all(
-      rows.map(async (row: Record<string, unknown>) => {
-        const detail = await hydrateBookDetail(supabase, row);
-        books[row.id as string] = detail;
-      })
-    );
+    detailMap.forEach((detail, id) => { books[id] = detail; });
 
     return NextResponse.json({ books });
   } catch {
