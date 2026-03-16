@@ -164,6 +164,7 @@ async function searchLocalDb(query: string): Promise<AgentSearchResult[]> {
       };
     })
     .sort((a, b) => b._score - a._score)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     .map(({ _score, ...rest }) => rest);
 }
 
