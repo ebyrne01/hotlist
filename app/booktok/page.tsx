@@ -449,7 +449,7 @@ function BookTokPageInner() {
                   {result.platform}
                 </span>
                 <span className="text-xs font-mono text-fire font-medium">
-                  {result.booksFound} book{result.booksFound !== 1 ? "s" : ""}{" "}
+                  {matchedCount} book{matchedCount !== 1 ? "s" : ""}{" "}
                   found
                 </span>
               </div>
