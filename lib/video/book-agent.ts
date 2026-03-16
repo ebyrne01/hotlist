@@ -52,8 +52,10 @@ class AgentDebugLog {
 
 const MODEL = "claude-sonnet-4-6";
 
-/** Max frames to send to the agent — 16 covers most 30s haul videos at 1fps */
-const MAX_AGENT_FRAMES = 16;
+/** Default max frames for normal videos */
+const DEFAULT_AGENT_FRAMES = 16;
+/** Higher frame cap for fast-moving haul videos (short + many frames = rapid content) */
+const FAST_VIDEO_AGENT_FRAMES = 24;
 
 /** Time budget for the agent loop (ms). After this, the agent will be asked to submit immediately. */
 const AGENT_TIME_BUDGET_MS = 220_000; // 3m 40s — leaves headroom within the 4.5-min pipeline timeout
@@ -248,6 +250,8 @@ interface BookAgentInput {
   captureToolCalls?: boolean;
   /** Pre-extracted series hints from Haiku preprocessing (series mode) */
   seriesHints?: { seriesName: string; author: string; bookCount?: number }[];
+  /** Video duration in seconds — used for adaptive frame density */
+  durationSeconds?: number;
 }
 
 export interface AgentToolCall {
@@ -273,15 +277,22 @@ interface SubmittedBook {
 }
 
 /**
- * Subsample frames evenly to stay under MAX_AGENT_FRAMES.
+ * Subsample frames evenly to stay under the frame cap.
  * Keeps first and last frame, evenly spaces the rest.
+ *
+ * Adaptive: short videos (≤30s) with many extracted frames are likely
+ * fast-moving haul videos — these get more frames (24) to catch titles
+ * that flash by quickly. Normal videos use 16 frames.
  */
-function subsampleFrames(frames: (string | Buffer)[]): (string | Buffer)[] {
-  if (frames.length <= MAX_AGENT_FRAMES) return frames;
+function subsampleFrames(frames: (string | Buffer)[], durationSeconds?: number): (string | Buffer)[] {
+  const isFastVideo = (durationSeconds ?? 999) <= 30 && frames.length >= 20;
+  const maxFrames = isFastVideo ? FAST_VIDEO_AGENT_FRAMES : DEFAULT_AGENT_FRAMES;
+
+  if (frames.length <= maxFrames) return frames;
 
   const result: (string | Buffer)[] = [frames[0]];
-  const step = (frames.length - 1) / (MAX_AGENT_FRAMES - 1);
-  for (let i = 1; i < MAX_AGENT_FRAMES - 1; i++) {
+  const step = (frames.length - 1) / (maxFrames - 1);
+  for (let i = 1; i < maxFrames - 1; i++) {
     result.push(frames[Math.round(i * step)]);
   }
   result.push(frames[frames.length - 1]);
@@ -329,8 +340,8 @@ async function _identifyBooksWithAgentInternal(
   try {
     const client = new Anthropic({ apiKey });
 
-    // Subsample frames to keep request size manageable
-    const frames = subsampleFrames(input.frames);
+    // Subsample frames — adaptive: fast haul videos get more frames
+    const frames = subsampleFrames(input.frames, input.durationSeconds);
     dbg.log(`Using ${frames.length} frames (from ${input.frames.length} total), transcript length=${input.transcript.length}`);
 
     // Build the user message with frames + transcript

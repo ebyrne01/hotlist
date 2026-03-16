@@ -333,6 +333,7 @@ async function grabPipeline(
       creatorHandle: creatorHandle ?? undefined,
       debugUrl: url,
       seriesHints: preprocessed.seriesHints,
+      durationSeconds: download.durationSeconds ?? undefined,
     });
     resolved = result.books;
     agentDiag = result.diagnostics;
@@ -343,6 +344,7 @@ async function grabPipeline(
       creatorHandle: creatorHandle ?? undefined,
       debugUrl: url,
       seriesHints: preprocessed.seriesHints,
+      durationSeconds: download.durationSeconds ?? undefined,
     });
   }
   timing.agentIdentificationMs = Date.now() - tAgent;
