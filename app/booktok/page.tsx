@@ -7,7 +7,6 @@ import { useAuth } from "@/lib/auth/AuthProvider";
 import { useSignInModal } from "@/lib/auth/useSignInModal";
 import { createClient } from "@/lib/supabase/client";
 import BookCover from "@/components/ui/BookCover";
-import RatingBadge from "@/components/ui/RatingBadge";
 import GrabFeedbackButton from "@/components/booktok/GrabFeedbackButton";
 import MissingBookFeedback from "@/components/booktok/MissingBookFeedback";
 import type { GrabResult, GrabStatus } from "@/lib/video";
@@ -50,6 +49,35 @@ const SENTIMENT_EMOJI: Record<string, string> = {
   disliked: "didn't love it",
   neutral: "mentioned",
 };
+
+/**
+ * Detect whether creator quotes are per-book (unique) or list-level (repeated).
+ * When >60% of quotes are identical, it's a list-level theme — show once as a summary.
+ */
+function extractListQuote(books: ResolvedBook[]): string | null {
+  const quotes = books
+    .filter((b): b is ResolvedBook & { matched: true } => b.matched && !!b.creatorQuote)
+    .map((b) => b.creatorQuote.trim().toLowerCase());
+
+  if (quotes.length < 2) return null;
+
+  // Find the most common quote
+  const counts = new Map<string, number>();
+  for (const q of quotes) {
+    counts.set(q, (counts.get(q) ?? 0) + 1);
+  }
+  const [topQuote, topCount] = Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0];
+
+  // If >60% of books share the same quote, it's list-level
+  if (topCount / quotes.length > 0.6) {
+    // Return the original-case version
+    const original = books.find(
+      (b) => b.matched && b.creatorQuote?.trim().toLowerCase() === topQuote
+    );
+    return original && "creatorQuote" in original ? original.creatorQuote : null;
+  }
+  return null;
+}
 
 // ── Main Page Component ─────────────────────────────────
 
@@ -380,10 +408,12 @@ function BookTokPageInner() {
       )}
 
       {/* Results */}
-      {result && result.success && !processing && (
+      {result && result.success && !processing && (() => {
+        const listQuote = extractListQuote(result.books);
+        return (
         <div className="mt-8">
           {/* Source video card */}
-          <div className="flex items-center gap-3 p-3 bg-white border border-border rounded-lg mb-6">
+          <div className="flex items-center gap-3 p-3 bg-white border border-border rounded-lg mb-4">
             {result.thumbnailUrl && (
               <img
                 src={result.thumbnailUrl}
@@ -406,6 +436,11 @@ function BookTokPageInner() {
                   found
                 </span>
               </div>
+              {listQuote && (
+                <p className="mt-1.5 text-xs font-body text-muted/70 italic leading-snug line-clamp-2">
+                  &ldquo;{listQuote}&rdquo;
+                </p>
+              )}
             </div>
             {result.processingTimeMs > 0 && (
               <span className="text-xs font-mono text-muted/70 shrink-0">
@@ -422,18 +457,23 @@ function BookTokPageInner() {
                   href={`/lists/${addedHotlistSlug}`}
                   className="inline-flex items-center gap-2 px-5 py-2.5 bg-fire text-white text-sm font-mono font-medium rounded-lg hover:bg-fire/90 transition-colors"
                 >
-                  {"View Hotlist \u2192"}
+                  {"View Hotlist — see ratings & spice \u2192"}
                 </Link>
               ) : (
-                <button
-                  onClick={handleAddAllToHotlist}
-                  disabled={addingAll}
-                  className="px-5 py-2.5 bg-fire text-white text-sm font-mono font-medium rounded-lg hover:bg-fire/90 transition-colors disabled:opacity-50"
-                >
-                  {addingAll
-                    ? "Creating..."
-                    : `Add all ${matchedCount} books to a Hotlist`}
-                </button>
+                <>
+                  <button
+                    onClick={handleAddAllToHotlist}
+                    disabled={addingAll}
+                    className="px-5 py-2.5 bg-fire text-white text-sm font-mono font-medium rounded-lg hover:bg-fire/90 transition-colors disabled:opacity-50"
+                  >
+                    {addingAll
+                      ? "Creating..."
+                      : `Add all ${matchedCount} to a Hotlist`}
+                  </button>
+                  <p className="mt-1.5 text-xs font-mono text-muted/60">
+                    Compare ratings, spice levels & tropes side by side
+                  </p>
+                </>
               )}
             </div>
           )}
@@ -442,7 +482,7 @@ function BookTokPageInner() {
           <div className="grid gap-3">
             {result.books.map((book, i) =>
               book.matched ? (
-                <MatchedBookCard key={i} book={book} videoUrl={url} />
+                <MatchedBookCard key={i} book={book} videoUrl={url} suppressQuote={!!listQuote} />
               ) : (
                 <UnmatchedBookCard key={i} book={book} videoUrl={url} />
               )
@@ -471,7 +511,8 @@ function BookTokPageInner() {
             )}
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
@@ -481,18 +522,16 @@ function BookTokPageInner() {
 function MatchedBookCard({
   book,
   videoUrl,
+  suppressQuote,
 }: {
   book: Extract<ResolvedBook, { matched: true }>;
   videoUrl: string;
+  suppressQuote?: boolean;
 }) {
   const detail = book.book;
-  const grRating = detail.ratings.find((r) => r.source === "goodreads");
-  const spice = detail.spice.find(
-    (s) =>
-      s.source === "romance_io" ||
-      s.source === "hotlist_community" ||
-      s.source === "goodreads_inference"
-  );
+
+  // Show per-book quote only when it's unique (not a repeated list-level quote)
+  const showQuote = !suppressQuote && !!book.creatorQuote;
 
   return (
     <div className="bg-white border border-border rounded-lg hover:border-fire/20 transition-colors">
@@ -513,36 +552,18 @@ function MatchedBookCard({
           </Link>
           <p className="text-xs font-body text-muted truncate">
             {detail.author}
-            {detail.genres.length > 0 && (
-              <> &middot; {detail.genres[0]}</>
+            {detail.seriesName && (
+              <> &middot; {detail.seriesName}{detail.seriesPosition ? ` #${detail.seriesPosition}` : ""}</>
             )}
           </p>
 
-          {/* Ratings row */}
-          <div className="flex items-center gap-3 mt-1">
-            {grRating?.rating && (
-              <RatingBadge
-                score={grRating.rating}
-                source="goodreads"
-                ratingCount={grRating.ratingCount}
-              />
-            )}
-            {spice && (
-              <span className="text-xs">
-                {Array.from({ length: Math.min(5, Math.round(spice.spiceLevel)) }, (_, i) => (
-                  <span key={i}>🌶️</span>
-                ))}
-              </span>
-            )}
-          </div>
-
-          {/* Creator quote */}
-          {book.creatorQuote && (
+          {/* Creator quote (only when unique per book) */}
+          {showQuote && (
             <p className="mt-1.5 text-xs font-body text-muted/70 italic leading-snug line-clamp-2">
               &ldquo;{book.creatorQuote}&rdquo;
             </p>
           )}
-          <p className="text-xs font-mono text-muted/70 mt-0.5">
+          <p className="text-xs font-mono text-muted/50 mt-0.5">
             {SENTIMENT_EMOJI[book.creatorSentiment] ?? "mentioned"}
           </p>
         </div>
