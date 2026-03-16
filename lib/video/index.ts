@@ -275,11 +275,12 @@ async function grabPipeline(
       onStatus?.("scanning");
       let frames = await extractFrames(videoUrl, download.durationSeconds);
 
-      // If we got suspiciously few frames compared to reported duration,
-      // the no-watermark video may be truncated — try fallback URLs
+      // If we got suspiciously few frames, the no-watermark video may be truncated.
+      // When duration is known: expect at least half the duration in frames.
+      // When duration is unknown: if we have <10 frames and alternatives exist, try them.
       const expectedMinFrames = download.durationSeconds
-        ? Math.floor(download.durationSeconds * 0.5) // expect at least half the duration in frames
-        : 0;
+        ? Math.floor(download.durationSeconds * 0.5)
+        : 10; // Unknown duration: always try fallbacks if we got fewer than 10 frames
 
       if (frames.length < expectedMinFrames && download.allVideoUrls.length > 1) {
         console.log(`[grab] Only ${frames.length} frames from primary URL (expected ~${expectedMinFrames}+), trying ${download.allVideoUrls.length - 1} fallback URLs`);
