@@ -72,7 +72,6 @@ export async function GET(request: NextRequest) {
     }
 
     let crawled = 0;
-    let discovered = 0;
     const results: { author: string; status: string }[] = [];
 
     for (const entry of authors) {
