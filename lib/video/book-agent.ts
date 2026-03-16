@@ -15,10 +15,10 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
-import { searchGoodreads, type GoodreadsSearchResult } from "@/lib/books/goodreads-search";
 import { getBookDetail } from "@/lib/books";
 import { isJunkTitle } from "@/lib/books/romance-filter";
 import { getAdminClient } from "@/lib/supabase/admin";
+import { searchBooksForAgent } from "./agent-search";
 import type { ResolvedBook, ResolvedBookMatched, ResolvedBookUnmatched } from "./book-resolver";
 
 /** Collects debug log entries and flushes to Supabase at the end */
@@ -60,7 +60,7 @@ const TOOLS: Anthropic.Messages.Tool[] = [
   {
     name: "search_goodreads",
     description:
-      "Search Goodreads for a book by title, author, or series name. Returns up to 5 results with title, author, Goodreads ID, rating, and rating count. Use this to verify book identities and find the correct edition. For series, search for the series name + author to find Book 1.",
+      "Search for a book by title, author, or series name. Checks our local database first (instant), then Google Books (fast), then Goodreads (slow). Returns up to 5 results with title, author, Goodreads ID, series info, and rating. Results from local_db already include series_name and series_position — you may not need to call confirm_book for those.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -137,7 +137,7 @@ YOUR PROCESS:
 2. LISTEN: Read the transcript to understand which books the creator is discussing and what they say about each one.
 3. CROSS-REFERENCE: Match what you see on covers with what you hear in the transcript. The creator may show Book 3 while recommending Book 1 of a series.
 4. VERIFY: Use search_goodreads to find each book. This is CRITICAL — do not guess at Goodreads IDs, always search. Call search_goodreads for ALL books in a SINGLE turn to save time.
-5. CONFIRM: Use confirm_book to verify you have the right edition (especially Book 1 for series recommendations). Call confirm_book for ALL books in a SINGLE turn.
+5. CONFIRM: If search results already include series_name and series_position (source: "local_db"), you can skip confirm_book for those. Only use confirm_book when you need series info that wasn't in the search results (source: "google_books" or "goodreads"). Call confirm_book for ALL books in a SINGLE turn.
 6. SUBMIT: Call submit_books with your final verified list.
 
 CRITICAL RULES:
@@ -464,15 +464,18 @@ Identify every book the creator is recommending or discussing. Use search_goodre
             if (toolUse.name === "search_goodreads") {
               const query = toolInput.query as string;
               dbg.log(`search_goodreads("${query}")`);
-              const results = await searchGoodreads(query);
-              const simplified = results.slice(0, 5).map((r: GoodreadsSearchResult) => ({
-                goodreads_id: r.goodreadsId,
+              const results = await searchBooksForAgent(query);
+              const simplified = results.map((r) => ({
+                goodreads_id: r.goodreads_id,
                 title: r.title,
                 author: r.author,
                 rating: r.rating,
-                rating_count: r.ratingCount,
+                rating_count: r.rating_count,
+                series_name: r.series_name,
+                series_position: r.series_position,
+                source: r.source,
               }));
-              dbg.log(`search_goodreads("${query}") => ${simplified.length} results: ${simplified.map(s => `${s.title} (${s.goodreads_id})`).join(", ")}`);
+              dbg.log(`search_goodreads("${query}") => ${simplified.length} results (${results[0]?.source ?? "none"}): ${simplified.map(s => `${s.title} (${s.goodreads_id})`).join(", ")}`);
               if (input.captureToolCalls) {
                 capturedToolCalls.push({ tool: "search_goodreads", input: { query }, output: simplified, turn });
               }
