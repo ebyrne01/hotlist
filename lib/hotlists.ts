@@ -54,6 +54,51 @@ export async function getUserHotlists(supabase: any, userId: string): Promise<(H
   });
 }
 
+/** Lightweight hotlist info for OG metadata — no book hydration. */
+export async function getHotlistMetadata(
+  hotlistIdOrSlug: string
+): Promise<{
+  name: string;
+  bookCount: number;
+  sourceCreatorHandle: string | null;
+  ownerName: string | null;
+} | null> {
+  const supabase = getAdminClient();
+
+  const { data: bySlug } = await supabase
+    .from("hotlists")
+    .select("id, name, user_id, is_public, source_creator_handle")
+    .eq("share_slug", hotlistIdOrSlug)
+    .single();
+
+  const hotlistRow = bySlug ?? (await supabase
+    .from("hotlists")
+    .select("id, name, user_id, is_public, source_creator_handle")
+    .eq("id", hotlistIdOrSlug)
+    .single()).data;
+
+  if (!hotlistRow) return null;
+
+  const [{ count }, { data: profile }] = await Promise.all([
+    supabase
+      .from("hotlist_books")
+      .select("id", { count: "exact", head: true })
+      .eq("hotlist_id", hotlistRow.id),
+    supabase
+      .from("profiles")
+      .select("display_name")
+      .eq("id", hotlistRow.user_id)
+      .single(),
+  ]);
+
+  return {
+    name: hotlistRow.name,
+    bookCount: count ?? 0,
+    sourceCreatorHandle: hotlistRow.source_creator_handle ?? null,
+    ownerName: profile?.display_name ?? null,
+  };
+}
+
 /** Get a hotlist with fully hydrated books. Server-side only (uses admin client). */
 export async function getHotlistWithBooks(
   hotlistIdOrSlug: string,

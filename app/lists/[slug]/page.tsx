@@ -1,33 +1,40 @@
 export const dynamic = "force-dynamic";
 
+import { cache } from "react";
 import { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
-import { getHotlistWithBooks } from "@/lib/hotlists";
+import { getHotlistWithBooks, getHotlistMetadata } from "@/lib/hotlists";
 import HotlistDetailClient from "./HotlistDetailClient";
 
 interface Props {
   params: { slug: string };
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const hotlist = await getHotlistWithBooks(params.slug);
+// React cache() deduplicates within a single server request
+const getCachedHotlist = cache((slug: string, userId?: string) =>
+  getHotlistWithBooks(slug, userId)
+);
 
-  if (!hotlist || "_accessDenied" in hotlist) {
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  // Lightweight query — just hotlist name + creator handle + book count
+  const meta = await getHotlistMetadata(params.slug);
+
+  if (!meta) {
     return { title: "Hotlist Not Found" };
   }
 
-  const byline = hotlist.sourceCreatorHandle
-    ? `${hotlist.sourceCreatorHandle}'s`
-    : hotlist.ownerName
-      ? `${hotlist.ownerName}'s`
+  const byline = meta.sourceCreatorHandle
+    ? `${meta.sourceCreatorHandle}'s`
+    : meta.ownerName
+      ? `${meta.ownerName}'s`
       : "a reader's";
 
   return {
-    title: `${hotlist.name} — Hotlist`,
-    description: `Check out ${byline} Hotlist: ${hotlist.name} — ${hotlist.books.length} books compared`,
+    title: `${meta.name} — Hotlist`,
+    description: `Check out ${byline} Hotlist: ${meta.name} — ${meta.bookCount} books compared`,
     openGraph: {
-      title: `${hotlist.name} — Hotlist`,
-      description: `${byline} Hotlist with ${hotlist.books.length} books compared side by side`,
+      title: `${meta.name} — Hotlist`,
+      description: `${byline} Hotlist with ${meta.bookCount} books compared side by side`,
       type: "website",
     },
   };
@@ -37,7 +44,7 @@ export default async function HotlistDetailPage({ params }: Props) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  const hotlist = await getHotlistWithBooks(params.slug, user?.id);
+  const hotlist = await getCachedHotlist(params.slug, user?.id);
 
   // Hotlist not found (deleted or never existed)
   if (!hotlist) {
