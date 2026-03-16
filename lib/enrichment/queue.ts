@@ -96,35 +96,28 @@ export const JOB_TYPE_PRIORITY: JobType[][] = [
 ];
 
 /**
- * Fetch the next batch of jobs to process.
- * Newest jobs first (so fresh grabs get enriched fast).
- * Optionally filter to specific job types (for priority processing).
+ * Atomically claim a batch of pending/failed jobs.
+ * Uses FOR UPDATE SKIP LOCKED in Postgres to prevent two workers
+ * from claiming the same job (race condition fix).
+ * Marks jobs as 'running' and increments attempts in one step.
  */
-export async function fetchPendingJobs(
+export async function claimJobs(
   limit: number = 10,
   jobTypes?: JobType[]
 ): Promise<QueuedJob[]> {
   const supabase = getAdminClient();
 
-  let query = supabase
-    .from("enrichment_queue")
-    .select(`
-      id, book_id, job_type, attempts,
-      books!inner(title, author, isbn, goodreads_id)
-    `)
-    .in("status", ["pending", "failed"])
-    .lt("attempts", 3)
-    .lte("next_retry_at", new Date().toISOString())
-    .order("created_at", { ascending: false })
-    .limit(limit);
+  const { data, error } = await supabase.rpc("claim_enrichment_jobs", {
+    p_limit: limit,
+    p_job_types: jobTypes ?? null,
+  });
 
-  if (jobTypes && jobTypes.length > 0) {
-    query = query.in("job_type", jobTypes);
+  if (error) {
+    console.warn("[enrichment-queue] Failed to claim jobs:", error.message);
+    return [];
   }
 
-  const { data } = await query;
-
-  if (!data) return [];
+  if (!data || data.length === 0) return [];
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return data.map((row: any) => ({
@@ -132,30 +125,31 @@ export async function fetchPendingJobs(
     book_id: row.book_id,
     job_type: row.job_type as JobType,
     attempts: row.attempts,
-    book_title: row.books?.title,
-    book_author: row.books?.author,
-    book_isbn: row.books?.isbn,
-    book_goodreads_id: row.books?.goodreads_id,
+    book_title: row.book_title,
+    book_author: row.book_author,
+    book_isbn: row.book_isbn,
+    book_goodreads_id: row.book_goodreads_id,
   }));
 }
 
 /**
- * Mark a job as running (prevents double-processing).
- * Increments attempts via RPC.
+ * @deprecated Use claimJobs() instead — it atomically fetches + marks running.
+ * Kept for backwards compatibility with any external callers.
+ */
+export async function fetchPendingJobs(
+  limit: number = 10,
+  jobTypes?: JobType[]
+): Promise<QueuedJob[]> {
+  return claimJobs(limit, jobTypes);
+}
+
+/**
+ * @deprecated Use claimJobs() instead — it atomically marks jobs running.
+ * Kept for backwards compatibility with any external callers.
  */
 export async function markJobRunning(jobId: string): Promise<void> {
-  const supabase = getAdminClient();
-
-  await supabase
-    .from("enrichment_queue")
-    .update({
-      status: "running",
-      last_attempt_at: new Date().toISOString(),
-    })
-    .eq("id", jobId);
-
-  // Increment attempts atomically
-  await supabase.rpc("increment_enrichment_attempts", { job_id: jobId });
+  // No-op — claimJobs already marks the job as running
+  void jobId;
 }
 
 /**

@@ -188,8 +188,40 @@ function normalizeUrl(url: string): string {
  * 5. Queue enrichment for matched books
  * 6. Cache result
  */
+/** Pipeline timeout: 4 minutes (leaves margin before Vercel's 5-min limit) */
+const PIPELINE_TIMEOUT_MS = 4 * 60 * 1000;
+
 export async function grabBooksFromVideo(
   url: string,
+  onStatus?: (status: GrabStatus) => void,
+  userId?: string,
+  debug?: boolean
+): Promise<GrabResult> {
+  // Step 1: Validate URL (fast, no timeout needed)
+  const platform = detectPlatform(url);
+  if (platform === "unknown") {
+    return { success: false, error: "invalid_url" };
+  }
+
+  // Step 2: Check cache (fast, no timeout needed)
+  const cached = await getCachedGrab(url);
+  if (cached) return cached;
+
+  // Race the rest of the pipeline against a timeout
+  return Promise.race([
+    grabPipeline(url, platform, onStatus, userId, debug),
+    new Promise<GrabResult>((resolve) =>
+      setTimeout(() => {
+        console.error(`[grab] Pipeline timed out after ${PIPELINE_TIMEOUT_MS / 1000}s for ${url}`);
+        resolve({ success: false, error: "video_unavailable" });
+      }, PIPELINE_TIMEOUT_MS)
+    ),
+  ]);
+}
+
+async function grabPipeline(
+  url: string,
+  platform: "tiktok" | "instagram" | "youtube",
   onStatus?: (status: GrabStatus) => void,
   userId?: string,
   debug?: boolean
@@ -203,16 +235,6 @@ export async function grabBooksFromVideo(
     enrichmentMs: 0,
     totalMs: 0,
   };
-
-  // Step 1: Validate URL
-  const platform = detectPlatform(url);
-  if (platform === "unknown") {
-    return { success: false, error: "invalid_url" };
-  }
-
-  // Step 2: Check cache
-  const cached = await getCachedGrab(url);
-  if (cached) return cached;
 
   // Step 3: Download video/audio
   onStatus?.("downloading");

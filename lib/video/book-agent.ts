@@ -159,6 +159,8 @@ SEARCH STRATEGY when a search returns 0 results:
 - Try shorter queries: just the most distinctive word + author.
 - If author + title together return 0, ALWAYS try the title by itself as one of your retries.
 - Do NOT repeat the same failing query with minor keyword changes — change your approach entirely.
+- NEVER add descriptive keywords like "dragon shifter", "magical academy", "fantasy romance", "completed trilogy" etc. to searches. Goodreads search matches on title/author text only — descriptive words poison the results. Search "Avalon Tower" not "Avalon Tower fairy spies Arthurian academy".
+- Limit retries to 2-3 per book. If 3 different search strategies fail, submit the book with null goodreads_id and move on.
 
 // Examples sourced from BookTok test harness baseline run (March 2026)
 // Update when new failure patterns are identified
@@ -183,6 +185,8 @@ KNOWN WHISPER ERRORS — the transcript may contain these garbled versions:
 - "Rose and Chains" → Book is "Rose in Chains" by Julie Soto
 - "Infantness of Yesterday" → Book is "The Infiniteness of Yesterday" by Micalea Smeltzer
 - "Alchemized" or "Alchemist" → Book may be "Alchemised" by SenLinYu
+- "Ashes of Thesmar" or "Thesmar" → Series is "The Ashes of Thezmarr" by Helen Scheuerer
+- "Power of Hayes" or "Hades Trials" → Series is "The Hades Trials" by Eliza Raine
 When the transcript contains garbled names, search Goodreads with the CORRECTED version.
 
 COMMON BOOKTOK ABBREVIATIONS — creators use these shorthand names:
@@ -196,11 +200,17 @@ COMMON BOOKTOK ABBREVIATIONS — creators use these shorthand names:
 When you hear an abbreviation, search for the full title on Goodreads.
 
 SERIES HANDLING — critical patterns:
-- When a creator says "you HAVE to read [series name]" → find Book 1
-- When a creator holds up Book 3 of a series → still recommend Book 1 unless they specifically say "start with Book 3"
+- When a creator casually recommends a series ("you HAVE to read [series name]") → find Book 1.
+- When a creator holds up Book 3 of a series → still recommend Book 1 unless they specifically say "start with Book 3".
 - When a creator says "I just finished [Book 5]" → they may be recommending the series (Book 1) OR specifically that book. Use context to decide.
 - When a creator says they gave a specific book 5 stars, extract THAT specific book, not Book 1 of its series.
 - Verify series position with confirm_book BEFORE submitting.
+
+COMPLETE SERIES / TRILOGY RECOMMENDATIONS:
+- When the video theme is about recommending complete series or trilogies (e.g., "trilogy recommendations", "completed series you need to read", or the creator shows/names ALL books in a series), submit EVERY book in the series — NOT just Book 1.
+- After confirming Book 1, search for the other books by series name + "book 2", "book 3", etc. Example: if Book 1 is "A Dawn of Onyx (The Sacred Stones, #1)", search "A Promise of Peridot Sacred Stones" and "A Reign of Rose Sacred Stones" to find Books 2 and 3.
+- The creator may hold up 3 books with only spines visible — read what you can from spines and cross-reference with the transcript to identify all volumes.
+- When a creator says "this whole trilogy" or "all three books", that means submit all books in the series, not just Book 1.
 
 DO NOT EXTRACT — these are NOT book recommendations:
 - Brief comparisons: "it's like a dark Twilight" → do NOT extract Twilight

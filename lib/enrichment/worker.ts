@@ -7,9 +7,8 @@
  */
 
 import {
-  fetchPendingJobs,
+  claimJobs,
   JOB_TYPE_PRIORITY,
-  markJobRunning,
   markJobCompleted,
   markJobFailed,
   updateBookEnrichmentStatus,
@@ -93,14 +92,14 @@ export async function processEnrichmentQueue(
     if (timeLeft() < 5000) break;
 
     while (timeLeft() > 5000) {
-      const jobs = await fetchPendingJobs(5, tier);
+      // Atomically claim jobs — prevents race conditions between concurrent workers
+      const jobs = await claimJobs(5, tier);
       if (jobs.length === 0) break;
 
       for (const job of jobs) {
         if (timeLeft() < 5000) break;
 
         try {
-          await markJobRunning(job.id);
           await processJob(job);
           await markJobCompleted(job.id);
           await updateBookEnrichmentStatus(job.book_id);
