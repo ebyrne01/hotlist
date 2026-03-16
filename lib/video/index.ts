@@ -273,7 +273,27 @@ async function grabPipeline(
     const videoUrl = download.videoUrl;
     if (videoUrl) {
       onStatus?.("scanning");
-      const frames = await extractFrames(videoUrl, download.durationSeconds);
+      let frames = await extractFrames(videoUrl, download.durationSeconds);
+
+      // If we got suspiciously few frames compared to reported duration,
+      // the no-watermark video may be truncated — try fallback URLs
+      const expectedMinFrames = download.durationSeconds
+        ? Math.floor(download.durationSeconds * 0.5) // expect at least half the duration in frames
+        : 0;
+
+      if (frames.length < expectedMinFrames && download.allVideoUrls.length > 1) {
+        console.log(`[grab] Only ${frames.length} frames from primary URL (expected ~${expectedMinFrames}+), trying ${download.allVideoUrls.length - 1} fallback URLs`);
+        for (const fallbackUrl of download.allVideoUrls) {
+          if (fallbackUrl === videoUrl) continue;
+          const fallbackFrames = await extractFrames(fallbackUrl, download.durationSeconds);
+          if (fallbackFrames.length > frames.length) {
+            console.log(`[grab] Fallback URL yielded ${fallbackFrames.length} frames (was ${frames.length})`);
+            frames = fallbackFrames;
+            break; // Use the first improvement
+          }
+        }
+      }
+
       timing.frameExtractionMs = Date.now() - tFrames;
       if (frames.length > 0) {
         console.log(`[grab] Extracted ${frames.length} frames`);

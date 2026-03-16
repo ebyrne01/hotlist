@@ -15,6 +15,8 @@ export interface VideoDownloadResult {
   durationSeconds: number | null;
   /** For photo/carousel posts: direct URLs to each slide image */
   imageUrls: string[];
+  /** All available video URLs in priority order (for fallback if primary is truncated) */
+  allVideoUrls: string[];
 }
 
 /**
@@ -136,6 +138,11 @@ export async function getVideoDownloadUrl(
     const audioUrl = audioMedia?.url ?? null;
     const videoUrl = videoMedia?.url ?? null;
 
+    // Collect ALL video URLs for fallback (some no-watermark versions are truncated)
+    const allVideoUrls = medias
+      .filter((m) => m.type === "video" && m.url)
+      .map((m) => m.url as string);
+
     if (!audioUrl && !videoUrl && imageUrls.length === 0) {
       console.error("[downloader] No download URLs in response:", JSON.stringify(data).slice(0, 500));
       return null;
@@ -144,6 +151,8 @@ export async function getVideoDownloadUrl(
     if (imageUrls.length > 0) {
       console.log(`[downloader] Photo/carousel post detected: ${imageUrls.length} images`);
     }
+
+    console.log(`[downloader] Found ${allVideoUrls.length} video URLs, ${medias.length} total medias, qualities: ${medias.filter(m => m.type === "video").map(m => m.quality).join(", ")}`);
 
     return {
       audioUrl,
@@ -158,6 +167,7 @@ export async function getVideoDownloadUrl(
       durationSeconds:
         data.duration != null ? Math.round(data.duration / 1000) : null,
       imageUrls,
+      allVideoUrls,
     };
   } catch (err) {
     console.error("[downloader] Failed:", err);
