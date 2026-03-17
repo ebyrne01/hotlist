@@ -453,6 +453,17 @@ function BookTokPageInner() {
                   found
                 </span>
               </div>
+              {result.videoTitle && (() => {
+                const cleanTitle = result.videoTitle
+                  .replace(/#\S+/g, "")
+                  .replace(/\s+/g, " ")
+                  .trim();
+                return cleanTitle ? (
+                  <p className="mt-1 text-xs font-body text-muted/70 italic leading-snug line-clamp-2">
+                    &ldquo;{cleanTitle}&rdquo;
+                  </p>
+                ) : null;
+              })()}
               {listQuote && (
                 <p className="mt-1.5 text-xs font-body text-muted/70 italic leading-snug line-clamp-2">
                   &ldquo;{listQuote}&rdquo;
