@@ -124,11 +124,11 @@ async function downloadViaTikTokApi(
   const creatorHandle = extractCreatorHandle(url, platform);
 
   try {
-    // Try the common endpoint patterns
+    // Try the known endpoint patterns for this API
     const endpoints = [
+      `https://${apiHost}/vid/index?url=${encodeURIComponent(url)}`,
       `https://${apiHost}/getVideo?url=${encodeURIComponent(url)}`,
       `https://${apiHost}/?url=${encodeURIComponent(url)}`,
-      `https://${apiHost}/dl?url=${encodeURIComponent(url)}`,
     ];
 
     let data: Record<string, unknown> | null = null;
@@ -212,8 +212,9 @@ function parseTikTokResponse(
       }
     }
   }
-  // Format B: { video: [...], audio: "...", ... }
+  // Format B (7scorp-style): { video: ["url"], music: ["url"], cover: ["url"], author: ["name"], ... }
   else if (data.video || data.video_url || data.videoUrl) {
+    // video field: array of URLs or single string
     const videos = data.video;
     if (Array.isArray(videos)) {
       for (const v of videos) {
@@ -226,10 +227,29 @@ function parseTikTokResponse(
         ?? data.video_url ?? data.videoUrl ?? null;
       if (videoUrl) allVideoUrls.push(videoUrl);
     }
-    audioUrl = data.audio ?? data.audio_url ?? data.audioUrl ?? data.music ?? null;
-    title = data.title ?? data.desc ?? null;
-    thumbnail = data.thumbnail ?? data.cover ?? data.origin_cover ?? null;
+    // OriginalWatermarkedVideo as fallback (full-length, watermarked)
+    if (Array.isArray(data.OriginalWatermarkedVideo)) {
+      for (const v of data.OriginalWatermarkedVideo) {
+        if (typeof v === "string" && !allVideoUrls.includes(v)) allVideoUrls.push(v);
+      }
+    }
+    // music/audio: may be array or string
+    const music = data.music ?? data.audio ?? data.audio_url ?? data.audioUrl ?? null;
+    audioUrl = Array.isArray(music) ? (music[0] ?? null) : music;
+    // description/title
+    const desc = data.description ?? data.title ?? data.desc ?? null;
+    title = Array.isArray(desc) ? (desc[0] ?? null) : desc;
+    // thumbnail/cover: may be array or string
+    const cover = data.cover ?? data.thumbnail ?? data.origin_cover ?? null;
+    thumbnail = Array.isArray(cover) ? (cover[0] ?? null) : cover;
     durationSeconds = data.duration != null ? Math.round(Number(data.duration)) : null;
+    // Carousel/slideshow images from 7scorp format
+    if (Array.isArray(data.images) && data.images.length > 0) {
+      for (const img of data.images) {
+        if (typeof img === "string") imageUrls.push(img);
+        else if (img?.url) imageUrls.push(img.url);
+      }
+    }
   }
   // Format C: response has a nested result
   else if (data.result && typeof data.result === "object") {
@@ -242,10 +262,10 @@ function parseTikTokResponse(
   }
 
   // Extract handle from response if available
-  const responseHandle = data.data?.author?.unique_id
-    ?? data.author?.unique_id
-    ?? data.unique_id
-    ?? null;
+  // 7scorp returns author as ["username"], tikwm returns author.unique_id
+  const authorField = data.author ?? data.data?.author;
+  const responseHandle = Array.isArray(authorField) ? (authorField[0] ?? null)
+    : (authorField?.unique_id ?? data.unique_id ?? null);
 
   console.log(`[downloader] TikTok API parsed: ${allVideoUrls.length} video URLs, duration=${durationSeconds}s, images=${imageUrls.length}`);
 
