@@ -14,6 +14,9 @@
     },
     "app/api/cron/openlibrary-discovery/route.ts": {
       "maxDuration": 300
+    },
+    "app/api/cron/amazon-bestsellers/route.ts": {
+      "maxDuration": 300
     }
   },
   "crons": [
@@ -52,6 +55,10 @@
     {
       "path": "/api/cron/author-expansion",
       "schedule": "0 3 * * 1"
+    },
+    {
+      "path": "/api/cron/amazon-bestsellers",
+      "schedule": "0 7 * * *"
     }
   ]
 }

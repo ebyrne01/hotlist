@@ -23,15 +23,39 @@ function sleep(ms: number) {
 
 /** All curated list URLs to seed from. */
 export const SEED_LIST_URLS = [
+  // --- Core romance lists ---
   "https://www.goodreads.com/list/show/18500.Best_Romance_of_the_Decade_2020s",
-  "https://www.goodreads.com/list/show/34735.Romantasy_Romantic_Fantasy",
   "https://www.goodreads.com/list/show/9951.Best_Romance_Novels",
-  "https://www.goodreads.com/list/show/142342.Best_Enemies_to_Lovers_Romance",
-  "https://www.goodreads.com/list/show/151423.Best_Fantasy_Romance",
   "https://www.goodreads.com/list/show/47.Best_Romance_of_the_21st_Century",
+  "https://www.goodreads.com/list/show/5937.Best_Romance_Books_on_Booktok",
+
+  // --- Romantasy / fantasy romance ---
+  "https://www.goodreads.com/list/show/34735.Romantasy_Romantic_Fantasy",
+  "https://www.goodreads.com/list/show/151423.Best_Fantasy_Romance",
+  "https://www.goodreads.com/list/show/7159.Best_Paranormal_Romance_Series",
+  "https://www.goodreads.com/list/show/3647.Best_Fae_Fantasy_Romance",
+
+  // --- Subgenres ---
+  "https://www.goodreads.com/list/show/11856.Best_Historical_Romance",
+  "https://www.goodreads.com/list/show/16745.Best_Contemporary_Romance",
+  "https://www.goodreads.com/list/show/47722.Best_Dark_Romance",
+  "https://www.goodreads.com/list/show/7413.Best_Romantic_Suspense",
+  "https://www.goodreads.com/list/show/157075.Best_Spicy_Romance",
+
+  // --- Trope-specific ---
+  "https://www.goodreads.com/list/show/142342.Best_Enemies_to_Lovers_Romance",
+  "https://www.goodreads.com/list/show/174498.Best_Grumpy_Sunshine_Romance",
+  "https://www.goodreads.com/list/show/36956.Best_Slow_Burn_Romance",
+  "https://www.goodreads.com/list/show/10745.Best_Friends_to_Lovers_Romance",
+  "https://www.goodreads.com/list/show/18816.Best_Fake_Relationship_Romance",
+  "https://www.goodreads.com/list/show/15399.Best_Second_Chance_Romance",
+  "https://www.goodreads.com/list/show/63775.Best_Forced_Proximity_Romance",
+
+  // --- Year-based (catch new releases) ---
   "https://www.goodreads.com/list/show/22833.Most_Popular_Books_Published_In_2024",
   "https://www.goodreads.com/list/show/171039.Most_Popular_Books_Published_In_2025",
-  "https://www.goodreads.com/list/show/5937.Best_Romance_Books_on_Booktok",
+  "https://www.goodreads.com/list/show/185279.Most_Popular_Books_Published_In_2026",
+  "https://www.goodreads.com/list/show/171040.Most_Anticipated_Books_of_2026",
 ];
 
 interface ListEntry {
