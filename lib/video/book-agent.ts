@@ -153,7 +153,8 @@ CRITICAL RULES:
 - When you see a book cover that shows a LATER book in a series (e.g., Book 3) but the creator is recommending the series from the start, search for Book 1.
 - Read book covers CHARACTER BY CHARACTER — do not substitute titles you think you recognize.
 - Extract sentiment and a creator quote for each book from the transcript.
-- Do NOT extract books mentioned only as brief comparisons ("similar to X", "if you liked X").
+- Do NOT extract books mentioned only as comparisons or references ("similar to X", "if you liked X", "it gives Fourth Wing vibes", "like ACOTAR"). Only extract books the creator is ACTUALLY recommending, reviewing, or showcasing. If a book is only named to describe another book's vibe, it is NOT a recommendation.
+- NEGATIVE SENTIMENT: If the creator explicitly dismisses or criticizes books (e.g., "no", "don't read this", "this was terrible", "overrated"), mark those with sentiment "disliked" and a quote capturing the criticism. Still include them — the user should know — but do NOT mark them as "liked".
 - Do NOT extract planners, journals, non-book products.
 - If you cannot verify a book on Goodreads, still include it with null goodreads_id.
 - Call submit_books exactly ONCE with ALL books when you are done.
