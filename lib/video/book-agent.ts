@@ -53,9 +53,11 @@ class AgentDebugLog {
 const MODEL = "claude-sonnet-4-6";
 
 /** Default max frames for normal videos */
-const DEFAULT_AGENT_FRAMES = 16;
+const DEFAULT_AGENT_FRAMES = 8;
 /** Higher frame cap for fast-moving haul videos (short + many frames = rapid content) */
-const FAST_VIDEO_AGENT_FRAMES = 24;
+const FAST_VIDEO_AGENT_FRAMES = 12;
+/** When transcript is very long (talk-heavy video), frames matter less — use fewer */
+const TRANSCRIPT_HEAVY_FRAMES = 6;
 
 /** Time budget for the agent loop (ms). After this, the agent will be asked to submit immediately. */
 const AGENT_TIME_BUDGET_MS = 220_000; // 3m 40s — leaves headroom within the 4.5-min pipeline timeout
@@ -280,13 +282,19 @@ interface SubmittedBook {
  * Subsample frames evenly to stay under the frame cap.
  * Keeps first and last frame, evenly spaces the rest.
  *
- * Adaptive: short videos (≤30s) with many extracted frames are likely
- * fast-moving haul videos — these get more frames (24) to catch titles
- * that flash by quickly. Normal videos use 16 frames.
+ * Adaptive frame selection:
+ * - Transcript-heavy videos (≥500 chars): fewer frames since audio carries
+ *   the book info. Use TRANSCRIPT_HEAVY_FRAMES (6).
+ * - Fast videos (≤30s, many frames): likely haul videos with titles flashing
+ *   by — use FAST_VIDEO_AGENT_FRAMES (12).
+ * - Normal videos: DEFAULT_AGENT_FRAMES (8).
  */
-function subsampleFrames(frames: (string | Buffer)[], durationSeconds?: number): (string | Buffer)[] {
+function subsampleFrames(frames: (string | Buffer)[], durationSeconds?: number, transcriptLength?: number): (string | Buffer)[] {
+  const isTranscriptHeavy = (transcriptLength ?? 0) >= 500;
   const isFastVideo = (durationSeconds ?? 999) <= 30 && frames.length >= 20;
-  const maxFrames = isFastVideo ? FAST_VIDEO_AGENT_FRAMES : DEFAULT_AGENT_FRAMES;
+  const maxFrames = isTranscriptHeavy ? TRANSCRIPT_HEAVY_FRAMES
+    : isFastVideo ? FAST_VIDEO_AGENT_FRAMES
+    : DEFAULT_AGENT_FRAMES;
 
   if (frames.length <= maxFrames) return frames;
 
@@ -341,7 +349,7 @@ async function _identifyBooksWithAgentInternal(
     const client = new Anthropic({ apiKey });
 
     // Subsample frames — adaptive: fast haul videos get more frames
-    const frames = subsampleFrames(input.frames, input.durationSeconds);
+    const frames = subsampleFrames(input.frames, input.durationSeconds, input.transcript.length);
     dbg.log(`Using ${frames.length} frames (from ${input.frames.length} total), transcript length=${input.transcript.length}`);
 
     // Build the user message with frames + transcript
@@ -407,6 +415,8 @@ Identify every book the creator is recommending or discussing. Use search_goodre
     let submittedBooks: SubmittedBook[] | null = null;
     const maxTurns = 20; // Safety limit — time budget is the real limiter
     let turn = 0;
+    let rateLimitRetries = 0;
+    const MAX_RATE_LIMIT_RETRIES = 2;
 
     // Track confirmed books as fallback if the agent never calls submit_books
     const confirmedBooks = new Map<string, { goodreads_id: string; title: string; author: string }>();
@@ -438,7 +448,16 @@ Identify every book the creator is recommending or discussing. Use search_goodre
           messages,
         });
       } catch (apiErr) {
-        dbg.log(`ERROR: Anthropic API error on turn ${turn}: ${String(apiErr)}`);
+        // Retry on 429 rate limit errors — wait 60s and try the same turn again
+        const errStr = String(apiErr);
+        if ((errStr.includes("429") || errStr.includes("rate_limit") || errStr.includes("Rate limit")) && rateLimitRetries < MAX_RATE_LIMIT_RETRIES) {
+          rateLimitRetries++;
+          dbg.log(`RATE LIMITED on turn ${turn}: waiting 60s before retry (${rateLimitRetries}/${MAX_RATE_LIMIT_RETRIES})...`);
+          await new Promise((r) => setTimeout(r, 60_000));
+          turn--; // Retry same turn
+          continue;
+        }
+        dbg.log(`ERROR: Anthropic API error on turn ${turn}: ${errStr}`);
         break;
       }
 

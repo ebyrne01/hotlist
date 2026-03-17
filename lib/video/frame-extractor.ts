@@ -30,8 +30,8 @@ const MAX_FRAMES = 30;
 /** Extract 1 frame every N seconds (1 = every second, catches fast-scrolling titles) */
 const FRAME_INTERVAL_SECONDS = 1;
 
-/** Resize frames to this width (pixels) — higher res = better OCR on book covers */
-const FRAME_WIDTH = 768;
+/** Resize frames to this width (pixels) — 512px is readable for covers while keeping vision token cost low */
+const FRAME_WIDTH = 512;
 
 /**
  * Extract frames from a video URL at regular intervals.

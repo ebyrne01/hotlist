@@ -273,7 +273,7 @@ Book data flows through two independent systems:
 - `enrichment_queue` table tracks jobs per book per source
 - Job types: goodreads_detail, goodreads_rating, amazon_rating, romance_io_spice, metadata, ai_synopsis, trope_inference, review_classifier, llm_spice
 - Each job retries up to 3 times with exponential backoff (30s, 2min, 10min)
-- **Priority tiers**: Tier 1 (goodreads_rating, amazon_rating, romance_io_spice, llm_spice) → Tier 2 (trope_inference, review_classifier) → Tier 3 (goodreads_detail, metadata, ai_synopsis, author_crawl). Newest jobs first within each tier.
+- **Priority tiers**: Tier 1 (goodreads_rating, amazon_rating, romance_io_spice, llm_spice) → Tier 2 (goodreads_detail, metadata, trope_inference, review_classifier) → Tier 3 (ai_synopsis, author_crawl). Newest jobs first within each tier.
 - Cron worker runs every 5 minutes (`/api/cron/enrichment-worker`)
 - `enrichment_status` on books table: "pending" → "partial" → "complete"
 - Book detail pages poll for updates when enrichment is incomplete
