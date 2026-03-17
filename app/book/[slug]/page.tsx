@@ -14,6 +14,7 @@ import { isJunkTitle } from "@/lib/books/romance-filter";
 import { deduplicateBooks } from "@/lib/books/utils";
 import type { BookDetail } from "@/lib/types";
 import BookDetailClient from "./BookDetailClient";
+import BookPreview from "@/components/books/BookPreview";
 import { InlineUserRating } from "./InlineRatings";
 import SpiceSection from "./SpiceSection";
 import BookTokMentions from "@/components/books/BookTokMentions";
@@ -403,6 +404,13 @@ export default async function BookPage({ params }: PageProps) {
                 </a>
               </div>
             </div>
+
+            {/* Google Books preview */}
+            <BookPreview
+              isbn={book.isbn13 ?? book.isbn ?? null}
+              googleBooksId={book.googleBooksId ?? null}
+              title={book.title}
+            />
 
             {/* Reading status (client component) */}
             <BookDetailClient
