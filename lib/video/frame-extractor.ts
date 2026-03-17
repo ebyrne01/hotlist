@@ -97,6 +97,25 @@ export async function extractFrames(
     // -f image2: output as image sequence
     const outputPattern = path.join(tmpDir, "frame-%03d.jpg");
 
+    // Extract the very first frame separately to catch books shown at t=0
+    // (the fps filter centers its window, missing the first ~0.5s)
+    const firstFramePath = path.join(tmpDir, "frame-000.jpg");
+    try {
+      await execFileAsync(
+        ffmpegPath,
+        [
+          "-i", videoUrl,
+          "-vf", `scale=${FRAME_WIDTH}:-1`,
+          "-frames:v", "1",
+          "-q:v", "2",
+          firstFramePath,
+        ],
+        { timeout: 10_000, maxBuffer: 5 * 1024 * 1024 }
+      );
+    } catch {
+      // Non-fatal — we'll still get frames from the fps pass
+    }
+
     await execFileAsync(
       ffmpegPath,
       [
