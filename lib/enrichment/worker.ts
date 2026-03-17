@@ -26,6 +26,7 @@ import { getAdminClient } from "@/lib/supabase/admin";
 import { computeGenreBucketing } from "@/lib/spice/genre-bucketing";
 import { inferAndUpsertSpice } from "@/lib/spice/llm-inference";
 import { classifyReviews } from "@/lib/spice/review-classifier";
+import { inferAndUpsertTropes } from "@/lib/spice/trope-inference";
 import { fetchAllReviews } from "@/lib/spice/review-fetcher";
 import { runAuthorCrawl } from "@/lib/books/author-crawl";
 
@@ -355,8 +356,24 @@ async function processJob(job: QueuedJob): Promise<void> {
     }
 
     case "trope_inference": {
-      // Run genre bucketing as part of trope inference
+      // Run genre bucketing as a spice signal
       await upsertGenreBucketing(supabase, book_id);
+
+      // Run LLM-based trope inference from description
+      const { data: bookForTropes } = await supabase
+        .from("books")
+        .select("description, genres")
+        .eq("id", book_id)
+        .single();
+
+      if (bookForTropes?.description) {
+        await inferAndUpsertTropes(book_id, {
+          title: book_title ?? "",
+          author: book_author ?? "",
+          description: bookForTropes.description,
+          genres: bookForTropes.genres ?? [],
+        });
+      }
       break;
     }
 
