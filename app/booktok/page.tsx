@@ -19,7 +19,7 @@ const STATUS_MESSAGES: Record<GrabStatus, string> = {
   transcribing: "Transcribing audio...",
   scanning: "Scanning for book covers...",
   extracting: "Finding book mentions...",
-  identifying: "Identifying books & verifying on Goodreads...",
+  identifying: "Identifying books & confirming editions...",
   done: "Done!",
 };
 
