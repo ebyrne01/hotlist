@@ -89,10 +89,10 @@ export async function queueEnrichmentJobs(
 export const JOB_TYPE_PRIORITY: JobType[][] = [
   // Tier 1: Ratings + spice — what users see immediately
   ["goodreads_rating", "amazon_rating", "romance_io_spice", "llm_spice"],
-  // Tier 2: Tropes + review-based spice
-  ["trope_inference", "review_classifier"],
-  // Tier 3: Supplementary data
-  ["goodreads_detail", "metadata", "ai_synopsis", "author_crawl"],
+  // Tier 2: Core data + tropes — covers, descriptions, ISBNs, trope tags
+  ["goodreads_detail", "metadata", "trope_inference", "review_classifier"],
+  // Tier 3: Nice-to-have enrichments
+  ["ai_synopsis", "author_crawl"],
 ];
 
 /**
