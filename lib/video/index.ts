@@ -77,7 +77,8 @@ export interface PipelineDiagnostics {
     downloadMs: number;
     transcriptionMs: number;
     frameExtractionMs: number;
-    agentIdentificationMs: number;
+    observeMs: number;
+    verifyMs: number;
     enrichmentMs: number;
     totalMs: number;
   };
@@ -232,7 +233,8 @@ async function grabPipeline(
     downloadMs: 0,
     transcriptionMs: 0,
     frameExtractionMs: 0,
-    agentIdentificationMs: 0,
+    observeMs: 0,
+    verifyMs: 0,
     enrichmentMs: 0,
     totalMs: 0,
   };
@@ -334,14 +336,14 @@ async function grabPipeline(
 
   // Step 4b: Preprocess transcript — apply Whisper corrections + detect series mode
   const preprocessed = transcript
-    ? await preprocessTranscript(effectiveTranscript)
-    : { correctedText: effectiveTranscript, isSeriesVideo: false, seriesHints: [] };
+    ? preprocessTranscript(effectiveTranscript)
+    : { correctedText: effectiveTranscript, isSeriesVideo: false };
 
   const agentTranscript = preprocessed.correctedText;
 
-  // Step 5: Single Sonnet agent call — vision + transcript + Goodreads tools
+  // Step 5: Two-phase agent — Haiku observe + Sonnet verify
   onStatus?.("identifying");
-  console.log(`[grab] Starting book agent with ${frames.length} frames and ${agentTranscript.length} chars of transcript (series mode: ${preprocessed.isSeriesVideo}, hints: ${preprocessed.seriesHints.length})`);
+  console.log(`[grab] Starting two-phase agent with ${frames.length} frames and ${agentTranscript.length} chars of transcript (series mode: ${preprocessed.isSeriesVideo})`);
   const tAgent = Date.now();
 
   let resolved: ResolvedBook[];
@@ -353,7 +355,7 @@ async function grabPipeline(
       transcript: agentTranscript,
       creatorHandle: creatorHandle ?? undefined,
       debugUrl: url,
-      seriesHints: preprocessed.seriesHints,
+      isSeriesMode: preprocessed.isSeriesVideo,
       durationSeconds: download.durationSeconds ?? undefined,
     });
     resolved = result.books;
@@ -364,11 +366,19 @@ async function grabPipeline(
       transcript: agentTranscript,
       creatorHandle: creatorHandle ?? undefined,
       debugUrl: url,
-      seriesHints: preprocessed.seriesHints,
+      isSeriesMode: preprocessed.isSeriesVideo,
       durationSeconds: download.durationSeconds ?? undefined,
     });
   }
-  timing.agentIdentificationMs = Date.now() - tAgent;
+  // Update timing from agent diagnostics if available
+  if (agentDiag) {
+    timing.observeMs = agentDiag.observeMs;
+    timing.verifyMs = agentDiag.verifyMs;
+  } else {
+    // Non-debug mode: total agent time is all we have
+    timing.observeMs = 0;
+    timing.verifyMs = Date.now() - tAgent;
+  }
 
   console.log(
     `[grab] Agent identified ${resolved.length} books:`,

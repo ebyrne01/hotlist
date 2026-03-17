@@ -1,17 +1,13 @@
 /**
  * TRANSCRIPT PREPROCESSOR
  *
- * Runs before the Sonnet book agent to:
+ * Runs before the two-phase book agent to:
  * 1. Apply known Whisper error corrections to the raw transcript
  * 2. Detect if the video is about series/trilogy recommendations
- * 3. If so, extract series names via a fast Haiku call
  *
- * This shifts error correction and series detection to deterministic
- * pre-processing + a cheap Haiku call (~$0.001), giving the Sonnet
- * agent a much simpler job with an explicit checklist.
+ * Series extraction is now handled by Phase 1 (Haiku observation),
+ * so this module only does deterministic preprocessing.
  */
-
-import Anthropic from "@anthropic-ai/sdk";
 
 /**
  * Known Whisper transcription errors.
@@ -64,14 +60,6 @@ export interface PreprocessedTranscript {
   correctedText: string;
   /** Whether this appears to be a series/trilogy recommendation video */
   isSeriesVideo: boolean;
-  /** Extracted series names + authors (from Haiku) — empty if not a series video */
-  seriesHints: SeriesHint[];
-}
-
-export interface SeriesHint {
-  seriesName: string;
-  author: string;
-  bookCount?: number;
 }
 
 /**
@@ -93,78 +81,17 @@ export function detectSeriesMode(transcript: string): boolean {
 }
 
 /**
- * Extract series names and authors from a transcript using Haiku.
- * Fast (~1-2s) and cheap (~$0.001).
- */
-async function extractSeriesWithHaiku(transcript: string): Promise<SeriesHint[]> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return [];
-
-  try {
-    const client = new Anthropic({ apiKey });
-    const response = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 1024,
-      temperature: 0,
-      system: "You extract book series information from BookTok video transcripts. Return ONLY valid JSON, no other text.",
-      messages: [
-        {
-          role: "user",
-          content: `Extract every book series or trilogy mentioned in this BookTok transcript. For each, provide the series name and author if mentioned. Return a JSON array of objects with "seriesName", "author", and optionally "bookCount".
-
-IMPORTANT:
-- Extract the SERIES NAME, not individual book titles. E.g. "Flame Cursed Fae" not "Of Blades and Wings"
-- If the creator mentions a book title as part of a series, use the series name
-- If an author isn't explicitly named, use "" for author
-- Only extract series the creator is actually recommending, not passing references ("like Throne of Glass" is a comparison, not a recommendation — unless they're recommending it directly)
-
-TRANSCRIPT:
-${transcript.slice(0, 3000)}`,
-        },
-      ],
-    });
-
-    const textBlock = response.content.find((b) => b.type === "text");
-    if (!textBlock || textBlock.type !== "text") return [];
-
-    // Parse JSON from response — handle markdown code blocks
-    let jsonStr = textBlock.text.trim();
-    if (jsonStr.startsWith("```")) {
-      jsonStr = jsonStr.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
-    }
-
-    const parsed = JSON.parse(jsonStr);
-    if (!Array.isArray(parsed)) return [];
-
-    return parsed
-      .filter((s: Record<string, unknown>) => s.seriesName && typeof s.seriesName === "string")
-      .map((s: Record<string, unknown>) => ({
-        seriesName: s.seriesName as string,
-        author: (s.author as string) || "",
-        bookCount: typeof s.bookCount === "number" ? s.bookCount : undefined,
-      }));
-  } catch (err) {
-    console.warn("[transcript-preprocessor] Haiku series extraction failed:", err);
-    return [];
-  }
-}
-
-/**
  * Full preprocessing pipeline:
  * 1. Apply Whisper corrections
  * 2. Detect series mode
- * 3. If series mode, extract series names with Haiku
  */
-export async function preprocessTranscript(rawTranscript: string): Promise<PreprocessedTranscript> {
+export function preprocessTranscript(rawTranscript: string): PreprocessedTranscript {
   const correctedText = correctTranscript(rawTranscript);
   const isSeriesVideo = detectSeriesMode(correctedText);
 
-  let seriesHints: SeriesHint[] = [];
   if (isSeriesVideo) {
-    console.log("[transcript-preprocessor] Series video detected, extracting series names with Haiku...");
-    seriesHints = await extractSeriesWithHaiku(correctedText);
-    console.log(`[transcript-preprocessor] Extracted ${seriesHints.length} series:`, seriesHints.map((s) => `${s.seriesName} by ${s.author}`).join(", "));
+    console.log("[transcript-preprocessor] Series video detected");
   }
 
-  return { correctedText, isSeriesVideo, seriesHints };
+  return { correctedText, isSeriesVideo };
 }
