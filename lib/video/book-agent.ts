@@ -141,6 +141,7 @@ KNOWN WHISPER ERRORS — the transcript may contain these garbled versions:
 - "Kristen Cicirelli" or "Kristen Chiccarelli" → Kristen Ciccarelli
 - "Cynlyn Yu" or "Sinlin Yu" → SenLinYu
 - "Debney Perry" → Devney Perry
+- "Alex Astor" → Alex Aster
 - "On a Storm" or "Onyx Store" → Onyx Storm
 - "Iron Frame" → Iron Flame
 - "The Night in the Moth" → The Knight and the Moth

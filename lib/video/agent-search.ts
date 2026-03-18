@@ -43,6 +43,17 @@ export async function searchBooksForAgent(query: string): Promise<AgentSearchRes
     return localResults.slice(0, 5);
   }
 
+  // Tier 1b: Try title-only search — handles "Starside Alex Aster" where
+  // the full query fails because no single field contains all words.
+  // Extract likely title (first word or first two words before common author patterns)
+  const titleOnly = extractLikelyTitle(query);
+  if (titleOnly && titleOnly !== query) {
+    const titleResults = await searchLocalDb(titleOnly);
+    if (titleResults.length > 0) {
+      return titleResults.slice(0, 5);
+    }
+  }
+
   // Tier 2: Google Books API (200-500ms)
   const googleResults = await searchGoogleBooksForAgent(query);
   if (googleResults.length > 0) {
@@ -213,4 +224,34 @@ async function searchGoodreadsForAgent(query: string): Promise<AgentSearchResult
   } catch {
     return [];
   }
+}
+
+/**
+ * Extract the likely book title from an agent search query.
+ * Queries often look like "Starside Alex Aster" or "Heart of Mischief Emma Noyes".
+ * Strip common author-name patterns to get just the title portion.
+ */
+function extractLikelyTitle(query: string): string | null {
+  const trimmed = query.trim();
+  const words = trimmed.split(/\s+/);
+
+  // Too short to split meaningfully
+  if (words.length <= 1) return null;
+
+  // If query contains a quoted title, extract it
+  const quotedMatch = trimmed.match(/^"([^"]+)"/);
+  if (quotedMatch) return quotedMatch[1];
+
+  // Heuristic: for "Title Author" patterns, try removing the last 1-2 words
+  // (which are usually the author name). Keep at least 1 word.
+  if (words.length >= 3) {
+    // Try dropping last 2 words (first + last name)
+    return words.slice(0, -2).join(" ");
+  }
+  if (words.length === 2) {
+    // Try just the first word
+    return words[0];
+  }
+
+  return null;
 }
