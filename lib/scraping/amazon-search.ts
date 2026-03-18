@@ -85,12 +85,18 @@ async function searchSerper(
   // Fall back to organic results
   const results: SerperResult[] = data.organic ?? [];
 
+  // Accumulate best rating and best ASIN separately across results
+  let bestRating: { rating: number; ratingCount: number } | null = null;
+  let bestAsin = "";
+
   for (const result of results) {
-    // Extract ASIN from Amazon product page URL
-    const asinMatch = result.link?.match(
-      /amazon\.com(?:\/[^/]+)?\/dp\/([A-Z0-9]{10})/
-    );
-    const asin = asinMatch?.[1] ?? "";
+    // Extract ASIN from Amazon product page URL (/dp/ or /gp/product/)
+    if (!bestAsin && result.link) {
+      const asinMatch = result.link.match(
+        /amazon\.com(?:\/[^/]+)?\/(?:dp|gp\/product)\/([A-Z0-9]{10})/
+      );
+      if (asinMatch) bestAsin = asinMatch[1];
+    }
 
     // Combine all text fields for rating extraction
     const texts = [
@@ -101,26 +107,30 @@ async function searchSerper(
 
     for (const text of texts) {
       const extracted = extractRatingFromText(text!);
-      if (extracted && asin) {
-        return { ...extracted, asin };
-      }
-      // If we got a rating but no ASIN from this result, keep looking
-      // for a result that has both
-      if (extracted && !asin) {
-        // Check remaining results for an ASIN
-        continue;
+      if (extracted && !bestRating) {
+        bestRating = extracted;
       }
     }
 
-    // Also check sitelinks and attributes (Serper sometimes nests data)
-    if (result.attributes) {
+    // Also check attributes
+    if (!bestRating && result.attributes) {
       for (const [key, value] of Object.entries(result.attributes)) {
         if (/rating/i.test(key) && typeof value === "string") {
           const extracted = extractRatingFromText(value);
-          if (extracted && asin) return { ...extracted, asin };
+          if (extracted) bestRating = extracted;
         }
       }
     }
+
+    // If we have both, return early
+    if (bestRating && bestAsin) {
+      return { ...bestRating, asin: bestAsin };
+    }
+  }
+
+  // Return rating even without ASIN — the rating is valuable on its own
+  if (bestRating) {
+    return { ...bestRating, asin: bestAsin };
   }
 
   return null;
@@ -209,7 +219,7 @@ function extractRatingFromText(
  * Extract ASIN from a URL or text containing an Amazon product link.
  */
 function extractAsinFromText(text: string): string | null {
-  const match = text.match(/amazon\.com(?:\/[^/]+)?\/dp\/([A-Z0-9]{10})/);
+  const match = text.match(/amazon\.com(?:\/[^/]+)?\/(?:dp|gp\/product)\/([A-Z0-9]{10})/);
   return match?.[1] ?? null;
 }
 

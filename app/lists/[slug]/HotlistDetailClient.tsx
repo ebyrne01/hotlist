@@ -25,10 +25,10 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
-  // Track which books have no ratings yet (likely being enriched in background)
+  // Track which books are still being enriched
   const enrichingBookIds = new Set(
     books
-      .filter((b) => !b.book.ratings.some((r) => r.rating !== null))
+      .filter((b) => b.book.enrichmentStatus !== "complete" && b.book.enrichmentStatus !== null)
       .map((b) => b.bookId)
   );
   const hasEnrichingBooks = enrichingBookIds.size > 0;
@@ -56,11 +56,7 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
         prev.map((b) => {
           const fresh = freshBooks[b.bookId];
           if (!fresh) return b;
-          // Only update if we got new data (has at least one rating)
-          if (fresh.ratings?.some((r: { rating: number | null }) => r.rating !== null)) {
-            return { ...b, book: fresh };
-          }
-          return b;
+          return { ...b, book: fresh };
         })
       );
     } catch {
