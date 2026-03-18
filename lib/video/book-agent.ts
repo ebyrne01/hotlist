@@ -103,8 +103,15 @@ COMPARISON FILTERING — these are NOT recommendations:
 - "like ACOTAR but darker" → do NOT extract ACOTAR
 - Only extract a book if the creator is directly recommending, reviewing, or showcasing it.
 
+NEW RELEASES PATTERN — pay special attention:
+- In "new releases" or "books coming out this month" videos, the creator often introduces each new book by comparing it to an older, well-known book: "if you loved [OLD BOOK], you'll love [NEW RELEASE]"
+- Extract the NEW RELEASE, NOT the old comparison book.
+- The new release is usually the one with a cover shown, the one being described in detail, or the one the creator says is "coming out" / "releasing" / "dropping."
+- If the creator shows Cover A while saying "if you loved [Cover A's title], check out [Book B]", extract Book B (even if you can't read its cover), NOT Cover A.
+
 Example: "If you loved Fourth Wing, you NEED to read this trilogy" — do NOT extract Fourth Wing. Only extract "this trilogy."
 Example: "This one has Powerless Trilogy vibes" — do NOT extract Powerless Trilogy.
+Example: "If you loved On Wings of Blood, The Wings that Bind releases March 15th" — extract The Wings that Bind, NOT On Wings of Blood.
 Example: "No, no, no, this one was terrible" → extract with sentiment "disliked", quote "no, no, no, this one was terrible"
 
 SERIES HANDLING:
@@ -307,7 +314,7 @@ CRITICAL RULES:
 - The preliminary scan already filtered out comparisons and non-recommendations. Trust the candidate list but verify identities.
 - Preserve the sentiment and quote from each candidate in your submission.
 - ONLY submit books from the candidate list. Do NOT add books that were not in the candidates (no series companions, no sequels, no prequels).
-- When a candidate has seriesRecommendation: true, find Book 1 of that series — but still only submit ONE book per candidate.
+- Submit the EXACT book the candidate names, even if it is Book 2 or Book 3 in a series. Do NOT swap it for Book 1. If the candidate says "Heart of Mischief" and search shows it is Book 2, submit Book 2 — not Book 1.
 - If you cannot find a Goodreads ID after 2 search attempts, submit with null goodreads_id. Do not keep retrying.
 
 SEARCH STRATEGY when a search returns 0 results:
@@ -355,9 +362,7 @@ async function verifyWithSonnet(
     return parts.join("\n");
   }).join("\n\n");
 
-  const seriesNote = observation.isSeriesVideo
-    ? "\n\nThis is a series/trilogy recommendation video. For candidates marked as seriesRecommendation, find Book 1 of the series. Only submit one book per candidate — do NOT add sequels or companion books."
-    : "";
+  const seriesNote = "";
 
   const userMessage = `Here are ${observation.candidates.length} book candidates observed from a BookTok video:
 
