@@ -108,9 +108,10 @@ Example: "This one has Powerless Trilogy vibes" — do NOT extract Powerless Tri
 Example: "No, no, no, this one was terrible" → extract with sentiment "disliked", quote "no, no, no, this one was terrible"
 
 SERIES HANDLING:
-- When a creator recommends a series by name ("you HAVE to read [series name]"), mark seriesRecommendation: true.
-- When the video theme is about complete series/trilogies, mark ALL mentioned series with seriesRecommendation: true.
+- Only mark isSeriesVideo: true when the creator's EXPLICIT THEME is recommending complete series/trilogies to binge (e.g., "completed series you need to read", "trilogies I devoured"). Do NOT set isSeriesVideo: true just because the video contains books that happen to be part of a series.
+- When a creator recommends a series by name ("you HAVE to read [series name]"), mark that candidate's seriesRecommendation: true.
 - When a creator shows Book 3 but recommends the series from the start, note this.
+- A video like "books everyone needs to read" that features series books is NOT a series video — it's a general recommendation video.
 
 KNOWN WHISPER ERRORS — the transcript may contain these garbled versions:
 - "Sara J. Mass" or "Sarah J. Moss" → Sarah J. Maas
@@ -296,32 +297,23 @@ const PHASE2_SYSTEM_PROMPT = `You are a book verification agent for a BookTok vi
 YOUR PROCESS:
 1. REVIEW the candidate list. Each candidate has a title, author, source (cover/transcript/both), confidence, and sentiment.
 2. SEARCH: Use search_goodreads to find each candidate on Goodreads. Call search_goodreads for ALL candidates in a SINGLE turn to save time.
-3. VERIFY: Check that search results match the candidates. The preliminary scan may have misread a cover — if a search returns 0 results, try variations (title alone, alternate spellings, shorter queries).
-4. SERIES HANDLING: When a candidate is marked as seriesRecommendation, find Book 1. When the video is a series/trilogy recommendation video, find ALL books in each series.
-5. CONFIRM: Use confirm_book when you need series info not in the search results.
-6. SUBMIT: Call submit_books with your final verified list.
+3. VERIFY: Check that search results match the candidates. The preliminary scan may have misread a cover — if a search returns 0 results, try ONE variation (title alone, or alternate spelling).
+4. CONFIRM: Use confirm_book to get series info for books where you found a Goodreads ID.
+5. SUBMIT: Call submit_books with your final verified list.
 
 CRITICAL RULES:
 - ALWAYS use search_goodreads to verify. Never guess Goodreads IDs.
 - BATCH tool calls: search ALL candidates in one turn, then confirm ALL in the next.
 - The preliminary scan already filtered out comparisons and non-recommendations. Trust the candidate list but verify identities.
 - Preserve the sentiment and quote from each candidate in your submission.
-- When a candidate has seriesRecommendation: true, find Book 1 of the series.
-- When the video is a series/trilogy recommendation video, submit ALL books in each series, not just Book 1.
+- ONLY submit books from the candidate list. Do NOT add books that were not in the candidates (no series companions, no sequels, no prequels).
+- When a candidate has seriesRecommendation: true, find Book 1 of that series — but still only submit ONE book per candidate.
+- If you cannot find a Goodreads ID after 2 search attempts, submit with null goodreads_id. Do not keep retrying.
 
 SEARCH STRATEGY when a search returns 0 results:
-- The preliminary scan may have misread a book cover. Try variations:
-  - Title alone without author
-  - Author alone
-  - Partial or alternate title spellings
-  - Shorter queries with just the most distinctive word
+- Try ONE variation: title alone without author, or a shorter query.
 - Do NOT add descriptive keywords like "dragon shifter", "fantasy romance" to searches.
-- Limit retries to 2-3 per candidate. If 3 strategies fail, submit with null goodreads_id.
-
-COMPLETE SERIES / TRILOGY RECOMMENDATIONS:
-- When the video is about complete series/trilogies, submit EVERY book in each series.
-- After confirming Book 1, search for remaining books by series name + "book 2", "book 3", etc.
-- When a creator says "this whole trilogy" or "all three books", submit all books.
+- Maximum 2 search attempts per candidate. After that, submit with null goodreads_id.
 
 KNOWN WHISPER ERRORS — the preliminary scan should have corrected these, but double-check:
 - "Sara J. Mass" → Sarah J. Maas
@@ -364,7 +356,7 @@ async function verifyWithSonnet(
   }).join("\n\n");
 
   const seriesNote = observation.isSeriesVideo
-    ? "\n\nThis is a SERIES/TRILOGY recommendation video. For each series, find and submit ALL books in the series, not just Book 1."
+    ? "\n\nThis is a series/trilogy recommendation video. For candidates marked as seriesRecommendation, find Book 1 of the series. Only submit one book per candidate — do NOT add sequels or companion books."
     : "";
 
   const userMessage = `Here are ${observation.candidates.length} book candidates observed from a BookTok video:
@@ -382,7 +374,7 @@ Verify each candidate on Goodreads using search_goodreads, then call submit_book
   // Agentic loop — reuses existing tool execution logic
   let messages: Anthropic.Messages.MessageParam[] = [{ role: "user", content: userMessage }];
   let submittedBooks: SubmittedBook[] | null = null;
-  const maxTurns = 15;
+  const maxTurns = 6;
   let turn = 0;
   let rateLimitRetries = 0;
   const MAX_RATE_LIMIT_RETRIES = 2;
@@ -396,11 +388,8 @@ Verify each candidate on Goodreads using search_goodreads, then call submit_book
     const elapsed = turnStart - agentStart;
 
     if (elapsed > AGENT_TIME_BUDGET_MS && turn > 2) {
-      dbg.log(`Phase 2: Time budget exceeded (${elapsed}ms) at turn ${turn}. Requesting immediate submission.`);
-      messages = [
-        ...messages,
-        { role: "user", content: "TIME LIMIT REACHED. You must call submit_books NOW with whatever books you have verified so far." },
-      ];
+      dbg.log(`Phase 2: Time budget exceeded (${elapsed}ms) at turn ${turn}. Force-stopping and using confirmed books.`);
+      break; // Hard stop — fall through to confirmed books fallback
     }
 
     dbg.log(`Phase 2 Turn ${turn}: sending request...`);
