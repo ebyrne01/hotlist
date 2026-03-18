@@ -112,13 +112,22 @@ NEW RELEASES PATTERN — pay special attention:
 Example: "If you loved Fourth Wing, you NEED to read this trilogy" — do NOT extract Fourth Wing. Only extract "this trilogy."
 Example: "This one has Powerless Trilogy vibes" — do NOT extract Powerless Trilogy.
 Example: "If you loved On Wings of Blood, The Wings that Bind releases March 15th" — extract The Wings that Bind, NOT On Wings of Blood.
+Example: "Heart of Mischief is the sequel to Soul of Shadow" — extract Heart of Mischief ONLY (the new release), NOT Soul of Shadow (the predecessor).
+Example: "Starside, the next book in the Lightlark series" — extract Starside ONLY, NOT Lightlark.
 Example: "No, no, no, this one was terrible" → extract with sentiment "disliked", quote "no, no, no, this one was terrible"
+
+SERIES PREDECESSOR FILTERING — do NOT extract these:
+- When the creator says "Book 2 is coming out" and mentions Book 1 as context, ONLY extract Book 2.
+- "Soul of Shadow was the first book, Heart of Mischief releases next week" → extract Heart of Mischief ONLY.
+- "This is Book 3 in the series, starting with Anathema" → extract Book 3 ONLY, not Anathema.
+- "Starside is the next book in the Lightlark series" → extract Starside ONLY, not Lightlark.
+- If a creator mentions an earlier book ONLY to provide context for the new release, that earlier book is NOT a recommendation.
+- ONLY extract a series predecessor if the creator explicitly recommends reading it on its own merits (e.g., "you need to read Book 1 before this comes out").
 
 SERIES HANDLING:
 - Only mark isSeriesVideo: true when the creator's EXPLICIT THEME is recommending complete series/trilogies to binge (e.g., "completed series you need to read", "trilogies I devoured"). Do NOT set isSeriesVideo: true just because the video contains books that happen to be part of a series.
 - When a creator recommends a series by name ("you HAVE to read [series name]"), mark that candidate's seriesRecommendation: true.
-- When a creator shows Book 3 but recommends the series from the start, note this.
-- A video like "books everyone needs to read" that features series books is NOT a series video — it's a general recommendation video.
+- A video like "books everyone needs to read" or "new releases this month" that features series books is NOT a series video — it's a general recommendation video.
 
 KNOWN WHISPER ERRORS — the transcript may contain these garbled versions:
 - "Sara J. Mass" or "Sarah J. Moss" → Sarah J. Maas
@@ -314,12 +323,14 @@ CRITICAL RULES:
 - The preliminary scan already filtered out comparisons and non-recommendations. Trust the candidate list but verify identities.
 - Preserve the sentiment and quote from each candidate in your submission.
 - ONLY submit books from the candidate list. Do NOT add books that were not in the candidates (no series companions, no sequels, no prequels).
-- Submit the EXACT book the candidate names, even if it is Book 2 or Book 3 in a series. Do NOT swap it for Book 1. If the candidate says "Heart of Mischief" and search shows it is Book 2, submit Book 2 — not Book 1.
+- NEVER swap a candidate for a different book in its series. If "Cinder Vale" is the candidate and it's Book 3, submit Book 3. Do NOT search for or submit Book 1 ("Never Keep"). If "Heart of Mischief" is the candidate and it's Book 2, submit Book 2. Do NOT submit Book 1 ("Soul of Shadow").
+- Do NOT search for "book one" or "book 1" of any series. You are verifying candidates, not finding starting points.
 - If you cannot find a Goodreads ID after 2 search attempts, submit with null goodreads_id. Do not keep retrying.
 
 SEARCH STRATEGY when a search returns 0 results:
 - Try ONE variation: title alone without author, or a shorter query.
 - Do NOT add descriptive keywords like "dragon shifter", "fantasy romance" to searches.
+- Do NOT search for "book one", "book 1", or "series name book one" — you must find the CANDIDATE book, not Book 1.
 - Maximum 2 search attempts per candidate. After that, submit with null goodreads_id.
 
 KNOWN WHISPER ERRORS — the preliminary scan should have corrected these, but double-check:
@@ -357,7 +368,7 @@ async function verifyWithSonnet(
       `   Source: ${c.source} | Confidence: ${c.confidence} | Sentiment: ${c.sentiment}`,
     ];
     if (c.quote) parts.push(`   Quote: "${c.quote}"`);
-    if (c.seriesRecommendation) parts.push(`   → SERIES RECOMMENDATION: Find Book 1 (or all books if series video)`);
+    if (c.seriesRecommendation) parts.push(`   → Part of a series (submit this exact book, NOT Book 1)`);
     if (c.notes) parts.push(`   Notes: ${c.notes}`);
     return parts.join("\n");
   }).join("\n\n");
@@ -554,7 +565,7 @@ const TOOLS: Anthropic.Messages.Tool[] = [
   {
     name: "confirm_book",
     description:
-      "Confirm a book identification by its Goodreads ID. Returns full book detail including series name, series position, genres, and description. Use this after search_goodreads to verify you have the RIGHT book (correct edition, Book 1 of a series, etc).",
+      "Confirm a book identification by its Goodreads ID. Returns full book detail including series name, series position, genres, and description. Use this after search_goodreads to verify the identity of the book. Do NOT use this to find or swap for a different book in the same series.",
     input_schema: {
       type: "object" as const,
       properties: {
