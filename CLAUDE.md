@@ -67,7 +67,7 @@ SPICE_LLM_DAILY_LIMIT=        # optional, default 100 — max LLM spice inferenc
 | **Google Books** | Metadata + provisional entries | ISBN, page count, publisher, cover. Also the source for books not yet on Goodreads. |
 | **Open Library** | Metadata fallback | ISBN, page count, publisher (if Google Books misses) |
 | **NYT Books API** | Discovery only | "What's Hot" row. Every NYT title resolved to Goodreads ID before storing. |
-| **Amazon** | Affiliate links + rating | ASIN for buy links, ratings via Serper Google search |
+| **Amazon** | Affiliate links + rating | ASIN for buy links, ratings via Serper Google search (rating and ASIN extracted independently — rating can exist without ASIN) |
 | **Romance.io** | Spice ratings (high confidence) | Spice level + heat label, scraped via Serper Google search |
 
 **Book identity rule:** Books may enter the database without a Goodreads ID (from Google Books, BookTok, imports). The enrichment queue attempts to resolve them to Goodreads. Books with a Goodreads ID get richer data (genres, series, description).
@@ -177,11 +177,18 @@ All tables in the public schema:
 
 /lib/spice/                   — Composite spice scoring system (see above)
 
+/app/lists/                   — Hotlist pages
+  page.tsx                    — User's hotlist index
+  [slug]/page.tsx             — Hotlist detail (server component)
+  [slug]/HotlistDetailClient.tsx — Hotlist detail (client: polling, inline edit, sharing)
+
 /lib/video/                   — BookTok pipeline
-  downloader.ts               — RapidAPI video downloader
+  downloader.ts               — RapidAPI video downloader (with TikTok-specific fallback)
   transcription.ts            — OpenAI Whisper
-  frame-extractor.ts          — ffmpeg frame extraction from video
-  book-agent.ts               — Single Sonnet agent (vision + transcript + Goodreads tool use)
+  transcript-preprocessor.ts  — Whisper error correction, noise removal
+  frame-extractor.ts          — ffmpeg frame extraction (adaptive density)
+  book-agent.ts               — Two-phase pipeline: Haiku observe + Sonnet verify
+  agent-search.ts             — Tiered search for agent (local DB → Google Books → Goodreads)
   book-resolver.ts            — Types only (ResolvedBook, etc.)
   index.ts                    — Pipeline orchestrator
 /components/books/            — Book-specific components (BookCard, SpiceDisplay, SpiceAttribution)
@@ -191,27 +198,27 @@ All tables in the public schema:
 ```
 
 ## BookTok feature (formerly "Grab from Video")
-- Video download: RapidAPI (third-party TikTok/Instagram/YouTube downloader)
+- Video download: RapidAPI (third-party TikTok/Instagram/YouTube downloader, with specialized TikTok fallback)
 - **Supports videos AND photo/carousel posts** (TikTok `/photo/` URLs with multiple slide images)
 - Transcription: OpenAI Whisper API (model: whisper-1) — NOT Claude. Skipped for carousel posts.
-- Frame extraction: ffmpeg for videos (up to 20 frames, subsampled to 8). Carousel posts use slide image URLs directly.
-- **Book identification: Single Claude Sonnet (`claude-sonnet-4-6`) agent with vision + tool use — reads covers, understands transcript, searches & confirms books on Goodreads in real time**
+- Frame extraction: ffmpeg for videos (adaptive density: 24 frames for fast haul videos, 16 for normal, subsampled to 8). Carousel posts use slide image URLs directly. First frame captured at t=0.
+- **Book identification: Two-phase pipeline (Haiku observe + Sonnet verify) — see below**
 - **Anti-hallucination rules**: Agent never guesses books from creator handles, partial/blurry covers, or music lyrics
 - Cache: `video_grabs` Supabase table — never process the same URL twice
 - UI: `/app/booktok/page.tsx` (old `/app/grab/page.tsx` redirects here)
 - API: `/app/api/grab/route.ts` (streaming)
 - URL detection: SearchBar auto-detects video URLs and redirects to `/booktok?url=...`
-- Cost: ~$0.05-0.10 per grab (vision + tool use, but only ONE Sonnet call)
+- Cost: ~$0.02-0.05 per grab (Haiku vision + Sonnet text-only verification)
 
 ### BookTok pipeline (in order):
 1. Validate URL + check cache
 2. Download video/audio via RapidAPI (detects carousel vs video posts)
 3. Transcribe audio via Whisper + extract frames via ffmpeg (parallel). Carousel posts skip Whisper, use slide images directly.
-4. Single Sonnet agent call: vision + transcript + Goodreads tool use
-   → Agent reads covers, understands transcript, searches Goodreads, confirms editions, returns verified canonical results
-5. Queue enrichment for all matched books + **kick off enrichment worker immediately** (fire-and-forget, no 5-min wait)
-6. Cache result in `video_grabs` table (includes `video_title` from RapidAPI)
-7. Register creator handle + book mentions in `creator_handles` / `creator_book_mentions` (fire-and-forget)
+4. **Phase 1 — Haiku observation** (single turn, vision + transcript, no tools): Reads ALL frames + full transcript. Returns structured candidate list with title, author, source, confidence, sentiment, and creator quote. Filters out comparison books ("if you loved X") and series predecessors.
+5. **Phase 2 — Sonnet verification** (multi-turn, text-only, tool use): Takes candidate list (NO images), searches Goodreads via tiered search (local DB → Google Books → Goodreads scraping), confirms book identities, submits final verified list. Max 6 turns, 3-min time budget. Critical rule: never swaps candidates for Book 1 of their series.
+6. Queue enrichment for all matched books + **kick off enrichment worker immediately** (fire-and-forget, no 5-min wait)
+7. Cache result in `video_grabs` table (includes `video_title` from RapidAPI)
+8. Register creator handle + book mentions in `creator_handles` / `creator_book_mentions` (fire-and-forget)
 
 ### Hotlist creation from grabs
 - Hotlist name uses the **video title/caption** (hashtags stripped), e.g. "All the books we gave 5 stars in 2025"
@@ -278,7 +285,7 @@ Book data flows through two independent systems:
 - `enrichment_status` on books table: "pending" → "partial" → "complete"
 - Book detail pages poll for updates when enrichment is incomplete
 - **Grab pipeline queues enrichment at grab time AND kicks off the worker immediately** (fire-and-forget `processEnrichmentQueue(30_000)`) so data is ready within seconds, not at the next 5-min cron tick
-- **Hotlist pages poll** `/api/books/refresh-batch` every 8s when un-enriched books are detected, auto-stopping when data arrives
+- **Hotlist pages poll** `/api/books/refresh-batch` every 8s when `enrichment_status` is not "complete" (and not null), auto-stopping when all books reach "complete"
 - Enrichment banner shows above the hotlist table while books are being enriched
 
 ### Files
