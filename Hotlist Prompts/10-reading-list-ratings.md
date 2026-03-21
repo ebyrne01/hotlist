@@ -1,5 +1,21 @@
 # Prompt 10 — Reading List & User Ratings
 
+IMPORTANT — Before building Prompt 10, note these changes from earlier prompts that affect this work:
+1. Star rating badge already built — The 'Your Rating' interactive star badge is already implemented in the ratings row on the book detail page (built during Prompt 07 fixes). Do NOT rebuild it. The RatingWidget in Section 4 should only handle the private note field and the reading list page display — not the star rating interaction, which already exists.
+2. Spice rating already built — The 'Your spice take' interactive chili rating is already implemented in SpiceSection.tsx (built during Prompt 05.9). Do NOT rebuild it. Remove the spice chili row from the RatingWidget layout entirely.
+3. saveUserRating spice recalculation already built — The community spice average recalculation after a user rates is already in place from Prompt 05.9. Do not duplicate this logic — just call the existing function.
+4. Section 7 (Community spice on book detail) is already done — The SpiceSection component already shows romance.io and community spice side by side. Skip Section 7 entirely.
+5. RatingWidget layout update — Given the above, the RatingWidget should simplify to:
+Your Rating
+[★][★][★][★][★]   ← only if not already showing in ratings row
+                    (check before rendering to avoid duplicate)
+
+Private Note (optional)
+[textarea: 'Your reading notes — only you can see this']
+
+[Save]  [Clear]
+Everything else in Prompt 10 is clean — build as written.
+
 > Users can track what they've read, what they're reading, and what's next.
 > They can also leave their own star + spice ratings.
 

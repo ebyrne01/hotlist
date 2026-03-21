@@ -1,6 +1,6 @@
 import { clsx } from "clsx";
 
-type CoverSize = "sm" | "md" | "lg" | "fill";
+type CoverSize = "sm" | "table" | "md" | "lg" | "fill";
 
 interface BookCoverProps {
   title: string;
@@ -11,6 +11,7 @@ interface BookCoverProps {
 
 const sizeStyles: Record<Exclude<CoverSize, "fill">, { className: string; width: number; height: number }> = {
   sm: { className: "w-[40px] h-[60px] text-sm", width: 40, height: 60 },
+  table: { className: "w-[64px] h-[90px] text-base", width: 64, height: 90 },
   md: { className: "w-[80px] h-[120px] text-xl", width: 80, height: 120 },
   lg: { className: "w-[120px] h-[180px] text-3xl", width: 120, height: 180 },
 };

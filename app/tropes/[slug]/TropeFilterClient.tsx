@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { PepperRow } from "@/components/ui/PepperIcon";
 
 interface ShapedBook {
   id: string;
@@ -144,10 +145,14 @@ export default function TropeFilterClient({
       {!loading && books.length === 0 ? (
         <div className="text-center py-16">
           <p className="text-lg font-body text-muted">
-            No books match all selected tropes
+            {selectedSlugs.length > 1
+              ? "No books match all selected tropes"
+              : `No books tagged with ${primaryTrope.name} yet`}
           </p>
           <p className="text-sm font-body text-muted/60 mt-2">
-            Try removing a trope to broaden results
+            {selectedSlugs.length > 1
+              ? "Try removing a trope to broaden results"
+              : "Check back soon \u2014 we\u2019re adding more every day"}
           </p>
         </div>
       ) : !loading ? (
@@ -185,9 +190,7 @@ export default function TropeFilterClient({
                     </span>
                   )}
                   {book.spiceLevel && book.spiceLevel > 0 && (
-                    <span className="text-xs font-mono text-fire/70">
-                      {"🌶️".repeat(book.spiceLevel)}
-                    </span>
+                    <PepperRow level={book.spiceLevel} size={12} />
                   )}
                 </div>
                 {/* Show which selected tropes this book has */}

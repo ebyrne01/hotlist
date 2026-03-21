@@ -23,6 +23,8 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
   const [copied, setCopied] = useState(false);
   const [books, setBooks] = useState(hotlist.books);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [deleteToast, setDeleteToast] = useState(false);
+  const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
   // Track which books are still being enriched
@@ -270,14 +272,29 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
     }
   }
 
-  async function handleDelete() {
-    try {
-      const supabase = createClient();
-      await supabase.from("hotlists").delete().eq("id", hotlist.id);
-      router.push("/lists");
-    } catch (err) {
-      console.error("[handleDelete] failed:", err);
+  function handleDelete() {
+    setShowConfirmDelete(false);
+    setDeleteToast(true);
+
+    // Delay actual deletion by 5 seconds to allow undo
+    deleteTimerRef.current = setTimeout(async () => {
+      try {
+        const supabase = createClient();
+        await supabase.from("hotlists").delete().eq("id", hotlist.id);
+        router.push("/lists");
+      } catch (err) {
+        console.error("[handleDelete] failed:", err);
+        setDeleteToast(false);
+      }
+    }, 5000);
+  }
+
+  function handleUndoDelete() {
+    if (deleteTimerRef.current) {
+      clearTimeout(deleteTimerRef.current);
+      deleteTimerRef.current = null;
     }
+    setDeleteToast(false);
   }
 
   return (
@@ -413,7 +430,7 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
       )}
 
       {/* Delete (owner only) */}
-      {isOwner && (
+      {isOwner && !deleteToast && (
         <div className="mt-12 pt-6 border-t border-border">
           {showConfirmDelete ? (
             <div className="flex items-center gap-3">
@@ -441,6 +458,19 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
               Delete this hotlist
             </button>
           )}
+        </div>
+      )}
+
+      {/* Undo delete toast */}
+      {deleteToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-ink text-cream rounded-lg shadow-lg px-4 py-3 flex items-center gap-3">
+          <p className="text-sm font-mono">Hotlist deleted</p>
+          <button
+            onClick={handleUndoDelete}
+            className="text-sm font-mono text-fire font-semibold hover:text-fire/80 transition-colors"
+          >
+            Undo
+          </button>
         </div>
       )}
     </div>

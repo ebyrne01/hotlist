@@ -1,7 +1,27 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { saveSynopsis } from "./cache";
+import { getAdminClient } from "@/lib/supabase/admin";
 
 const SYNOPSIS_MODEL = "claude-haiku-4-5-20251001";
+const DEFAULT_DAILY_LIMIT = 1000;
+
+/**
+ * Check how many AI synopses have been generated today.
+ */
+async function getDailySynopsisUsage(): Promise<number> {
+  const supabase = getAdminClient();
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const { count } = await supabase
+    .from("enrichment_queue")
+    .select("*", { count: "exact", head: true })
+    .eq("job_type", "ai_synopsis")
+    .eq("status", "complete")
+    .gte("completed_at", todayStart.toISOString());
+
+  return count ?? 0;
+}
 
 const SYSTEM_PROMPT = `You write warm, engaging book synopses for romance readers. \
 You are spoiler-free, tonal, and use the voice of an enthusiastic reader — not a librarian. \
@@ -35,6 +55,14 @@ export async function generateSynopsis(book: {
 
   // Need at least a description to work with
   if (!book.description) return null;
+
+  // Check daily limit
+  const dailyLimit = Number(process.env.AI_SYNOPSIS_DAILY_LIMIT) || DEFAULT_DAILY_LIMIT;
+  const usage = await getDailySynopsisUsage();
+  if (usage >= dailyLimit) {
+    console.log(`[ai-synopsis] Daily limit reached (${usage}/${dailyLimit}), skipping`);
+    return null;
+  }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return null;

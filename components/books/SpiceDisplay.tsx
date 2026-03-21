@@ -12,40 +12,8 @@
 
 import { clsx } from "clsx";
 import SpiceAttribution, { isEstimatedSource } from "./SpiceAttribution";
+import { PepperIcon } from "@/components/ui/PepperIcon";
 import type { CompositeSpiceData } from "@/lib/types";
-
-/** SVG pepper icon — fill color controlled via className */
-function PepperIcon({ filled, size, estimated }: { filled: boolean; size: number; estimated?: boolean }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={clsx(
-        "shrink-0",
-        filled
-          ? estimated
-            ? "text-fire/50"
-            : "text-fire"
-          : "text-border"
-      )}
-      aria-hidden="true"
-    >
-      {/* Stem */}
-      <path
-        d="M12 2C12 2 11 4 11 5C11 5.5 11.5 6 12 6C12.5 6 13 5.5 13 5C13 4 12 2 12 2Z"
-        fill="currentColor"
-      />
-      {/* Pepper body */}
-      <path
-        d="M8 7C6 8 5 11 5 14C5 18 8 22 10 22C11 22 11.5 21 12 21C12.5 21 13 22 14 22C16 22 19 18 19 14C19 11 18 8 16 7C14.5 6 9.5 6 8 7Z"
-        fill="currentColor"
-      />
-    </svg>
-  );
-}
 
 interface SpiceDisplayProps {
   composite: CompositeSpiceData | null;

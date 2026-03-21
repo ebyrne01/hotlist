@@ -257,19 +257,22 @@ async function processJob(job: QueuedJob): Promise<void> {
     case "amazon_rating": {
       if (!book_title || !book_author) break;
       const amazonData = await getAmazonRatingViaSerper(book_title, book_author, book_isbn);
-      if (amazonData && amazonData.rating > 0) {
-        await supabase.from("book_ratings").upsert(
-          {
-            book_id,
-            source: "amazon",
-            rating: amazonData.rating,
-            rating_count: amazonData.ratingCount,
-            scraped_at: new Date().toISOString(),
-          },
-          { onConflict: "book_id,source" }
-        );
+      if (amazonData) {
+        // Save ASIN even when rating extraction fails — ASINs power affiliate buy links
         if (amazonData.asin) {
           await supabase.from("books").update({ amazon_asin: amazonData.asin }).eq("id", book_id);
+        }
+        if (amazonData.rating > 0) {
+          await supabase.from("book_ratings").upsert(
+            {
+              book_id,
+              source: "amazon",
+              rating: amazonData.rating,
+              rating_count: amazonData.ratingCount,
+              scraped_at: new Date().toISOString(),
+            },
+            { onConflict: "book_id,source" }
+          );
         }
       }
       break;
@@ -278,14 +281,15 @@ async function processJob(job: QueuedJob): Promise<void> {
     case "romance_io_spice": {
       if (!book_title || !book_author) break;
       const spiceData = await getRomanceIoSpice(book_title, book_author);
-      if (spiceData && spiceData.confidence === "high") {
+      if (spiceData && (spiceData.confidence === "high" || spiceData.confidence === "medium")) {
+        const signalConfidence = spiceData.confidence === "high" ? 0.85 : 0.7;
         // Store in legacy book_spice table
         await supabase.from("book_spice").upsert(
           {
             book_id,
             source: "romance_io",
             spice_level: spiceData.spiceLevel,
-            confidence: "high",
+            confidence: spiceData.confidence,
             scraped_at: new Date().toISOString(),
           },
           { onConflict: "book_id,source" }
@@ -296,9 +300,10 @@ async function processJob(job: QueuedJob): Promise<void> {
             book_id,
             source: "romance_io",
             spice_value: spiceData.spiceLevel,
-            confidence: 0.85,
+            confidence: signalConfidence,
             evidence: {
               heat_label: spiceData.heatLabel,
+              match_confidence: spiceData.confidence,
               scraped_at: new Date().toISOString(),
             },
             updated_at: new Date().toISOString(),

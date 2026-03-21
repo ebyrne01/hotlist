@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { Video } from "lucide-react";
 
 interface BookTokBannerProps {
   previewCovers?: string[];
@@ -11,13 +12,13 @@ export default function BookTokBanner({ previewCovers = [] }: BookTokBannerProps
   const covers = previewCovers.slice(0, 3);
 
   return (
-    <section className="max-w-6xl mx-auto px-4 py-6">
+    <section className="py-6">
       <Link
         href="/booktok"
         className="block bg-gradient-to-r from-fire/10 to-fire/5 border border-fire/20 rounded-xl px-5 py-4 sm:px-6 sm:py-5 hover:border-fire/40 transition-colors group"
       >
         <div className="flex items-center gap-3 sm:gap-4">
-          <span className="text-2xl sm:text-3xl shrink-0">📹</span>
+          <Video size={28} className="text-fire shrink-0 sm:w-8 sm:h-8" aria-hidden="true" />
           <div className="flex-1 min-w-0">
             <p className="font-display text-base sm:text-lg font-bold text-ink">
               Saw a book rec on BookTok?

@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { findBook } from "@/lib/books";
+import { Video } from "lucide-react";
 import BookCard from "@/components/books/BookCard";
 
 
@@ -29,18 +30,29 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
       )}
 
       {query && books.length === 0 && (
-        <div className="text-center py-16">
-          <p className="text-lg font-body text-muted">
-            No results for &ldquo;{query}&rdquo;
+        <div className="text-center py-16 max-w-md mx-auto">
+          <p className="text-lg font-display font-bold text-ink">
+            We don&apos;t have &ldquo;{query}&rdquo; yet
           </p>
-          <p className="text-sm font-body text-muted/60 mt-2">
-            Try a different title or author
-          </p>
+          <div className="mt-4 text-sm font-body text-muted space-y-1.5 text-left">
+            <p>Try searching for:</p>
+            <ul className="list-disc list-inside space-y-1 text-muted/80">
+              <li>A different spelling</li>
+              <li>Just the author&apos;s name</li>
+              <li>
+                A trope instead &rarr;{" "}
+                <a href="/tropes" className="text-fire hover:text-fire/80 font-mono text-xs transition-colors">
+                  browse tropes
+                </a>
+              </li>
+            </ul>
+          </div>
           <a
             href="/booktok"
-            className="inline-flex items-center gap-2 mt-4 text-sm font-mono text-fire hover:text-fire/80 transition-colors"
+            className="inline-flex items-center gap-2 mt-6 text-sm font-mono text-fire hover:text-fire/80 transition-colors"
           >
-            📹 Or paste a BookTok link to find books from a video &rarr;
+            <Video size={14} className="inline -mt-0.5" aria-hidden="true" />
+            Paste a BookTok link to find books from a video &rarr;
           </a>
         </div>
       )}

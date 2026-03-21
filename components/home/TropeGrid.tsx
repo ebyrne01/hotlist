@@ -28,6 +28,19 @@ const TROPE_GROUPS: { label: string; slugs: string[] }[] = [
     ],
   },
   {
+    label: "Romantasy",
+    slugs: [
+      "fated-mates",
+      "fae-faerie",
+      "dragon-riders",
+      "court-academy",
+      "morally-grey",
+      "chosen-one",
+      "found-family",
+      "mortal-immortal",
+    ],
+  },
+  {
     label: "Contemporary & Settings",
     slugs: [
       "office-romance",
@@ -41,15 +54,14 @@ const TROPE_GROUPS: { label: string; slugs: string[] }[] = [
     ],
   },
   {
-    label: "Dark & Paranormal",
+    label: "Dark & Spicy",
     slugs: [
       "dark-romance",
       "mafia-romance",
       "reverse-harem",
+      "monster-romance",
       "vampire",
       "shifter",
-      "fae-faerie",
-      "chosen-one",
       "insta-love",
     ],
   },
@@ -76,7 +88,7 @@ export default function TropeGrid({ tropes }: TropeGridProps) {
 
         return (
           <div key={group.label}>
-            <h3 className="text-xs font-mono text-muted/80 uppercase tracking-wider mb-2 text-center">
+            <h3 className="heading-subsection mb-2 text-center">
               {group.label}
             </h3>
             <div className="flex flex-wrap gap-2 justify-center">

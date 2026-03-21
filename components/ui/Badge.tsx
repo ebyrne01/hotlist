@@ -10,7 +10,7 @@ interface BadgeProps {
 }
 
 const variantStyles: Record<Variant, string> = {
-  trope: "bg-gold/15 text-gold border border-gold/25",
+  trope: "bg-brand-cream-dk text-ink border border-border/60 hover:bg-fire hover:text-white hover:border-fire transition-colors duration-150",
   fire: "bg-fire/10 text-fire border border-fire/20",
   muted: "bg-ink/5 text-muted border border-border",
   included: "bg-fire text-white border border-fire",

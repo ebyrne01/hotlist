@@ -6,6 +6,7 @@ import BookCover from "@/components/ui/BookCover";
 import Badge from "@/components/ui/Badge";
 import SpiceDisplay from "@/components/books/SpiceDisplay";
 import SpiceIndicator from "@/components/ui/SpiceIndicator";
+import { PepperRow } from "@/components/ui/PepperIcon";
 import type { BookDetail } from "@/lib/types";
 
 interface BookCardProps {
@@ -32,6 +33,7 @@ export default function BookCard({ book, layout = "grid", className }: BookCardP
   const amzRating = getRatingBySource(book, "amazon");
   const spice = getSpice(book);
   const topTropes = book.tropes.slice(0, 2);
+  const tropeOverflow = book.tropes.length - 2;
   const slug = book.slug || book.id;
 
   if (layout === "list") {
@@ -85,12 +87,15 @@ export default function BookCard({ book, layout = "grid", className }: BookCardP
             ) : null}
           </div>
           {topTropes.length > 0 && (
-            <div className="flex gap-1 mt-1">
+            <div className="flex items-center gap-1 mt-1">
               {topTropes.map((t) => (
                 <Badge key={t.id} variant="trope">
                   {t.name}
                 </Badge>
               ))}
+              {tropeOverflow > 0 && (
+                <span className="text-xs font-mono text-muted/60">+{tropeOverflow}</span>
+              )}
             </div>
           )}
         </div>
@@ -120,24 +125,27 @@ export default function BookCard({ book, layout = "grid", className }: BookCardP
           {book.title}
         </h3>
         <p className="text-xs font-body text-muted truncate">{book.author}</p>
-        <div className="flex items-center gap-2 mt-1 flex-wrap">
-          {grRating !== null && (
-            <span className="text-xs font-mono">
-              <span className="text-muted">GR</span>{" "}
+        {/* Ratings — always rendered */}
+        <div className="flex items-center gap-2 mt-1">
+          <span className="text-xs font-mono">
+            <span className="text-muted">GR</span>{" "}
+            {grRating !== null ? (
               <span className="text-gold font-medium">{grRating.toFixed(1)}</span>
-            </span>
-          )}
-          {amzRating !== null ? (
-            <span className="text-xs font-mono">
-              <span className="text-muted">AMZ</span>{" "}
+            ) : (
+              <span className="text-muted/40">&mdash;</span>
+            )}
+          </span>
+          <span className="text-xs font-mono">
+            <span className="text-muted">AMZ</span>{" "}
+            {amzRating !== null ? (
               <span className="text-gold font-medium">{amzRating.toFixed(1)}</span>
-            </span>
-          ) : grRating !== null ? (
-            <span className="text-xs font-mono">
-              <span className="text-muted">AMZ</span>{" "}
-              <span className="text-muted/60">&mdash;</span>
-            </span>
-          ) : null}
+            ) : (
+              <span className="text-muted/40">&mdash;</span>
+            )}
+          </span>
+        </div>
+        {/* Spice — always rendered */}
+        <div className="mt-0.5">
           {book.compositeSpice ? (
             <SpiceDisplay
               composite={book.compositeSpice}
@@ -153,15 +161,20 @@ export default function BookCard({ book, layout = "grid", className }: BookCardP
               ratingCount={spice.ratingCount}
               className="[&_span]:text-xs"
             />
-          ) : null}
+          ) : (
+            <PepperRow level={0} size={12} muted className="opacity-40" />
+          )}
         </div>
         {topTropes.length > 0 && (
-          <div className="flex gap-1 mt-0.5 flex-wrap">
+          <div className="flex items-center gap-1 mt-0.5 flex-wrap">
             {topTropes.map((t) => (
               <Badge key={t.id} variant="trope" className="text-xs px-1.5 py-0.5">
                 {t.name}
               </Badge>
             ))}
+            {tropeOverflow > 0 && (
+              <span className="text-xs font-mono text-muted/60">+{tropeOverflow}</span>
+            )}
           </div>
         )}
       </div>

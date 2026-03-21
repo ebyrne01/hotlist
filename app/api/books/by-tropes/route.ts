@@ -34,39 +34,49 @@ export async function GET(request: NextRequest) {
 
   const tropeIds = tropes.map((t) => t.id as string);
 
-  // Find books that have ALL selected tropes (intersection)
-  // Query book_tropes for all selected trope IDs, group by book_id,
-  // and keep only books that appear tropeIds.length times
-  const { data: bookTropes } = await supabase
-    .from("book_tropes")
-    .select("book_id")
-    .in("trope_id", tropeIds);
+  // For a single trope, fetch book_tropes directly with a limit.
+  // For multiple tropes, find the intersection (books matching ALL).
+  let matchingBookIds: string[] = [];
 
-  if (!bookTropes || bookTropes.length === 0) {
-    return NextResponse.json({ books: [] });
+  if (tropeIds.length === 1) {
+    // Single trope — simple query with limit
+    const { data: bookTropes } = await supabase
+      .from("book_tropes")
+      .select("book_id")
+      .eq("trope_id", tropeIds[0])
+      .limit(50);
+
+    matchingBookIds = (bookTropes ?? []).map((bt) => bt.book_id as string);
+  } else {
+    // Multiple tropes — intersection query
+    // Fetch book_tropes for each trope separately, then intersect in JS
+    const allSets: Set<string>[] = [];
+    for (const tropeId of tropeIds) {
+      const { data: bt } = await supabase
+        .from("book_tropes")
+        .select("book_id")
+        .eq("trope_id", tropeId);
+      allSets.push(new Set((bt ?? []).map((r) => r.book_id as string)));
+    }
+
+    // Intersect: keep only book IDs present in ALL sets
+    if (allSets.length > 0) {
+      const [first, ...rest] = allSets;
+      matchingBookIds = Array.from(first).filter((id) =>
+        rest.every((s) => s.has(id))
+      );
+    }
   }
-
-  // Count how many of the selected tropes each book has
-  const tropeCountByBook = new Map<string, number>();
-  for (const bt of bookTropes) {
-    const id = bt.book_id as string;
-    tropeCountByBook.set(id, (tropeCountByBook.get(id) ?? 0) + 1);
-  }
-
-  // Keep only books that match ALL selected tropes
-  const matchingBookIds = Array.from(tropeCountByBook.entries())
-    .filter(([, count]) => count >= tropeIds.length)
-    .map(([id]) => id);
 
   if (matchingBookIds.length === 0) {
     return NextResponse.json({ books: [] });
   }
 
-  // Fetch and hydrate matching books
+  // Fetch and hydrate matching books (limit to 50 for response size)
   const { data: dbBooks } = await supabase
     .from("books")
     .select("*")
-    .in("id", matchingBookIds.slice(0, 30))
+    .in("id", matchingBookIds.slice(0, 50))
     .order("updated_at", { ascending: false });
 
   if (!dbBooks || dbBooks.length === 0) {

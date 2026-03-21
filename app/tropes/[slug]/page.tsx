@@ -30,50 +30,64 @@ export default async function TropePage({ params }: TropePageProps) {
     );
   }
 
-  // Get books tagged with this trope
-  const { data: bookTropes } = await supabase
+  // Get total count of books tagged with this trope
+  const { count: totalBookCount } = await supabase
     .from("book_tropes")
-    .select("book_id")
+    .select("book_id", { count: "exact", head: true })
     .eq("trope_id", trope.id);
 
   const books: BookDetail[] = [];
   const relatedTropeMap = new Map<string, { slug: string; name: string; count: number }>();
+  const PAGE_SIZE = 50;
 
-  if (bookTropes && bookTropes.length > 0) {
-    const bookIds = bookTropes.map((bt) => bt.book_id);
+  if (totalBookCount && totalBookCount > 0) {
+    // Fetch books via a join-style query: get book_tropes rows with limit,
+    // then fetch the corresponding books. This avoids passing hundreds of
+    // UUIDs into .in() which exceeds PostgREST URL length limits.
+    const { data: bookTropes } = await supabase
+      .from("book_tropes")
+      .select("book_id")
+      .eq("trope_id", trope.id)
+      .limit(PAGE_SIZE);
 
-    const { data: dbBooks } = await supabase
-      .from("books")
-      .select("*")
-      .in("id", bookIds)
-      .order("updated_at", { ascending: false });
+    const bookIds = (bookTropes ?? []).map((bt) => bt.book_id as string);
 
-    if (dbBooks && dbBooks.length > 0) {
-      for (const dbBook of dbBooks as Record<string, unknown>[]) {
-        books.push(await hydrateBookDetail(supabase, dbBook));
+    if (bookIds.length > 0) {
+      const { data: dbBooks } = await supabase
+        .from("books")
+        .select("*")
+        .in("id", bookIds)
+        .order("updated_at", { ascending: false });
+
+      if (dbBooks && dbBooks.length > 0) {
+        for (const dbBook of dbBooks as Record<string, unknown>[]) {
+          books.push(await hydrateBookDetail(supabase, dbBook));
+        }
       }
     }
 
-    // Find related tropes (other tropes that appear on these books)
-    const { data: otherTropes } = await supabase
-      .from("book_tropes")
-      .select("trope_id, tropes(id, slug, name)")
-      .in("book_id", bookIds)
-      .neq("trope_id", trope.id);
+    // Find related tropes — sample from the first batch of book IDs
+    if (bookIds.length > 0) {
+      const { data: otherTropes } = await supabase
+        .from("book_tropes")
+        .select("trope_id, tropes(id, slug, name)")
+        .in("book_id", bookIds)
+        .neq("trope_id", trope.id);
 
-    if (otherTropes) {
-      for (const bt of otherTropes as Record<string, unknown>[]) {
-        const t = bt.tropes as Record<string, unknown> | null;
-        if (!t) continue;
-        const slug = t.slug as string;
-        if (!relatedTropeMap.has(slug)) {
-          relatedTropeMap.set(slug, {
-            slug,
-            name: t.name as string,
-            count: 0,
-          });
+      if (otherTropes) {
+        for (const bt of otherTropes as Record<string, unknown>[]) {
+          const t = bt.tropes as Record<string, unknown> | null;
+          if (!t) continue;
+          const slug = t.slug as string;
+          if (!relatedTropeMap.has(slug)) {
+            relatedTropeMap.set(slug, {
+              slug,
+              name: t.name as string,
+              count: 0,
+            });
+          }
+          relatedTropeMap.get(slug)!.count++;
         }
-        relatedTropeMap.get(slug)!.count++;
       }
     }
   }
@@ -104,7 +118,7 @@ export default async function TropePage({ params }: TropePageProps) {
       }}
       relatedTropes={relatedTropes}
       initialBooks={initialBooks}
-      initialBookCount={books.length}
+      initialBookCount={totalBookCount ?? books.length}
     />
   );
 }

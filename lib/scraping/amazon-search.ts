@@ -29,6 +29,10 @@ export async function getAmazonRatingViaSerper(
     return null;
   }
 
+  // Minimum rating count to consider a result trustworthy — lower counts
+  // often indicate a wrong-edition match (e.g. an audiobook or ARC listing)
+  const MIN_TRUSTED_COUNT = 50;
+
   try {
     // Strategy 1: Broad query — surfaces knowledge graph + rich snippets
     const broadQuery = isbn
@@ -36,14 +40,29 @@ export async function getAmazonRatingViaSerper(
       : `"${title}" ${author} amazon book rating`;
 
     const result = await searchSerper(apiKey, broadQuery);
-    if (result) return result;
+    if (result && result.ratingCount >= MIN_TRUSTED_COUNT) return result;
 
-    // Strategy 2: Site-restricted fallback — guaranteed Amazon pages
+    // Strategy 2: If ISBN query returned a low-count result, retry with
+    // title+author instead — the ISBN may have matched a niche edition
+    if (isbn && (!result || result.ratingCount < MIN_TRUSTED_COUNT)) {
+      const titleQuery = `"${title}" ${author} amazon book rating`;
+      const titleResult = await searchSerper(apiKey, titleQuery);
+      if (titleResult && titleResult.ratingCount >= MIN_TRUSTED_COUNT) return titleResult;
+      // If title query also low-count, prefer the higher-count result
+      if (titleResult && result && titleResult.ratingCount > result.ratingCount) return titleResult;
+      if (titleResult && !result) return titleResult;
+    }
+
+    // Strategy 3: Site-restricted fallback — guaranteed Amazon pages
     const siteQuery = isbn
       ? `site:amazon.com "${isbn}"`
       : `site:amazon.com "${title}" ${author} book`;
 
-    return await searchSerper(apiKey, siteQuery);
+    const siteResult = await searchSerper(apiKey, siteQuery);
+    if (siteResult && siteResult.ratingCount >= MIN_TRUSTED_COUNT) return siteResult;
+
+    // Return best available result even if low-count (display layer will suppress)
+    return result ?? siteResult;
   } catch (err) {
     console.warn("[amazon-search] Failed:", err);
     return null;
@@ -131,6 +150,11 @@ async function searchSerper(
   // Return rating even without ASIN — the rating is valuable on its own
   if (bestRating) {
     return { ...bestRating, asin: bestAsin };
+  }
+
+  // Return ASIN even without rating — ASINs power affiliate buy links
+  if (bestAsin) {
+    return { rating: 0, ratingCount: 0, asin: bestAsin };
   }
 
   return null;

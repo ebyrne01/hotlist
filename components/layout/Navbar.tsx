@@ -58,7 +58,7 @@ export default function Navbar() {
             href="/discover"
             className="text-xs font-mono text-muted hover:text-ink transition-colors"
           >
-            Discover
+            Creators
           </Link>
           {user && (
             <>
@@ -181,7 +181,7 @@ export default function Navbar() {
               className="text-sm font-mono text-muted hover:text-ink transition-colors"
               onClick={() => setMenuOpen(false)}
             >
-              Discover Creators
+              Creators
             </Link>
             {user ? (
               <>

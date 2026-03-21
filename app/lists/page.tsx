@@ -13,6 +13,7 @@ interface HotlistCard {
   updatedAt: string;
   bookCount: number;
   sourceCreatorHandle: string | null;
+  coverUrls: string[];
 }
 
 export default function MyHotlistsPage() {
@@ -39,6 +40,27 @@ export default function MyHotlistsPage() {
         .eq("user_id", user!.id)
         .order("updated_at", { ascending: false });
 
+      const hotlistIds = (data ?? []).map((r: Record<string, unknown>) => r.id as string);
+
+      // Fetch first 4 book covers per hotlist
+      const coverMap: Record<string, string[]> = {};
+      if (hotlistIds.length > 0) {
+        const { data: hbRows } = await supabase
+          .from("hotlist_books")
+          .select("hotlist_id, position, books(cover_url)")
+          .in("hotlist_id", hotlistIds)
+          .order("position", { ascending: true });
+
+        for (const row of (hbRows ?? []) as { hotlist_id: string; position: number; books: { cover_url: string | null }[] | { cover_url: string | null } | null }[]) {
+          const hid = row.hotlist_id;
+          const booksData = Array.isArray(row.books) ? row.books[0] : row.books;
+          const url = booksData?.cover_url;
+          if (!url) continue;
+          if (!coverMap[hid]) coverMap[hid] = [];
+          if (coverMap[hid].length < 4) coverMap[hid].push(url);
+        }
+      }
+
       const mapped: HotlistCard[] = (data ?? []).map((row: Record<string, unknown>) => {
         const countData = row.hotlist_books as { count: number }[] | undefined;
         return {
@@ -49,6 +71,7 @@ export default function MyHotlistsPage() {
           updatedAt: row.updated_at as string,
           bookCount: countData?.[0]?.count ?? 0,
           sourceCreatorHandle: (row.source_creator_handle as string) ?? null,
+          coverUrls: coverMap[row.id as string] ?? [],
         };
       });
 
@@ -92,6 +115,7 @@ export default function MyHotlistsPage() {
             updatedAt: data.updated_at,
             bookCount: 0,
             sourceCreatorHandle: null,
+            coverUrls: [],
           },
           ...prev,
         ]);
@@ -265,33 +289,49 @@ export default function MyHotlistsPage() {
                     autoFocus
                   />
                 ) : (
-                  <Link href={`/lists/${hl.shareSlug ?? hl.id}`}>
-                    <div className="flex items-center gap-3">
-                      <h3 className="font-display font-bold text-ink text-base truncate group-hover:text-fire transition-colors">
-                        {hl.name}
-                      </h3>
-                      <button
-                        onClick={(e) => {
-                          e.preventDefault();
-                          handleTogglePublic(hl.id, hl.isPublic);
-                        }}
-                        className={`text-xs font-mono px-2 py-0.5 rounded-full border transition-colors ${
-                          hl.isPublic
-                            ? "text-green-700 bg-green-50 border-green-200 hover:bg-green-100"
-                            : "text-muted bg-cream border-border hover:border-fire/30"
-                        }`}
-                        title={hl.isPublic ? "Click to make private" : "Click to make public"}
-                      >
-                        {hl.isPublic ? "Public" : "Private"}
-                      </button>
+                  <Link href={`/lists/${hl.shareSlug ?? hl.id}`} className="flex items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3">
+                        <h3 className="font-display font-bold text-ink text-base truncate max-w-[280px] sm:max-w-[400px] group-hover:text-fire transition-colors">
+                          {hl.name}
+                        </h3>
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            handleTogglePublic(hl.id, hl.isPublic);
+                          }}
+                          className={`shrink-0 text-xs font-mono px-2 py-0.5 rounded-full border transition-colors ${
+                            hl.isPublic
+                              ? "text-green-700 bg-green-50 border-green-200 hover:bg-green-100"
+                              : "text-muted bg-cream border-border hover:border-fire/30"
+                          }`}
+                          title={hl.isPublic ? "Click to make private" : "Click to make public"}
+                        >
+                          {hl.isPublic ? "Public" : "Private"}
+                        </button>
+                      </div>
+                      <p className="text-xs font-mono text-muted mt-0.5">
+                        {hl.sourceCreatorHandle && (
+                          <span className="text-fire/70">{hl.sourceCreatorHandle}</span>
+                        )}
+                        {hl.sourceCreatorHandle && " · "}
+                        {hl.bookCount} {hl.bookCount === 1 ? "book" : "books"} · updated {timeAgo(hl.updatedAt)}
+                      </p>
                     </div>
-                    <p className="text-xs font-mono text-muted mt-0.5">
-                      {hl.sourceCreatorHandle && (
-                        <span className="text-fire/70">{hl.sourceCreatorHandle}</span>
-                      )}
-                      {hl.sourceCreatorHandle && " · "}
-                      {hl.bookCount} {hl.bookCount === 1 ? "book" : "books"} · updated {timeAgo(hl.updatedAt)}
-                    </p>
+                    {/* Cover thumbnails — overlapping stack */}
+                    {hl.coverUrls.length > 0 && (
+                      <div className="hidden sm:flex shrink-0 -space-x-3">
+                        {hl.coverUrls.map((url, i) => (
+                          <img
+                            key={i}
+                            src={url}
+                            alt=""
+                            className="w-[32px] h-[48px] rounded-sm shadow-sm border border-white object-cover"
+                            style={{ zIndex: hl.coverUrls.length - i }}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </Link>
                 )}
               </div>

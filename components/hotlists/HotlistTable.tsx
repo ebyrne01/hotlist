@@ -3,7 +3,9 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import BookCover from "@/components/ui/BookCover";
-import type { HotlistBookDetail, Rating } from "@/lib/types";
+import Badge from "@/components/ui/Badge";
+import { PepperRow } from "@/components/ui/PepperIcon";
+import type { HotlistBookDetail, Rating, SpiceRating } from "@/lib/types";
 
 interface HotlistTableProps {
   books: HotlistBookDetail[];
@@ -109,9 +111,19 @@ export default function HotlistTable({
   if (books.length === 0) {
     return (
       <div className="text-center py-12 border border-dashed border-border rounded-lg">
-        <p className="font-body text-muted text-sm">
-          Add at least 2 books to compare them
+        <p className="font-display text-lg font-bold text-ink">
+          Your Hotlist is empty
         </p>
+        <p className="font-body text-muted text-sm mt-2 max-w-xs mx-auto">
+          Add books to compare their spice, tropes, and ratings &mdash; all side by side.
+        </p>
+        <Link
+          href="/booktok"
+          className="inline-flex items-center gap-2 mt-4 text-sm font-mono text-fire hover:text-fire/80 transition-colors"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></svg>
+          Paste a BookTok link to add all books at once &rarr;
+        </Link>
       </div>
     );
   }
@@ -162,46 +174,49 @@ export default function HotlistTable({
                   </div>
 
                   {/* Ratings row */}
-                  <div className="flex items-center gap-3 mt-2 text-xs font-mono">
-                    <span className="text-muted" title="Goodreads">
-                      GR: <RatingCell value={gr} isEnriching={isEnriching && noRatings} />
+                  <div className="flex items-center gap-3 mt-2 font-mono">
+                    <span className="inline-flex items-baseline gap-1" aria-label={`Goodreads rating: ${gr !== null ? gr.toFixed(1) : 'not available'}`}>
+                      <span className="text-[10px] uppercase tracking-wide text-muted/70">GR</span>
+                      <span className="text-sm"><RatingCell value={gr} isEnriching={isEnriching && noRatings} /></span>
                     </span>
-                    <span className="text-muted" title="Amazon">
-                      AMZ: <RatingCell value={amz} isEnriching={isEnriching && noRatings} />
+                    <span className="text-border" aria-hidden="true">&middot;</span>
+                    <span className="inline-flex items-baseline gap-1" aria-label={`Amazon rating: ${amz !== null ? amz.toFixed(1) : 'not available'}`}>
+                      <span className="text-[10px] uppercase tracking-wide text-muted/70">AMZ</span>
+                      <span className="text-sm"><RatingCell value={amz} isEnriching={isEnriching && noRatings} /></span>
                     </span>
                     {rio !== null && (
-                      <span className="text-muted" title="romance.io">
-                        R.io: <span className="text-ink">{rio.toFixed(1)}</span>
-                      </span>
+                      <>
+                        <span className="text-border" aria-hidden="true">&middot;</span>
+                        <span className="inline-flex items-baseline gap-1" aria-label={`romance.io rating: ${rio.toFixed(1)}`}>
+                          <span className="text-[10px] uppercase tracking-wide text-muted/70">RIO</span>
+                          <span className="text-sm text-ink">{rio.toFixed(1)}</span>
+                        </span>
+                      </>
                     )}
                   </div>
 
                   {/* Spice + My Rating + Buy */}
                   <div className="flex items-center gap-3 mt-1.5">
-                    {spice > 0 && (
+                    {spice > 0 ? (
                       <span
                         className="text-sm"
                         title={hb.book.compositeSpice
-                          ? hb.book.compositeSpice.conflictFlag
-                            ? `${hb.book.compositeSpice.score.toFixed(1)}/5 spice · ${hb.book.compositeSpice.attribution}`
-                            : `${hb.book.compositeSpice.score.toFixed(1)}/5 spice · ${hb.book.compositeSpice.attribution}`
+                          ? `${hb.book.compositeSpice.score.toFixed(1)}/5 spice · ${hb.book.compositeSpice.attribution}`
                           : `${spice}/5 spice`}
                       >
-                        {Array.from({ length: Math.min(5, Math.max(1, Math.round(spice))) }, (_, i) => (
-                          <span
-                            key={i}
-                            className={hb.book.compositeSpice?.conflictFlag
-                              ? "opacity-50"
-                              : hb.book.compositeSpice && !["community", "romance_io"].includes(hb.book.compositeSpice.primarySource)
-                                ? "opacity-60"
-                                : ""}
-                          >🌶️</span>
-                        ))}
+                        <PepperRow
+                          level={spice}
+                          size={14}
+                          estimated={hb.book.compositeSpice ? !["community", "romance_io"].includes(hb.book.compositeSpice.primarySource) : false}
+                          muted={!!hb.book.compositeSpice?.conflictFlag}
+                        />
                         {hb.book.compositeSpice?.conflictFlag && (
-                          <span className="text-xs font-mono text-fire/70 italic ml-1">varies</span>
+                          <SpiceVariesTooltip spiceSignals={hb.book.spice} />
                         )}
                       </span>
-                    )}
+                    ) : hb.book.spice.length > 0 || hb.book.compositeSpice ? (
+                      <span className="text-[10px] font-mono text-muted/60">Low spice</span>
+                    ) : null}
                     <InlineStarRating
                       bookId={hb.bookId}
                       currentRating={hb.userRating?.starRating ?? null}
@@ -268,7 +283,7 @@ export default function HotlistTable({
                 <tr key={hb.id} className="border-b border-border/50 hover:bg-white/60 transition-colors">
                   <td className="px-3 py-3">
                     <Link href={`/book/${slug}`} className="flex items-center gap-3 group">
-                      <BookCover title={hb.book.title} coverUrl={hb.book.coverUrl} size="sm" />
+                      <BookCover title={hb.book.title} coverUrl={hb.book.coverUrl} size="table" />
                       <div className="min-w-0">
                         <p className="font-display font-bold text-ink text-sm leading-tight group-hover:text-fire transition-colors truncate max-w-[180px]">
                           {hb.book.title}
@@ -297,22 +312,26 @@ export default function HotlistTable({
                           ? `${hb.book.compositeSpice.score.toFixed(1)}/5 spice · ${hb.book.compositeSpice.attribution}`
                           : `${spice}/5 spice`}
                       >
-                        {Array.from({ length: Math.min(5, Math.max(1, Math.round(spice))) }, (_, i) => (
-                          <span
-                            key={i}
-                            className={hb.book.compositeSpice?.conflictFlag
-                              ? "opacity-50"
-                              : hb.book.compositeSpice && !["community", "romance_io"].includes(hb.book.compositeSpice.primarySource)
-                                ? "opacity-60"
-                                : ""}
-                          >🌶️</span>
-                        ))}
+                        <PepperRow
+                          level={spice}
+                          size={14}
+                          estimated={hb.book.compositeSpice ? !["community", "romance_io"].includes(hb.book.compositeSpice.primarySource) : false}
+                          muted={!!hb.book.compositeSpice?.conflictFlag}
+                        />
                         {hb.book.compositeSpice?.conflictFlag && (
-                          <span className="block text-xs font-mono text-fire/70 italic">varies</span>
+                          <SpiceVariesTooltip spiceSignals={hb.book.spice} />
+                        )}
+                        {spice <= 2 && hb.book.compositeSpice && (
+                          <span className="block text-[10px] font-mono text-muted/60">Low spice</span>
                         )}
                       </span>
+                    ) : hb.book.spice.length > 0 || hb.book.compositeSpice ? (
+                      <span className="text-sm cursor-default" title="Confirmed low/no spice">
+                        <PepperRow level={1} size={14} estimated muted />
+                        <span className="block text-[10px] font-mono text-muted/60">Low spice</span>
+                      </span>
                     ) : (
-                      <span className="text-muted/70 font-mono text-sm">{"\u2014"}</span>
+                      <span className="text-muted/50 font-mono text-[10px]">Unknown</span>
                     )}
                   </td>
                   <td className="px-3 py-3 text-center">
@@ -326,10 +345,15 @@ export default function HotlistTable({
                   <td className="px-3 py-3">
                     <div className="flex gap-1 flex-wrap max-w-[160px]">
                       {hb.book.tropes.slice(0, 3).map((t) => (
-                        <span key={t.id} className="text-xs font-mono px-1.5 py-0.5 rounded-full border border-border bg-white text-muted whitespace-nowrap">
-                          {t.name}
-                        </span>
+                        <Link key={t.id} href={`/tropes/${t.slug}`}>
+                          <Badge variant="trope" className="text-xs px-1.5 py-0.5 cursor-pointer">
+                            {t.name}
+                          </Badge>
+                        </Link>
                       ))}
+                      {hb.book.tropes.length > 3 && (
+                        <span className="text-xs font-mono text-muted/60">+{hb.book.tropes.length - 3}</span>
+                      )}
                       {hb.book.tropes.length === 0 && (
                         <span className="text-muted/70 font-mono text-xs">{"\u2014"}</span>
                       )}
@@ -411,11 +435,11 @@ function SortHeader({
 
 function RatingCell({ value, isEnriching }: { value: number | null; isEnriching: boolean }) {
   if (value !== null) {
-    return <span className="text-ink">{value.toFixed(1)}</span>;
+    return <span className="font-medium text-ink">{value.toFixed(1)}</span>;
   }
 
   return (
-    <span className="inline-flex items-center gap-1 text-muted/70">
+    <span className="inline-flex items-center gap-1 text-muted/40">
       {"\u2014"}
       {isEnriching && (
         <span
@@ -614,5 +638,51 @@ function ReadStatusToggle({
     >
       {status === "read" ? "Read" : "Unread"}
     </button>
+  );
+}
+
+// ── Spice "varies" tooltip ────────────────────────────
+
+const spiceSourceLabels: Record<string, string> = {
+  romance_io: "Romance.io",
+  hotlist_community: "Community",
+  goodreads_inference: "Goodreads (est.)",
+};
+
+function pepperString(level: number): string {
+  const filled = Math.round(level);
+  return "\uD83C\uDF36\uFE0F".repeat(filled);
+}
+
+function SpiceVariesTooltip({ spiceSignals }: { spiceSignals: SpiceRating[] }) {
+  const [open, setOpen] = useState(false);
+
+  if (spiceSignals.length === 0) {
+    return <span className="block text-xs font-mono text-fire/70 italic">varies</span>;
+  }
+
+  return (
+    <span
+      className="relative inline-block"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      onClick={() => setOpen((o) => !o)}
+    >
+      <span className="block text-xs font-mono text-fire/70 italic cursor-help underline decoration-dotted underline-offset-2">
+        varies
+      </span>
+      {open && (
+        <span className="absolute z-40 bottom-full left-1/2 -translate-x-1/2 mb-1.5 bg-ink text-cream rounded-lg shadow-lg px-3 py-2 text-left whitespace-nowrap">
+          <span className="block text-[10px] font-mono uppercase tracking-wide text-cream/60 mb-1">
+            Spice signals vary
+          </span>
+          {spiceSignals.map((s) => (
+            <span key={s.source} className="block text-xs font-mono leading-relaxed">
+              {spiceSourceLabels[s.source] ?? s.source}: {pepperString(s.spiceLevel)} ({s.spiceLevel.toFixed(1)})
+            </span>
+          ))}
+        </span>
+      )}
+    </span>
   );
 }

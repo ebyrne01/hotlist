@@ -18,6 +18,7 @@ import {
 } from "./goodreads-search";
 import { saveGoodreadsBookToCache } from "./cache";
 import { queueEnrichmentJobs } from "@/lib/enrichment/queue";
+import { isRomanceByGenres } from "./romance-filter";
 import { isJunkTitle } from "./romance-filter";
 
 const GOODREADS_DELAY_MS = 1500;
@@ -223,6 +224,9 @@ export async function runAuthorCrawl(
     try {
       const detail = await getGoodreadsBookById(result.goodreadsId);
       if (!detail) continue;
+
+      // Skip non-romance books discovered via author crawl
+      if (detail.genres?.length > 0 && !isRomanceByGenres(detail.genres)) continue;
 
       const book = await saveGoodreadsBookToCache({
         title: detail.title,

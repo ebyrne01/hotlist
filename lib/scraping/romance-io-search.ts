@@ -4,7 +4,7 @@
  * romance.io blocks direct scraping, but Google has indexed their
  * book pages and surfaces spice data in search snippets.
  * We query Google (via Serper.dev) for romance.io results and
- * parse the spice level from the snippet text.
+ * parse the spice level from the snippet text + Serper structured data.
  *
  * This reads publicly available Google search results — we are not
  * hitting romance.io's servers. We display 'romance.io' as the
@@ -19,7 +19,7 @@
  *   - romance.io URL slug contains slugified author last name
  *   - AND slug contains slugified title words
  *
- * MEDIUM confidence (store, never display):
+ * MEDIUM confidence (store + display):
  *   - Author appears in snippet text but not confirmed in slug
  *   - OR title is in slug but author unconfirmed
  *
@@ -73,6 +73,9 @@ interface SerperResult {
   title: string;
   link: string;
   snippet: string;
+  rating?: number;
+  ratingCount?: number;
+  position?: number;
 }
 
 interface SerperResponse {
@@ -141,6 +144,13 @@ function confirmAuthor(
 
 /**
  * Parse spice/heat data from a search snippet.
+ *
+ * Real romance.io snippet formats observed from Serper:
+ *   - "Steam rating: 3 of 5 - Open door" (series/author pages)
+ *   - "Steam rating: 4 of 5 - Explicit open door"
+ *   - "Steam rating: 4 of 5" (without label)
+ *   - "Spice/Steam/Heat level: X/5" (rare, older format)
+ *
  * Returns { spiceLevel, heatLabel } or null.
  */
 function parseSpiceFromSnippet(
@@ -149,15 +159,27 @@ function parseSpiceFromSnippet(
 ): { spiceLevel: number; heatLabel: string } | null {
   const text = (snippet + " " + resultTitle).toLowerCase();
 
-  // Pattern 1: "Spice/Steam/Heat level: X/5" or "X out of 5"
+  // Pattern 1: "Steam rating: X of 5 - Label" (most common romance.io format)
+  const steamOfMatch = text.match(
+    /(?:steam|spice|heat)\s*rating[:\s]*(\d)\s*(?:of|\/)\s*5(?:\s*[-–—]\s*(.+?)(?:\s*·|\s*$))?/i
+  );
+  if (steamOfMatch) {
+    const level = Math.min(5, Math.max(1, parseInt(steamOfMatch[1])));
+    const labelText = steamOfMatch[2]?.trim();
+    const label = labelText ? findHeatLabel(labelText) || findHeatLabel(text) : findHeatLabel(text);
+    return {
+      spiceLevel: level,
+      heatLabel: label || spiceLevelToLabel(level),
+    };
+  }
+
+  // Pattern 2: "Spice/Steam/Heat level: X/5" or "X out of 5"
   const levelMatch = text.match(
     /(?:spice|steam|heat|spiciness)\s*(?:level|rating)?[:\s]*(\d(?:\.\d)?)\s*(?:\/\s*5|out\s*of\s*5)/i
   );
   if (levelMatch) {
     const raw = parseFloat(levelMatch[1]);
     const level = Math.min(5, Math.max(1, Math.round(raw)));
-
-    // Also try to find a heat label
     const label = findHeatLabel(text);
     return {
       spiceLevel: level,
@@ -165,17 +187,7 @@ function parseSpiceFromSnippet(
     };
   }
 
-  // Pattern 2: Look for heat label text
-  const label = findHeatLabel(text);
-  if (label) {
-    return {
-      spiceLevel: HEAT_LABEL_TO_LEVEL[label.toLowerCase()] ?? 3,
-      heatLabel: label,
-    };
-  }
-
-  // Pattern 3: "Rated X/5" (star rating, not spice — but sometimes
-  // romance.io shows "Spice: X/5" in a compact format)
+  // Pattern 3: "Spice: X/5" compact format
   const ratedMatch = text.match(
     /(?:spice|steam)\s*:\s*(\d(?:\.\d)?)\s*\/\s*5/i
   );
@@ -188,6 +200,15 @@ function parseSpiceFromSnippet(
     };
   }
 
+  // Pattern 4: Look for heat label text alone (e.g. "explicit open door" in snippet)
+  const label = findHeatLabel(text);
+  if (label) {
+    return {
+      spiceLevel: HEAT_LABEL_TO_LEVEL[label.toLowerCase()] ?? 3,
+      heatLabel: label,
+    };
+  }
+
   return null;
 }
 
@@ -196,12 +217,13 @@ function parseSpiceFromSnippet(
  * Searches longest labels first to avoid partial matches.
  */
 function findHeatLabel(text: string): string | null {
+  const lower = text.toLowerCase();
   // Sort by length descending to match "very explicit open door" before "open door"
   const labels = Object.keys(HEAT_LABEL_TO_LEVEL).sort(
     (a, b) => b.length - a.length
   );
   for (const label of labels) {
-    if (text.includes(label)) {
+    if (lower.includes(label)) {
       // Return the label in title case
       return label
         .split(" ")
@@ -234,35 +256,49 @@ function spiceLevelToLabel(level: number): string {
 
 /**
  * Extract romance.io star rating from snippet if present.
- * Matches patterns like:
- *   "Rated 4.4/5"
- *   "Rated 4.4/5 stars"
- *   "Rating: 4.5"
- *   "4.3 / 5 stars"
- *   "4.3/5"
+ *
+ * Real romance.io snippet formats observed from Serper:
+ *   - "Rated: 4.12 of 5 stars" (series/author pages)
+ *   - "4.33 · 4982 ratings" (book pages)
+ *   - "Rated: 4.41 of 5 stars · 2523 ratings"
+ *   - "3.77 · ..." (bare rating at start)
  */
 function parseRomanceIoRating(snippet: string, resultTitle: string): number | null {
   const text = snippet + " " + resultTitle;
 
-  // Pattern 1: "Rated X.X/5" or "Rated X.X/5 stars"
-  const ratedMatch = text.match(/[Rr]ated\s+(\d\.\d)\s*\/\s*5/);
-  if (ratedMatch) {
-    const val = parseFloat(ratedMatch[1]);
-    if (val >= 1 && val <= 5) return val;
+  // Pattern 1: "Rated: X.XX of 5 stars" (most common on series/author pages)
+  const ratedOfMatch = text.match(/[Rr]ated:?\s+(\d\.\d\d?)\s+of\s+5\s*(?:stars?)?/);
+  if (ratedOfMatch) {
+    const val = parseFloat(ratedOfMatch[1]);
+    if (val >= 1 && val <= 5) return Math.round(val * 100) / 100;
   }
 
-  // Pattern 2: "Rating: X.X" or "Rating X.X/5"
-  const ratingMatch = text.match(/[Rr]ating[:\s]+(\d\.\d)\s*(?:\/\s*5)?/);
+  // Pattern 2: "X.XX · NNNN ratings" (book pages — rating before middot)
+  const middotMatch = text.match(/(\d\.\d\d?)\s*·\s*\d+\s*ratings?/);
+  if (middotMatch) {
+    const val = parseFloat(middotMatch[1]);
+    if (val >= 1 && val <= 5) return Math.round(val * 100) / 100;
+  }
+
+  // Pattern 3: "Rated X.X/5" or "Rated X.X/5 stars" (legacy format)
+  const ratedSlashMatch = text.match(/[Rr]ated\s+(\d\.\d\d?)\s*\/\s*5/);
+  if (ratedSlashMatch) {
+    const val = parseFloat(ratedSlashMatch[1]);
+    if (val >= 1 && val <= 5) return Math.round(val * 100) / 100;
+  }
+
+  // Pattern 4: "Rating: X.X" or "Rating X.X/5"
+  const ratingMatch = text.match(/[Rr]ating[:\s]+(\d\.\d\d?)\s*(?:\/\s*5)?/);
   if (ratingMatch) {
     const val = parseFloat(ratingMatch[1]);
-    if (val >= 1 && val <= 5) return val;
+    if (val >= 1 && val <= 5) return Math.round(val * 100) / 100;
   }
 
-  // Pattern 3: standalone "X.X/5 stars" or "X.X / 5"
-  const starsMatch = text.match(/(\d\.\d)\s*\/\s*5\s*(?:stars?)?/i);
+  // Pattern 5: standalone "X.X/5 stars" or "X.X / 5"
+  const starsMatch = text.match(/(\d\.\d\d?)\s*\/\s*5\s*(?:stars?)?/i);
   if (starsMatch) {
     const val = parseFloat(starsMatch[1]);
-    if (val >= 1 && val <= 5) return val;
+    if (val >= 1 && val <= 5) return Math.round(val * 100) / 100;
   }
 
   return null;
@@ -271,6 +307,9 @@ function parseRomanceIoRating(snippet: string, resultTitle: string): number | nu
 /**
  * Main function. Given a book's title and author, attempts to find
  * and return romance.io spice data via Google search index.
+ *
+ * Searches ALL romance.io results (book pages, series pages, author pages)
+ * and aggregates the best data from any of them.
  *
  * Returns null if no confident match found or API fails.
  */
@@ -306,7 +345,7 @@ export async function getRomanceIoSpice(
       },
       body: JSON.stringify({
         q: query,
-        num: 5,
+        num: 10,
       }),
     });
 
@@ -320,51 +359,64 @@ export async function getRomanceIoSpice(
     const data: SerperResponse = await response.json();
     const results = data.organic ?? [];
 
-    // Find the first romance.io book page result
-    const romanceIoResult = results.find(
+    // Filter to romance.io results only (books, series, authors pages)
+    const romanceIoResults = results.filter(
+      (r) => r.link.includes("romance.io/")
+    );
+
+    if (romanceIoResults.length === 0) {
+      console.log(`[romance.io] No romance.io result found for "${title}"`);
+      return null;
+    }
+
+    // Step 3: Find the best book page result for URL/slug/confidence
+    // Prefer /books/ URLs, but accept /series/ and /authors/ for data
+    const bookPageResult = romanceIoResults.find(
       (r) =>
         r.link.includes("romance.io/books/") ||
         r.link.includes("romance.io/book/")
     );
 
-    if (!romanceIoResult) {
-      console.log(`[romance.io] No romance.io result found for "${title}"`);
-      return null;
-    }
+    const primaryResult = bookPageResult || romanceIoResults[0];
 
-    // Step 3: Extract slug and score confidence
-    const urlParts = romanceIoResult.link.split("/");
+    // Extract slug from the primary result URL
+    const urlParts = primaryResult.link.split("/");
     const slug = urlParts[urlParts.length - 1] || urlParts[urlParts.length - 2];
+    // Strip query params from slug
+    const cleanSlug = slug.split("?")[0];
 
     const titleWords = getTitleWords(title);
 
     // Check title words in slug
-    const titleWordsInSlug = titleWords.filter((w) => slug.includes(w));
+    const titleWordsInSlug = titleWords.filter((w) => cleanSlug.includes(w));
     const titleConfirmed =
       titleWords.length > 0 &&
       titleWordsInSlug.length >= Math.ceil(titleWords.length * 0.6);
 
-    // Check author in slug or snippet
-    const authorConfirmation = confirmAuthor(
-      author,
-      slug,
-      romanceIoResult.snippet + " " + romanceIoResult.title
-    );
+    // Combine all snippet text for author confirmation
+    const allSnippetText = romanceIoResults
+      .map((r) => r.snippet + " " + r.title)
+      .join(" ");
+
+    // Check author in slug or snippet (check all results)
+    const authorConfirmation = confirmAuthor(author, cleanSlug, allSnippetText);
 
     // Score confidence
     let confidence: "high" | "medium" | "low";
     if (titleConfirmed && authorConfirmation === "slug") {
       confidence = "high";
     } else if (titleConfirmed && authorConfirmation === "snippet") {
-      confidence = "medium";
+      confidence = "high"; // Promoted: author in snippet + title in slug is reliable enough
     } else if (authorConfirmation === "slug" && titleWordsInSlug.length > 0) {
+      confidence = "medium";
+    } else if (authorConfirmation && titleWordsInSlug.length > 0) {
       confidence = "medium";
     } else {
       confidence = "low";
     }
 
     console.log(
-      `[romance.io] "${title}" → slug="${slug}" confidence=${confidence} ` +
+      `[romance.io] "${title}" → slug="${cleanSlug}" confidence=${confidence} ` +
         `(title: ${titleWordsInSlug.length}/${titleWords.length}, author: ${authorConfirmation})`
     );
 
@@ -373,34 +425,68 @@ export async function getRomanceIoSpice(
       return null;
     }
 
-    // Step 4: Parse spice data from snippet
-    const spiceData = parseSpiceFromSnippet(
-      romanceIoResult.snippet,
-      romanceIoResult.title
-    );
+    // Step 4: Extract data from ALL romance.io results
+    // Aggregate spice and rating from any result that has them
 
-    if (!spiceData) {
-      console.log(
-        `[romance.io] Found "${title}" on romance.io but couldn't parse spice data from snippet`
-      );
-      // Still return the result with a default — having the romance.io link
-      // and slug is valuable even without parsed spice
-      return {
-        spiceLevel: 3, // default to moderate if we can't parse
-        heatLabel: "Open Door",
-        romanceIoSlug: slug,
-        romanceIoUrl: romanceIoResult.link,
-        romanceIoRating: parseRomanceIoRating(romanceIoResult.snippet, romanceIoResult.title),
-        confidence,
-      };
+    let bestSpice: { spiceLevel: number; heatLabel: string } | null = null;
+    let bestRating: number | null = null;
+
+    for (const result of romanceIoResults) {
+      // Try Serper's structured rating field first (most reliable)
+      if (!bestRating && result.rating && result.rating >= 1 && result.rating <= 5) {
+        bestRating = Math.round(result.rating * 100) / 100;
+      }
+
+      // Parse snippet for spice data
+      if (!bestSpice) {
+        const spice = parseSpiceFromSnippet(result.snippet, result.title);
+        if (spice) bestSpice = spice;
+      }
+
+      // Parse snippet for rating (in case Serper structured data is missing)
+      if (!bestRating) {
+        const rating = parseRomanceIoRating(result.snippet, result.title);
+        if (rating) bestRating = rating;
+      }
+
+      // Stop early if we have both
+      if (bestSpice && bestRating) break;
     }
 
+    // Use the book page URL if available, otherwise the best match
+    const bestUrl = bookPageResult?.link || primaryResult.link;
+    const bestSlug = bookPageResult
+      ? (bookPageResult.link.split("/").pop() || "").split("?")[0]
+      : cleanSlug;
+
+    if (!bestSpice) {
+      console.log(
+        `[romance.io] Found "${title}" on romance.io but couldn't parse spice from any snippet`
+      );
+      // Still return if we have a rating — the link and slug are valuable
+      if (bestRating || confidence === "high") {
+        return {
+          spiceLevel: 3, // default to moderate if we can't parse
+          heatLabel: "Open Door",
+          romanceIoSlug: bestSlug,
+          romanceIoUrl: bestUrl,
+          romanceIoRating: bestRating,
+          confidence,
+        };
+      }
+      return null;
+    }
+
+    console.log(
+      `[romance.io] "${title}" → spice=${bestSpice.spiceLevel} (${bestSpice.heatLabel}), rating=${bestRating ?? "none"}`
+    );
+
     return {
-      spiceLevel: spiceData.spiceLevel,
-      heatLabel: spiceData.heatLabel,
-      romanceIoSlug: slug,
-      romanceIoUrl: romanceIoResult.link,
-      romanceIoRating: parseRomanceIoRating(romanceIoResult.snippet, romanceIoResult.title),
+      spiceLevel: bestSpice.spiceLevel,
+      heatLabel: bestSpice.heatLabel,
+      romanceIoSlug: bestSlug,
+      romanceIoUrl: bestUrl,
+      romanceIoRating: bestRating,
       confidence,
     };
   } catch (err) {

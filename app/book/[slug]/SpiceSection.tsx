@@ -4,8 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import { Check, ExternalLink } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useSignInModal } from "@/lib/auth/useSignInModal";
-import { clsx } from "clsx";
 import SpiceAttribution, { isEstimatedSource } from "@/components/books/SpiceAttribution";
+import { PepperIcon, PepperRow } from "@/components/ui/PepperIcon";
 import type { CompositeSpiceData } from "@/lib/types";
 
 interface SpiceData {
@@ -183,10 +183,10 @@ export default function SpiceSection({
 
   // Build tooltip text based on what data sources are showing
   const tooltipText = hasRomanceIo
-    ? `Spice rating from romance.io — the leading romance spice database, rated by thousands of romance readers. Heat level: ${romanceIoHeatLabel ?? "Unknown"}. You can add your own spice rating below.`
+    ? `Spice rating from romance.io — rated by thousands of romance readers. Heat level: ${romanceIoHeatLabel ?? "Unknown"}.`
     : hasCommunity
-      ? `Rated by ${communitySpice.ratingCount} Hotlist readers. Add your own rating below.`
-      : "Hotlist estimates spice by analyzing how readers shelve this book on Goodreads — e.g. 'steamy', 'clean-romance'. This is an estimate. Be the first Hotlist reader to rate the spice below.";
+      ? `Rated by ${communitySpice.ratingCount} Hotlist reader${(communitySpice.ratingCount ?? 0) === 1 ? "" : "s"}.`
+      : "Estimated from how readers shelve this book on Goodreads (e.g. 'steamy', 'clean-romance'). Add your rating to improve it.";
 
   // Spice difference for "your experience may vary" note
   // Compare against romance.io first, then community, then inferred
@@ -231,7 +231,7 @@ export default function SpiceSection({
 
       {/* Primary spice indicator */}
       <div className="flex items-center gap-2">
-        <SpiceChilies level={primaryLevel} muted={false} estimated={isEstimated} />
+        <PepperRow level={primaryLevel} size={18} estimated={isEstimated} />
         {hasRomanceIo && romanceIoHeatLabel && (
           <span className="text-xs font-body text-muted/80 italic">
             {romanceIoHeatLabel}
@@ -272,7 +272,7 @@ export default function SpiceSection({
       {hasRomanceIo && hasCommunity && (
         <div className="mt-2 flex items-center gap-2 text-xs font-mono text-muted/60">
           <span>Hotlist readers:</span>
-          <SpiceChilies level={communitySpice.spiceLevel} muted />
+          <PepperRow level={communitySpice.spiceLevel} size={16} muted />
           <span className="text-xs">
             ({communitySpice.ratingCount} rating
             {(communitySpice.ratingCount ?? 0) === 1 ? "" : "s"})
@@ -284,7 +284,7 @@ export default function SpiceSection({
       {!hasRomanceIo && communitySpice && inferredSpice && (
         <div className="mt-2 flex items-center gap-2 text-xs font-mono text-muted/60">
           <span>Goodreads estimate:</span>
-          <SpiceChilies level={inferredSpice.spiceLevel} muted />
+          <PepperRow level={inferredSpice.spiceLevel} size={16} muted />
         </div>
       )}
 
@@ -312,47 +312,6 @@ export default function SpiceSection({
         </div>
       )}
     </div>
-  );
-}
-
-// ── Helper: render chili peppers ─────────────────────
-
-function SpiceChilies({
-  level,
-  muted,
-  estimated = false,
-}: {
-  level: number | null;
-  muted: boolean;
-  estimated?: boolean;
-}) {
-  if (!level) {
-    return (
-      <span className="text-xs font-mono text-muted/70">Spice unknown</span>
-    );
-  }
-
-  const clamped = Math.min(5, Math.max(1, Math.round(level)));
-  return (
-    <span className="inline-flex items-center gap-0.5">
-      {Array.from({ length: 5 }, (_, i) => (
-        <span
-          key={i}
-          className={clsx(
-            "text-base transition-opacity",
-            i < clamped
-              ? muted
-                ? "opacity-50"
-                : estimated
-                  ? "opacity-60"
-                  : "opacity-100"
-              : "opacity-20 grayscale"
-          )}
-        >
-          🌶️
-        </span>
-      ))}
-    </span>
   );
 }
 
@@ -411,19 +370,7 @@ function UserSpiceRow({
           <span className="text-xs font-mono text-muted/60">
             Your take:
           </span>
-          <span className="inline-flex items-center gap-0.5">
-            {Array.from({ length: 5 }, (_, i) => (
-              <span
-                key={i}
-                className={clsx(
-                  "text-sm",
-                  i < userSpice ? "opacity-100" : "opacity-20 grayscale"
-                )}
-              >
-                🌶️
-              </span>
-            ))}
-          </span>
+          <PepperRow level={userSpice} size={16} />
           <button
             onClick={onEdit}
             className="text-xs font-mono text-fire/70 hover:text-fire transition-colors ml-1"
@@ -433,7 +380,7 @@ function UserSpiceRow({
         </div>
         {spiceDifference >= 2 && (
           <p className="mt-1.5 text-xs font-body text-muted/70 italic">
-            Spice is personal — your experience may vary 🌶️
+            Spice is personal — your experience may vary
           </p>
         )}
       </div>
@@ -451,12 +398,9 @@ function UserSpiceRow({
             type="button"
             disabled={saving}
             onClick={() => onSave(i + 1)}
-            className={clsx(
-              "text-sm transition-all cursor-pointer hover:scale-125",
-              i < userSpice ? "opacity-100" : "opacity-20 grayscale"
-            )}
+            className="transition-transform cursor-pointer hover:scale-125"
           >
-            🌶️
+            <PepperIcon filled={i < userSpice} size={16} />
           </button>
         ))}
       </span>

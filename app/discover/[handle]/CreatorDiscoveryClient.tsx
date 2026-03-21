@@ -7,6 +7,7 @@ import { useSignInModal } from "@/lib/auth/useSignInModal";
 import { createClient } from "@/lib/supabase/client";
 import BookCover from "@/components/ui/BookCover";
 import RatingBadge from "@/components/ui/RatingBadge";
+import { PepperRow } from "@/components/ui/PepperIcon";
 import type { BookDetail } from "@/lib/types";
 
 interface BookWithMention extends BookDetail {
@@ -201,11 +202,7 @@ export default function CreatorDiscoveryClient({ creator, books }: Props) {
                       />
                     )}
                     {spice && (
-                      <span className="text-xs">
-                        {Array.from({ length: Math.min(5, Math.round(spice.spiceLevel)) }, (_, i) => (
-                          <span key={i}>🌶️</span>
-                        ))}
-                      </span>
+                      <PepperRow level={spice.spiceLevel} size={12} />
                     )}
                   </div>
 

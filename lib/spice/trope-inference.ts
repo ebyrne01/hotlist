@@ -12,6 +12,25 @@ import { getAdminClient } from "@/lib/supabase/admin";
 
 const MODEL = "claude-haiku-4-5-20251001";
 const MIN_DESCRIPTION_LENGTH = 50;
+const DEFAULT_DAILY_LIMIT = 1000;
+
+/**
+ * Check how many trope inferences have been run today.
+ */
+async function getDailyTropeUsage(): Promise<number> {
+  const supabase = getAdminClient();
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const { count } = await supabase
+    .from("enrichment_queue")
+    .select("*", { count: "exact", head: true })
+    .eq("job_type", "trope_inference")
+    .eq("status", "complete")
+    .gte("completed_at", todayStart.toISOString());
+
+  return count ?? 0;
+}
 
 /**
  * Canonical trope slugs — must match the `tropes` table exactly.
@@ -161,6 +180,14 @@ export async function inferAndUpsertTropes(
   }
 ): Promise<boolean> {
   if (!book.description || book.description.length < MIN_DESCRIPTION_LENGTH) {
+    return false;
+  }
+
+  // Check daily limit
+  const dailyLimit = Number(process.env.TROPE_INFERENCE_DAILY_LIMIT) || DEFAULT_DAILY_LIMIT;
+  const usage = await getDailyTropeUsage();
+  if (usage >= dailyLimit) {
+    console.log(`[trope-inference] Daily limit reached (${usage}/${dailyLimit}), skipping`);
     return false;
   }
 

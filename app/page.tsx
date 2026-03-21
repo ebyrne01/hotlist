@@ -11,6 +11,7 @@ import { getRomanceNewReleases } from "@/lib/books/new-releases";
 import { hydrateBookDetail } from "@/lib/books/cache";
 import { isJunkTitle } from "@/lib/books/romance-filter";
 import { deduplicateBooks, diversifyByAuthor, isCompilationTitle, hasYAGenre } from "@/lib/books/utils";
+import { TrendingUp, Sparkles, Swords, Flame } from "lucide-react";
 import type { BookDetail } from "@/lib/types";
 
 /** Confirmed spice sources — not estimated/inferred */
@@ -34,6 +35,8 @@ function isHomepageQualified(book: BookDetail): boolean {
   if (!grRating || (grRating.ratingCount ?? 0) < 100) return false;
   // Must have confirmed spice (not estimated/inferred)
   if (!hasConfirmedSpice(book)) return false;
+  // Must have at least one trope tag — books without tropes look incomplete
+  if (book.tropes.length === 0) return false;
   return true;
 }
 
@@ -215,15 +218,42 @@ async function getSpiciest(): Promise<BookDetail[]> {
     hydrated.push(await hydrateBookDetail(supabase, book));
   }
 
-  // Strict filter: confirmed spice >= 4, no YA, no compilations
+  // Spice section filter: confirmed spice >= 4, cover, GR rating, no YA
+  // Tropes are nice-to-have but not required — spice is the qualifier here
   const qualified = hydrated.filter((book) => {
-    if (!isHomepageQualified(book)) return false;
+    if (!book.coverUrl) return false;
+    if (isCompilationTitle(book.title)) return false;
+    const grRating = book.ratings.find((r) => r.source === "goodreads");
+    if (!grRating || (grRating.ratingCount ?? 0) < 50) return false;
+    if (!hasConfirmedSpice(book)) return false;
     if (hasYAGenre(book)) return false;
-    // Require high confirmed spice
     const spiceLevel = book.compositeSpice?.score ?? 0;
     return spiceLevel >= 4;
   });
+
+  // Sort: books with tropes first, then by spice level
+  qualified.sort((a, b) => {
+    const aScore = (a.tropes.length > 0 ? 10 : 0) + (a.compositeSpice?.score ?? 0);
+    const bScore = (b.tropes.length > 0 ? 10 : 0) + (b.compositeSpice?.score ?? 0);
+    return bScore - aScore;
+  });
   return diversifyByAuthor(deduplicateBooks(qualified)).slice(0, 12);
+}
+
+/** Romantasy trope slugs — books need at least one to qualify for Romantasy Picks */
+const ROMANTASY_TROPE_SLUGS = new Set([
+  "fae-faerie", "fated-mates", "dragon-riders", "court-academy",
+  "morally-grey", "chosen-one", "found-family", "mortal-immortal",
+  "enemies-to-lovers", "forbidden-romance",
+]);
+
+function isRomantasyQualified(book: BookDetail): boolean {
+  if (!isHomepageQualified(book)) return false;
+  // Minimum GR 3.9 for "picks" curation
+  const gr = book.ratings.find((r) => r.source === "goodreads");
+  if (!gr || gr.rating === null || gr.rating < 3.9) return false;
+  // Must have at least one romantasy trope
+  return book.tropes.some((t) => ROMANTASY_TROPE_SLUGS.has(t.slug));
 }
 
 async function getRomantasyPicks(): Promise<BookDetail[]> {
@@ -257,7 +287,7 @@ async function getRomantasyPicks(): Promise<BookDetail[]> {
       if (isJunkTitle(book.title as string)) continue;
       hydrated.push(await hydrateBookDetail(supabase, book));
     }
-    return diversifyByAuthor(deduplicateBooks(hydrated.filter(isHomepageQualified))).slice(0, 12);
+    return diversifyByAuthor(deduplicateBooks(hydrated.filter(isRomantasyQualified))).slice(0, 8);
   }
 
   const hydrated: BookDetail[] = [];
@@ -266,7 +296,7 @@ async function getRomantasyPicks(): Promise<BookDetail[]> {
     hydrated.push(await hydrateBookDetail(supabase, book));
   }
 
-  return diversifyByAuthor(deduplicateBooks(hydrated.filter(isHomepageQualified))).slice(0, 12);
+  return diversifyByAuthor(deduplicateBooks(hydrated.filter(isRomantasyQualified))).slice(0, 8);
 }
 
 async function getTropesWithCounts() {
@@ -353,56 +383,61 @@ export default async function Home() {
 
       <ValuePropStrip />
 
-      <BookTokBanner previewCovers={previewCovers} />
-
       <div className="max-w-6xl mx-auto px-4">
-        {/* What's Hot — NYT Bestsellers */}
+        {/* 1. What's Hot — NYT Bestsellers */}
         {hotBooks.length > 0 && (
           <section className="py-8">
-            <h2 className="font-display text-xl sm:text-2xl font-bold text-ink mb-4">
-              🔥{" "}What&apos;s Hot
+            <h2 className="heading-section flex items-center gap-2 mb-4">
+              <TrendingUp size={20} className="text-fire" aria-hidden="true" />
+              What&apos;s Hot
             </h2>
             <BookRow books={hotBooks} />
           </section>
         )}
 
-        {/* New Releases */}
-        {filteredReleases.length > 0 && (
-          <section className="py-8">
-            <h2 className="font-display text-xl sm:text-2xl font-bold text-ink mb-4">
-              ✨ New Releases
-            </h2>
-            <BookRow books={filteredReleases} />
-          </section>
-        )}
-
-        {/* Romantasy Picks */}
+        {/* 2. Romantasy Picks */}
         {romantasyBooks.length > 0 && (
           <section className="py-8">
-            <h2 className="font-display text-xl sm:text-2xl font-bold text-ink mb-4">
-              🗡️ Romantasy Picks
+            <h2 className="heading-section flex items-center gap-2 mb-4">
+              <Swords size={20} className="text-fire" aria-hidden="true" />
+              Romantasy Picks
             </h2>
             <BookRow books={romantasyBooks} />
           </section>
         )}
 
-        {/* Browse by Trope */}
-        <section id="tropes" className="py-8 scroll-mt-20">
-          <h2 className="font-display text-xl sm:text-2xl font-bold text-ink mb-4 text-center">
-            Browse by Trope
-          </h2>
-          <TropeGrid tropes={tropes} />
-        </section>
+        {/* 3. BookTok CTA — single mid-page banner */}
+        <BookTokBanner previewCovers={previewCovers} />
 
-        {/* Spiciest Right Now */}
+        {/* 4. Turn Up the Heat — high spice */}
         {spicyBooks.length > 0 && (
           <section className="py-8">
-            <h2 className="font-display text-xl sm:text-2xl font-bold text-ink mb-4">
-              🌶️{" "}Turn Up the Heat
+            <h2 className="heading-section flex items-center gap-2 mb-4">
+              <Flame size={20} className="text-fire" aria-hidden="true" />
+              Turn Up the Heat
             </h2>
             <BookRow books={spicyBooks} />
           </section>
         )}
+
+        {/* 5. New Releases */}
+        {filteredReleases.length > 0 && (
+          <section className="py-8">
+            <h2 className="heading-section flex items-center gap-2 mb-4">
+              <Sparkles size={20} className="text-fire" aria-hidden="true" />
+              New Releases
+            </h2>
+            <BookRow books={filteredReleases} />
+          </section>
+        )}
+
+        {/* 6. Browse by Trope */}
+        <section id="tropes" className="py-8 scroll-mt-20">
+          <h2 className="heading-section mb-4 text-center">
+            Browse by Trope
+          </h2>
+          <TropeGrid tropes={tropes} />
+        </section>
       </div>
     </>
   );

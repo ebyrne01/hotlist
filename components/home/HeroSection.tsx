@@ -35,11 +35,15 @@ export default function HeroSection({ bookCount, tropeCount }: HeroSectionProps)
       />
 
       <div className="relative max-w-2xl mx-auto px-4 py-20 sm:py-28 flex flex-col items-center text-center">
-        <h1 className="font-display text-5xl sm:text-7xl font-bold text-cream italic">
+        <p className="font-display text-2xl sm:text-3xl font-bold text-cream/80 italic">
           Hotlist 🔥
-        </h1>
-        <p className="mt-4 text-lg sm:text-xl font-body text-cream/70 max-w-md">
+        </p>
+        <h1 className="mt-3 font-display text-4xl sm:text-6xl font-bold text-cream italic leading-tight">
           Every rating. Every trope. One decision.
+        </h1>
+        <p className="mt-3 text-sm sm:text-base font-body text-cream/60 max-w-md">
+          Search {displayBookCount ?? "thousands of"} romance and romantasy books
+          to find spice levels, tropes, and ratings &mdash; all in one place.
         </p>
 
         <div className="mt-8 w-full max-w-lg">

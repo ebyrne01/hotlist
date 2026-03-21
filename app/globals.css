@@ -4,6 +4,19 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer components {
+  /* ── Typography hierarchy (Issue 04) ── */
+  .heading-section {
+    @apply font-display text-xl sm:text-2xl font-bold text-ink leading-tight tracking-tight;
+  }
+  .heading-subsection {
+    @apply font-mono text-[11px] uppercase tracking-[0.1em] text-fire;
+  }
+  .label-meta {
+    @apply font-mono text-[10px] text-stone-400 tracking-wide;
+  }
+}
+
 @layer utilities {
   .scrollbar-hide {
     -ms-overflow-style: none;

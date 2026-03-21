@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { Search, X } from "lucide-react";
+import { Search, X, Video } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { clsx } from "clsx";
 import BookCover from "@/components/ui/BookCover";
@@ -165,7 +165,7 @@ export default function SearchBar({ variant = "navbar", className, inputId, onSe
             ref={inputRef}
             id={inputId}
             type="text"
-            placeholder="Search by title, author, or ISBN"
+            placeholder="Search by title, author, or trope..."
             value={query}
             onChange={(e) => {
               const val = e.target.value;
@@ -236,7 +236,7 @@ export default function SearchBar({ variant = "navbar", className, inputId, onSe
                     className="text-xs font-mono text-fire hover:underline inline-block"
                     onClick={() => setIsOpen(false)}
                   >
-                    📹 Or paste a BookTok link &rarr;
+                    <Video size={12} className="inline -mt-0.5" aria-hidden="true" /> Or paste a BookTok link &rarr;
                   </a>
                 </div>
               </div>

@@ -142,7 +142,9 @@ export async function fetchShareCardData(
       goodreadsCount: grRow?.rating_count
         ? Number(grRow.rating_count)
         : null,
-      amazon: amzRow ? parseFloat(amzRow.rating as string) : null,
+      amazon: amzRow && (amzRow.rating_count as number | null) != null && (amzRow.rating_count as number) >= 50
+        ? parseFloat(amzRow.rating as string)
+        : null,
     },
     spiceLevel,
     heatLabel: HEAT_LABELS[spiceLevel] ?? "",

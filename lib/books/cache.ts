@@ -411,11 +411,22 @@ export async function hydrateBookDetail(
       .eq("book_id", book.id),
   ]);
 
-  const ratings: Rating[] = (ratingsRes.data ?? []).map((r: Record<string, unknown>) => ({
-    source: r.source as Rating["source"],
-    rating: r.rating ? parseFloat(r.rating as string) : null,
-    ratingCount: r.rating_count as number | null,
-  }));
+  // Minimum rating count to display Amazon ratings — low-count ratings from
+  // Serper are often wrong-edition matches and misleading (e.g. 5.0 from 6 reviews)
+  const MIN_AMAZON_RATING_COUNT = 50;
+
+  const ratings: Rating[] = (ratingsRes.data ?? []).map((r: Record<string, unknown>) => {
+    const source = r.source as Rating["source"];
+    const rating = r.rating ? parseFloat(r.rating as string) : null;
+    const ratingCount = r.rating_count as number | null;
+
+    // Suppress Amazon ratings with too few reviews — show as "—" instead
+    if (source === "amazon" && (ratingCount == null || ratingCount < MIN_AMAZON_RATING_COUNT)) {
+      return { source, rating: null, ratingCount };
+    }
+
+    return { source, rating, ratingCount };
+  });
 
   const spice: SpiceRating[] = (spiceRes.data ?? []).map((s: Record<string, unknown>) => ({
     source: s.source as SpiceRating["source"],

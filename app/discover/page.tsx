@@ -5,7 +5,7 @@ import Link from "next/link";
 import { getAdminClient } from "@/lib/supabase/admin";
 
 export const metadata: Metadata = {
-  title: "Discover BookTok Creators — Hotlist",
+  title: "BookTok Creators — Hotlist",
   description: "Find BookTok creators and see their book recommendations with ratings, spice levels, and tropes.",
 };
 
@@ -35,7 +35,7 @@ export default async function DiscoverPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
       <h1 className="text-2xl font-display font-bold text-ink mb-2">
-        Discover BookTok Creators
+        BookTok Creators
       </h1>
       <p className="text-sm font-body text-muted mb-8">
         Every time a reader grabs books from a BookTok video, we catalog the

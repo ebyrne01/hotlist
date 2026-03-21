@@ -13,6 +13,7 @@ import { extractGoodreadsIdFromSlug } from "@/lib/books/goodreads-search";
 import { isJunkTitle } from "@/lib/books/romance-filter";
 import { deduplicateBooks } from "@/lib/books/utils";
 import type { BookDetail } from "@/lib/types";
+import { Video } from "lucide-react";
 import BookDetailClient from "./BookDetailClient";
 import BookPreview from "@/components/books/BookPreview";
 import { InlineUserRating } from "./InlineRatings";
@@ -307,38 +308,163 @@ export default async function BookPage({ params }: PageProps) {
       />
 
       <div className="max-w-5xl mx-auto px-4 py-6 sm:py-10">
-        {/* ── Two-column layout ── */}
-        <div className="flex flex-col sm:flex-row gap-6 sm:gap-10">
+        {/* ── Zone A: Decision block (above fold) ── */}
+        <div className="grid grid-cols-[100px_1fr] sm:grid-cols-[240px_1fr] gap-4 sm:gap-8 items-start">
+          {/* Cover */}
+          <BookCover
+            title={book.title}
+            coverUrl={coverUrl}
+            size="fill"
+            className="w-full aspect-[2/3] object-contain rounded-lg shadow-md"
+          />
 
-          {/* ── Left column: cover + metadata + buy ── */}
-          <div className="flex flex-col items-center sm:items-start gap-4 sm:w-1/3 shrink-0">
-            <BookCover
-              title={book.title}
-              coverUrl={coverUrl}
-              size="fill"
-              className="w-[200px] h-[300px] sm:w-full sm:h-auto sm:aspect-[2/3] object-contain rounded-lg shadow-md"
+          {/* Decision info */}
+          <div className="min-w-0">
+            <h1 className="font-display text-xl sm:text-4xl font-bold text-ink leading-tight">
+              {book.title}
+            </h1>
+            <p className="mt-1 text-sm font-body text-muted">
+              by{" "}
+              <Link
+                href={`/search?q=${encodeURIComponent(book.author)}`}
+                className="text-ink hover:text-fire transition-colors"
+              >
+                {book.author}
+              </Link>
+              {" "}
+              <Link
+                href={`/search?q=${encodeURIComponent(book.author)}`}
+                className="text-xs font-mono text-fire/70 hover:text-fire transition-colors"
+              >
+                See all &rarr;
+              </Link>
+            </p>
+            {book.seriesName && (
+              <p className="mt-0.5 text-sm font-body text-muted italic">
+                <Link
+                  href={`/search?q=${encodeURIComponent(book.seriesName)}`}
+                  className="hover:text-fire transition-colors"
+                >
+                  {book.seriesName}
+                </Link>
+                {book.seriesPosition ? ` #${book.seriesPosition}` : ""}
+              </p>
+            )}
+
+            {/* Trope tags */}
+            <div className="mt-3">
+              {book.tropes.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {book.tropes.map((trope) => (
+                    <Link key={trope.id} href={`/tropes/${trope.slug}`}>
+                      <Badge variant="trope" className="cursor-pointer">
+                        {trope.name}
+                      </Badge>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm font-body text-muted/70">
+                  No tropes tagged yet.{" "}
+                  <Link
+                    href="/tropes"
+                    className="text-fire/70 hover:text-fire transition-colors font-mono text-xs"
+                  >
+                    Suggest a trope &rarr;
+                  </Link>
+                </p>
+              )}
+            </div>
+
+            {/* Ratings row */}
+            <div data-rating-row className="flex flex-wrap items-start gap-4 sm:gap-6 mt-4">
+              <RatingBadge
+                score={goodreadsRating?.rating ?? null}
+                source="goodreads"
+                ratingCount={goodreadsRating?.ratingCount}
+              />
+              <RatingBadge
+                score={amazonRating?.rating ?? null}
+                source="amazon"
+                ratingCount={amazonRating?.ratingCount}
+              />
+              {romanceIoRating && (
+                <a
+                  href={book.romanceIoSlug
+                    ? `https://romance.io/books/${book.romanceIoSlug}`
+                    : `https://romance.io/search?q=${encodeURIComponent(book.title + " " + book.author)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group"
+                >
+                  <RatingBadge
+                    score={romanceIoRating.rating ?? null}
+                    source="romance_io"
+                    ratingCount={romanceIoRating.ratingCount}
+                    external
+                  />
+                </a>
+              )}
+              <div className="border-l border-border pl-4 sm:pl-6">
+                <InlineUserRating bookId={book.id} />
+              </div>
+            </div>
+
+            {/* Add to Hotlist — desktop only */}
+            <div className="hidden sm:block mt-4">
+              <BookDetailClient
+                section="add-to-hotlist"
+                bookId={book.id}
+                bookTitle={book.title}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* ── Zone B: Reference + Discovery (below fold) ── */}
+        <div className="mt-8 sm:mt-12 grid grid-cols-1 sm:grid-cols-[240px_1fr] gap-8">
+          {/* Sidebar: spice + metadata + buy links + reading status */}
+          <div className="order-2 sm:order-1 flex flex-col gap-4">
+            {/* Spice level */}
+            <SpiceSection
+              bookId={book.id}
+              compositeSpice={book.compositeSpice}
+              romanceIoSpice={romanceIoSpice ? {
+                spiceLevel: romanceIoSpice.spiceLevel,
+                source: "romance_io",
+                ratingCount: romanceIoSpice.ratingCount,
+                confidence: romanceIoSpice.confidence ?? null,
+              } : null}
+              romanceIoHeatLabel={book.romanceIoHeatLabel}
+              romanceIoSlug={book.romanceIoSlug}
+              communitySpice={communitySpice ? {
+                spiceLevel: communitySpice.spiceLevel,
+                source: "hotlist_community",
+                ratingCount: communitySpice.ratingCount,
+                confidence: null,
+              } : null}
+              inferredSpice={inferredSpice ? {
+                spiceLevel: inferredSpice.spiceLevel,
+                source: "goodreads_inference",
+                ratingCount: inferredSpice.ratingCount,
+                confidence: inferredSpice.confidence ?? null,
+              } : null}
             />
 
             {/* Metadata list */}
-            <dl className="w-full text-sm font-body space-y-1.5 mt-2">
-              <div className="flex justify-between">
-                <dt className="text-muted font-mono text-xs">Author</dt>
-                <dd className="text-ink text-right">
-                  <Link
-                    href={`/search?q=${encodeURIComponent(book.author)}`}
-                    className="hover:text-fire transition-colors"
-                  >
-                    {book.author}
-                  </Link>
-                </dd>
-              </div>
+            <dl className="w-full text-sm font-body space-y-1.5">
               {book.seriesName && (
                 <div className="flex justify-between">
                   <dt className="text-muted font-mono text-xs">Series</dt>
                   <dd className="text-ink text-right">
-                    {book.seriesPosition
-                      ? `Book ${book.seriesPosition} of ${book.seriesName}`
-                      : book.seriesName}
+                    <Link
+                      href={`/search?q=${encodeURIComponent(book.seriesName)}`}
+                      className="hover:text-fire transition-colors"
+                    >
+                      {book.seriesPosition
+                        ? `Book ${book.seriesPosition} of ${book.seriesName}`
+                        : book.seriesName}
+                    </Link>
                   </dd>
                 </div>
               )}
@@ -365,7 +491,7 @@ export default async function BookPage({ params }: PageProps) {
             </dl>
 
             {/* Buy buttons */}
-            <div className="w-full flex flex-col gap-2 mt-2">
+            <div className="w-full flex flex-col gap-2">
               <a
                 href={kindleUrl}
                 target="_blank"
@@ -375,7 +501,7 @@ export default async function BookPage({ params }: PageProps) {
                 Read on Kindle &rarr;
               </a>
               <p className="text-xs font-mono text-muted/70 uppercase tracking-wide mt-1">
-                Read in Print
+                Buy Print
               </p>
               <div className="flex gap-2">
                 <a
@@ -412,14 +538,14 @@ export default async function BookPage({ params }: PageProps) {
               title={book.title}
             />
 
-            {/* Reading status (client component) */}
+            {/* Reading status */}
             <BookDetailClient
               section="reading-status"
               bookId={book.id}
               bookTitle={book.title}
             />
 
-            {/* Enrichment poller — triggers enrichment + polls for new data */}
+            {/* Enrichment poller */}
             {enrichmentStatus !== "complete" && (
               <BookDetailClient
                 section="enrichment-poller"
@@ -431,104 +557,10 @@ export default async function BookPage({ params }: PageProps) {
             )}
           </div>
 
-          {/* ── Right column: title + ratings + spice + tropes + synopsis ── */}
-          <div className="flex-1 min-w-0">
-            {/* Title */}
-            <h1 className="font-display text-2xl sm:text-4xl font-bold text-ink leading-tight">
-              {book.title}
-            </h1>
-            {book.seriesName && (
-              <p className="mt-1 text-sm font-body text-muted italic">
-                {book.seriesPosition
-                  ? `${book.seriesName} #${book.seriesPosition}`
-                  : book.seriesName}
-              </p>
-            )}
-
-            {/* Ratings row */}
-            <div data-rating-row className="flex items-start gap-6 mt-5 pb-5 border-b border-border">
-              <RatingBadge
-                score={goodreadsRating?.rating ?? null}
-                source="goodreads"
-                ratingCount={goodreadsRating?.ratingCount}
-              />
-              <RatingBadge
-                score={amazonRating?.rating ?? null}
-                source="amazon"
-                ratingCount={amazonRating?.ratingCount}
-              />
-              {romanceIoSpice && (
-                <a
-                  href={book.romanceIoSlug
-                    ? `https://romance.io/books/${book.romanceIoSlug}`
-                    : `https://romance.io/search?q=${encodeURIComponent(book.title + " " + book.author)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="group"
-                >
-                  <RatingBadge
-                    score={romanceIoRating?.rating ?? null}
-                    source="romance_io"
-                    ratingCount={romanceIoRating?.ratingCount}
-                    external
-                  />
-                </a>
-              )}
-              <div className="border-l border-border pl-6">
-                <InlineUserRating bookId={book.id} />
-              </div>
-            </div>
-
-            {/* Spice level */}
-            <SpiceSection
-              bookId={book.id}
-              compositeSpice={book.compositeSpice}
-              romanceIoSpice={romanceIoSpice ? {
-                spiceLevel: romanceIoSpice.spiceLevel,
-                source: "romance_io",
-                ratingCount: romanceIoSpice.ratingCount,
-                confidence: romanceIoSpice.confidence ?? null,
-              } : null}
-              romanceIoHeatLabel={book.romanceIoHeatLabel}
-              romanceIoSlug={book.romanceIoSlug}
-              communitySpice={communitySpice ? {
-                spiceLevel: communitySpice.spiceLevel,
-                source: "hotlist_community",
-                ratingCount: communitySpice.ratingCount,
-                confidence: null,
-              } : null}
-              inferredSpice={inferredSpice ? {
-                spiceLevel: inferredSpice.spiceLevel,
-                source: "goodreads_inference",
-                ratingCount: inferredSpice.ratingCount,
-                confidence: inferredSpice.confidence ?? null,
-              } : null}
-            />
-
-            {/* Trope tags */}
-            <div className="mt-4 pb-4 border-b border-border">
-              <h2 className="text-xs font-mono text-muted uppercase tracking-wide mb-2">
-                Tropes
-              </h2>
-              {book.tropes.length > 0 ? (
-                <div className="flex flex-wrap gap-1.5">
-                  {book.tropes.map((trope) => (
-                    <Link key={trope.id} href={`/tropes/${trope.slug}`}>
-                      <Badge variant="trope" className="cursor-pointer hover:bg-gold/25 transition-colors">
-                        {trope.name}
-                      </Badge>
-                    </Link>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm font-body text-muted/70 italic">
-                  No tropes tagged yet
-                </p>
-              )}
-            </div>
-
+          {/* Main content: synopsis */}
+          <div className="order-1 sm:order-2 min-w-0">
             {/* AI Synopsis */}
-            <div className="mt-5">
+            <div>
               <h2 className="text-xs font-mono text-muted uppercase tracking-wide mb-2">
                 About this book
               </h2>
@@ -552,20 +584,10 @@ export default async function BookPage({ params }: PageProps) {
               )}
             </div>
 
-            {/* Add to Hotlist CTA */}
-            <div className="mt-6">
-              <BookDetailClient
-                section="add-to-hotlist"
-                bookId={book.id}
-                bookTitle={book.title}
-              />
-            </div>
-
             {/* Creator share card button (only visible to verified creators) */}
             <div className="mt-3">
               <CreateShareCardButton bookSlug={book.slug} />
             </div>
-
           </div>
         </div>
 
@@ -573,20 +595,23 @@ export default async function BookPage({ params }: PageProps) {
         <BookTokMentions mentions={creatorMentions} />
 
         {/* ── Readers also loved ── */}
-        {relatedBooks.length > 0 && (
-          <section className="mt-12 pt-8 border-t border-border">
-            <h2 className="font-display text-xl sm:text-2xl font-bold text-ink mb-4">
-              Readers also loved
-            </h2>
+        <section className="mt-12 pt-8 border-t border-border">
+          <h2 className="font-display text-xl sm:text-2xl font-bold text-ink mb-4">
+            Readers also loved
+          </h2>
+          {relatedBooks.length > 0 ? (
             <BookRow books={relatedBooks} />
-          </section>
-        )}
-      </div>
+          ) : (
+            <p className="text-sm font-body text-muted/70 py-4">
+              We&apos;re still finding similar books. Check back soon!
+            </p>
+          )}
+        </section>
 
         {/* ── BookTok CTA ── */}
         <section className="mt-8 pt-6 border-t border-border">
           <div className="flex items-center gap-3">
-            <span className="text-lg">📹</span>
+            <Video size={20} className="text-fire" aria-hidden="true" />
             <div>
               <p className="text-sm font-body text-ink font-medium">
                 Saw this on BookTok?
@@ -600,6 +625,7 @@ export default async function BookPage({ params }: PageProps) {
             </div>
           </div>
         </section>
+      </div>
 
       {/* ── Sticky mobile CTA ── */}
       <div className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-sm border-t border-border px-4 py-3">
