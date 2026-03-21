@@ -45,6 +45,8 @@ RAPIDAPI_TIKTOK_HOST=          # optional — specialized TikTok downloader API 
 OPENAI_API_KEY=                # from platform.openai.com — Whisper transcription
 CRON_SECRET=                   # shared secret for Vercel cron job auth
 SPICE_LLM_DAILY_LIMIT=        # optional, default 100 — max LLM spice inferences per day
+AI_SYNOPSIS_DAILY_LIMIT=      # optional, default 1000 — max AI synopsis generations per day
+TROPE_INFERENCE_DAILY_LIMIT=  # optional, default 1000 — max trope inferences per day
 ```
 
 ## Brand
@@ -67,7 +69,7 @@ SPICE_LLM_DAILY_LIMIT=        # optional, default 100 — max LLM spice inferenc
 | **Google Books** | Metadata + provisional entries | ISBN, page count, publisher, cover. Also the source for books not yet on Goodreads. |
 | **Open Library** | Metadata fallback | ISBN, page count, publisher (if Google Books misses) |
 | **NYT Books API** | Discovery only | "What's Hot" row. Every NYT title resolved to Goodreads ID before storing. |
-| **Amazon** | Affiliate links + rating | ASIN for buy links, ratings via Serper Google search (rating and ASIN extracted independently — rating can exist without ASIN) |
+| **Amazon** | Affiliate links + rating | ASIN for buy links, ratings via Serper Google search. ASIN extraction is independent of rating — worker saves ASINs even when Amazon suppresses star ratings (~58% of books). Rating hit rate ceiling is ~42% due to Amazon blocking rating data from Google search results. |
 | **Romance.io** | Spice ratings (high confidence) | Spice level + heat label, scraped via Serper Google search |
 
 **Book identity rule:** Books may enter the database without a Goodreads ID (from Google Books, BookTok, imports). The enrichment queue attempts to resolve them to Goodreads. Books with a Goodreads ID get richer data (genres, series, description).
@@ -79,7 +81,7 @@ Spice scores come from 5 weighted signals stored in the `spice_signals` table. T
 | Source | Weight | Confidence | How it works |
 |--------|--------|------------|--------------|
 | `community` | 1.0 | 0.55–1.0 (scales with count) | Aggregated from user_ratings. Our data moat. |
-| `romance_io` | 0.85 | ~0.85 | Scraped via Serper from romance.io pages |
+| `romance_io` | 0.85 | 0.7–0.85 | Scraped via Serper from romance.io pages. Uses structured `rating`/`ratingCount` fields + snippet parsing. Searches books, series, and author pages. High confidence (0.85) = title+author in slug; Medium (0.7) = partial match. |
 | `review_classifier` | 0.6 | varies | Keyword matching on Goodreads/Amazon reviews, LLM fallback |
 | `llm_inference` | 0.4 | varies | Claude Haiku reads the book description |
 | `genre_bucketing` | 0.2 | ~0.2–0.5 | Rule-based from genre tags (e.g., "erotica" → 5.0) |
@@ -157,8 +159,8 @@ All tables in the public schema:
   new-releases.ts             — Google Books new releases in romance
   metadata-enrichment.ts      — supplementary metadata from Google/OL
   romance-filter.ts           — romance genre guard + junk title filter
-  ai-synopsis.ts              — Claude-generated synopses
-  author-crawl.ts             — Crawl author's full bibliography
+  ai-synopsis.ts              — Claude-generated synopses (daily cap via AI_SYNOPSIS_DAILY_LIMIT)
+  author-crawl.ts             — Crawl author's full bibliography (romance genre guard filters non-romance)
 
 /lib/creators/                — Creator discovery system
   register.ts                 — Upsert creator handle + book mentions after each grab
@@ -169,8 +171,8 @@ All tables in the public schema:
 
 /lib/scraping/                — Per-site scrapers
   goodreads.ts                — Goodreads rating scraper
-  amazon-search.ts            — Amazon ratings via Serper Google search
-  romance-io-search.ts        — Romance.io spice via Serper Google search
+  amazon-search.ts            — Amazon ratings + ASINs via Serper (3-strategy fallback, returns ASINs even without ratings)
+  romance-io-search.ts        — Romance.io spice+rating via Serper (structured fields + snippet parsing, searches books/series/author pages)
   amazon.ts                   — DEPRECATED: direct Amazon scraping (returns 503)
 
 /lib/hotlists.ts              — Hotlist CRUD operations (getUserHotlists, getHotlistWithBooks)
@@ -287,6 +289,8 @@ Book data flows through two independent systems:
 - **Grab pipeline queues enrichment at grab time AND kicks off the worker immediately** (fire-and-forget `processEnrichmentQueue(30_000)`) so data is ready within seconds, not at the next 5-min cron tick
 - **Hotlist pages poll** `/api/books/refresh-batch` every 8s when `enrichment_status` is not "complete" (and not null), auto-stopping when all books reach "complete"
 - Enrichment banner shows above the hotlist table while books are being enriched
+- **Daily caps**: `ai_synopsis` and `trope_inference` jobs check daily completion counts before calling LLM APIs (prevents runaway costs). Configurable via env vars.
+- **Author crawl guard**: `author_crawl` jobs filter out non-romance books using `isRomanceByGenres()` before ingestion
 
 ### Files
 - `/lib/enrichment/queue.ts` — queue management (add, fetch, complete, fail)
