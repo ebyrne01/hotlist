@@ -29,25 +29,25 @@ const VALUE_PROPS: { icon: ReactNode; title: string; desc: string; href: string;
 
 export default function ValuePropStrip() {
   return (
-    <section className="bg-ink/[0.03] border-y border-border/50">
-      <div className="max-w-6xl mx-auto px-4 py-4">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-6">
+    <section className="py-12 mt-4 border-t border-border/50">
+      <div className="max-w-2xl mx-auto text-center">
+        <h2 className="font-display text-lg font-bold text-ink mb-6">
+          Why readers love Hotlist
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {VALUE_PROPS.map((prop) => (
             <Link
               key={prop.title}
               href={prop.href}
-              className="flex items-start gap-2 hover:opacity-80 transition-opacity"
+              className="flex items-start gap-3 text-left hover:opacity-80 transition-opacity"
             >
-              <span className="shrink-0 mt-0.5">{prop.icon}</span>
+              <span className="text-lg shrink-0 mt-0.5">{prop.icon}</span>
               <div className="min-w-0">
                 <p className="text-sm font-display font-bold text-ink leading-tight">
                   {prop.title}
                 </p>
                 <p className="text-xs font-body text-muted leading-snug mt-0.5">
                   {prop.desc}
-                </p>
-                <p className="text-xs font-mono text-fire mt-1">
-                  {prop.cta} &rarr;
                 </p>
               </div>
             </Link>

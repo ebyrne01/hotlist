@@ -6,9 +6,10 @@ import SearchBar from "@/components/search/SearchBar";
 interface HeroSectionProps {
   bookCount?: number;
   tropeCount?: number;
+  communitySpiceCount?: number;
 }
 
-export default function HeroSection({ bookCount, tropeCount }: HeroSectionProps) {
+export default function HeroSection({ bookCount, tropeCount, communitySpiceCount }: HeroSectionProps) {
   // Autofocus search on desktop only (avoid mobile keyboard pop-up)
   useEffect(() => {
     if (window.innerWidth >= 768) {
@@ -50,17 +51,14 @@ export default function HeroSection({ bookCount, tropeCount }: HeroSectionProps)
           <SearchBar variant="hero" inputId="hero-search" />
         </div>
 
-        <button
-          onClick={() => document.getElementById("hero-search")?.focus()}
-          className="mt-4 px-6 py-3 bg-fire text-cream font-mono text-sm font-semibold rounded-lg hover:bg-fire/90 transition-colors shadow-lg shadow-fire/20"
-        >
-          Find Your Next Read
-        </button>
-
         {/* Stats bar */}
         {displayBookCount && (
           <p className="mt-4 text-sm font-mono text-cream/60 tracking-wide">
-            {displayBookCount} books &middot; 3 rating sources &middot; {displayTropeCount} tropes &middot; 5 spice levels
+            {displayBookCount} books &middot;{" "}
+            {communitySpiceCount && communitySpiceCount >= 50
+              ? `${communitySpiceCount.toLocaleString()}+ community spice ratings`
+              : "3 rating sources"}{" "}
+            &middot; {displayTropeCount} tropes
           </p>
         )}
 

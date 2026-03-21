@@ -58,17 +58,12 @@ export default function BookCard({ book, layout = "grid", className }: BookCardP
                 <span className="text-gold font-medium">{grRating.toFixed(1)}</span>
               </span>
             )}
-            {amzRating !== null ? (
+            {amzRating !== null && (
               <span className="text-xs font-mono">
                 <span className="text-muted">AMZ</span>{" "}
                 <span className="text-gold font-medium">{amzRating.toFixed(1)}</span>
               </span>
-            ) : grRating !== null ? (
-              <span className="text-xs font-mono">
-                <span className="text-muted">AMZ</span>{" "}
-                <span className="text-muted/60">&mdash;</span>
-              </span>
-            ) : null}
+            )}
             {book.compositeSpice ? (
               <SpiceDisplay
                 composite={book.compositeSpice}
@@ -135,14 +130,12 @@ export default function BookCard({ book, layout = "grid", className }: BookCardP
               <span className="text-muted/40">&mdash;</span>
             )}
           </span>
-          <span className="text-xs font-mono">
-            <span className="text-muted">AMZ</span>{" "}
-            {amzRating !== null ? (
+          {amzRating !== null && (
+            <span className="text-xs font-mono">
+              <span className="text-muted">AMZ</span>{" "}
               <span className="text-gold font-medium">{amzRating.toFixed(1)}</span>
-            ) : (
-              <span className="text-muted/40">&mdash;</span>
-            )}
-          </span>
+            </span>
+          )}
         </div>
         {/* Spice — always rendered */}
         <div className="mt-0.5">
@@ -162,7 +155,7 @@ export default function BookCard({ book, layout = "grid", className }: BookCardP
               className="[&_span]:text-xs"
             />
           ) : (
-            <PepperRow level={0} size={12} muted className="opacity-40" />
+            <PepperRow level={0} size={14} muted className="opacity-50" />
           )}
         </div>
         {topTropes.length > 0 && (

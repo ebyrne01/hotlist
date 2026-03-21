@@ -62,7 +62,6 @@ const TROPE_GROUPS: { label: string; slugs: string[] }[] = [
       "monster-romance",
       "vampire",
       "shifter",
-      "insta-love",
     ],
   },
 ];

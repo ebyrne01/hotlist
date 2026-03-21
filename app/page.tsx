@@ -1,7 +1,10 @@
 export const dynamic = "force-dynamic";
 
 import { getAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
+import { getUserHotlists } from "@/lib/hotlists";
 import HeroSection from "@/components/home/HeroSection";
+import UserHotlistBar from "@/components/home/UserHotlistBar";
 import ValuePropStrip from "@/components/home/ValuePropStrip";
 import BookTokBanner from "@/components/home/BookTokBanner";
 import TropeGrid from "@/components/home/TropeGrid";
@@ -228,7 +231,7 @@ async function getSpiciest(): Promise<BookDetail[]> {
     if (!hasConfirmedSpice(book)) return false;
     if (hasYAGenre(book)) return false;
     const spiceLevel = book.compositeSpice?.score ?? 0;
-    return spiceLevel >= 4;
+    return spiceLevel >= 3;
   });
 
   // Sort: books with tropes first, then by spice level
@@ -330,10 +333,11 @@ async function getTropesWithCounts() {
 
 async function getHomepageStats() {
   const supabase = getAdminClient();
-  const { count } = await supabase
-    .from("books")
-    .select("*", { count: "exact", head: true });
-  return { bookCount: count ?? 0 };
+  const [{ count }, { count: communitySpiceCount }] = await Promise.all([
+    supabase.from("books").select("*", { count: "exact", head: true }),
+    supabase.from("spice_signals").select("*", { count: "exact", head: true }).eq("source", "community"),
+  ]);
+  return { bookCount: count ?? 0, communitySpiceCount: communitySpiceCount ?? 0 };
 }
 
 async function getBookTokPreviewCovers(): Promise<string[]> {
@@ -363,6 +367,18 @@ async function getBookTokPreviewCovers(): Promise<string[]> {
 
 
 export default async function Home() {
+  // Fetch user session (non-blocking — returns null for logged-out users)
+  let userHotlists: { id: string; name: string; shareSlug: string | null; bookCount: number }[] = [];
+  try {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      userHotlists = await getUserHotlists(supabase, user.id);
+    }
+  } catch {
+    // Auth check failed — continue without personalization
+  }
+
   const [hotBooks, newReleases, spicyBooks, romantasyBooks, tropes, stats, previewCovers] = await Promise.all([
     getWhatsHot(),
     getNewReleases(),
@@ -379,14 +395,15 @@ export default async function Home() {
 
   return (
     <>
-      <HeroSection bookCount={stats.bookCount} tropeCount={tropes.length} />
+      <HeroSection bookCount={stats.bookCount} tropeCount={tropes.length} communitySpiceCount={stats.communitySpiceCount} />
 
-      <ValuePropStrip />
+      {/* Logged-in personalization: quick links to user's hotlists */}
+      <UserHotlistBar hotlists={userHotlists} />
 
       <div className="max-w-6xl mx-auto px-4">
-        {/* 1. What's Hot — NYT Bestsellers */}
+        {/* 1. What's Hot — NYT Bestsellers (first book content, immediately after hero) */}
         {hotBooks.length > 0 && (
-          <section className="py-8">
+          <section id="whats-hot" className="py-8">
             <h2 className="heading-section flex items-center gap-2 mb-4">
               <TrendingUp size={20} className="text-fire" aria-hidden="true" />
               What&apos;s Hot
@@ -394,7 +411,14 @@ export default async function Home() {
             <BookRow books={hotBooks} />
           </section>
         )}
+      </div>
 
+      {/* BookTok CTA — breathing break between book rows */}
+      <div className="max-w-6xl mx-auto px-4">
+        <BookTokBanner previewCovers={previewCovers} />
+      </div>
+
+      <div className="max-w-6xl mx-auto px-4">
         {/* 2. Romantasy Picks */}
         {romantasyBooks.length > 0 && (
           <section className="py-8">
@@ -406,21 +430,7 @@ export default async function Home() {
           </section>
         )}
 
-        {/* 3. BookTok CTA — single mid-page banner */}
-        <BookTokBanner previewCovers={previewCovers} />
-
-        {/* 4. Turn Up the Heat — high spice */}
-        {spicyBooks.length > 0 && (
-          <section className="py-8">
-            <h2 className="heading-section flex items-center gap-2 mb-4">
-              <Flame size={20} className="text-fire" aria-hidden="true" />
-              Turn Up the Heat
-            </h2>
-            <BookRow books={spicyBooks} />
-          </section>
-        )}
-
-        {/* 5. New Releases */}
+        {/* 3. New Releases */}
         {filteredReleases.length > 0 && (
           <section className="py-8">
             <h2 className="heading-section flex items-center gap-2 mb-4">
@@ -431,13 +441,27 @@ export default async function Home() {
           </section>
         )}
 
-        {/* 6. Browse by Trope */}
+        {/* 4. Browse by Trope */}
         <section id="tropes" className="py-8 scroll-mt-20">
           <h2 className="heading-section mb-4 text-center">
             Browse by Trope
           </h2>
           <TropeGrid tropes={tropes} />
         </section>
+
+        {/* 5. Turn Up the Heat — only if enough books qualify */}
+        {spicyBooks.length >= 5 && (
+          <section className="py-8">
+            <h2 className="heading-section flex items-center gap-2 mb-4">
+              <Flame size={20} className="text-fire" aria-hidden="true" />
+              Turn Up the Heat
+            </h2>
+            <BookRow books={spicyBooks} />
+          </section>
+        )}
+
+        {/* 6. Value props — relocated to bottom as closer for scrolled-to-end users */}
+        <ValuePropStrip />
       </div>
     </>
   );
