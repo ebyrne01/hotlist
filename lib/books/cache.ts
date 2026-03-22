@@ -3,7 +3,7 @@ import type { Book, BookData, BookDetail, Rating, SpiceRating, SpotifyPlaylistRe
 import { getCompositeSpice, getCompositeSpiceBatch } from "@/lib/spice/compute-composite";
 import { generateBookSlug } from "./goodreads-search";
 import { isJunkTitle } from "./romance-filter";
-import { deduplicateBooks } from "./utils";
+import { deduplicateBooks, normalizeTitle } from "./utils";
 
 /** Returns null if the URL is a known placeholder image */
 function cleanCoverUrl(url: string | null | undefined): string | null {
@@ -254,21 +254,26 @@ export async function saveGoodreadsBookToCache(bookData: BookData): Promise<Book
   const supabase = getAdminClient();
 
   // Check for existing book with same title+author (prevents edition duplicates)
-  const normalizedTitle = bookData.title.toLowerCase().replace(/[^\w\s]/g, "").trim();
+  const incomingNorm = normalizeTitle(bookData.title);
   const authorLastName = bookData.author.split(" ").pop() ?? bookData.author;
   const { data: existing } = await supabase
     .from("books")
     .select("id, goodreads_id, title, cover_url, ai_synopsis")
-    .ilike("title", `%${normalizedTitle}%`)
     .ilike("author", `%${authorLastName}%`)
-    .limit(5);
+    .limit(20);
 
   if (existing && existing.length > 0) {
     for (const row of existing) {
-      const rowTitle = ((row.title as string) || "").toLowerCase().replace(/[^\w\s]/g, "").trim();
-      if (rowTitle === normalizedTitle && row.goodreads_id !== bookData.goodreadsId) {
-        // Same book, different Goodreads ID — don't create a duplicate
-        console.log(`[cache] Skipping duplicate: "${bookData.title}" already exists as ${row.goodreads_id}`);
+      const rowNorm = normalizeTitle((row.title as string) || "");
+      if (rowNorm === incomingNorm && row.goodreads_id !== bookData.goodreadsId) {
+        // Same book, different Goodreads ID — don't create a duplicate.
+        // If incoming edition has a cover and existing doesn't, upgrade the existing entry.
+        const incomingCover = cleanCoverUrl(bookData.coverUrl);
+        if (incomingCover && !row.cover_url) {
+          await supabase.from("books").update({ cover_url: incomingCover }).eq("id", row.id);
+          console.log(`[cache] Upgraded cover for "${row.title}" from edition ${bookData.goodreadsId}`);
+        }
+        console.log(`[cache] Skipping duplicate: "${bookData.title}" (${bookData.goodreadsId}) already exists as "${row.title}" (${row.goodreads_id})`);
         const { data: fullRow } = await supabase.from("books").select("*").eq("id", row.id).single();
         return fullRow ? mapDbBook(fullRow as Record<string, unknown>) : null;
       }
@@ -359,17 +364,17 @@ export async function saveProvisionalBook(bookData: BookData): Promise<Book | nu
   }
 
   // Check by normalized title + author to avoid duplicates
-  const normalizedTitle = bookData.title.toLowerCase().replace(/[^\w\s]/g, "").trim();
+  const provNorm = normalizeTitle(bookData.title);
   const authorLastName = bookData.author.split(" ").pop()?.toLowerCase() ?? "";
-  if (normalizedTitle && authorLastName) {
-    const { data: titleMatch } = await supabase
+  if (provNorm && authorLastName) {
+    const { data: candidates } = await supabase
       .from("books")
-      .select("id")
-      .ilike("title", `%${normalizedTitle}%`)
+      .select("id, title")
       .ilike("author", `%${authorLastName}%`)
-      .limit(1)
-      .single();
-    if (titleMatch) return null;
+      .limit(20);
+    if (candidates?.some((c) => normalizeTitle((c.title as string) || "") === provNorm)) {
+      return null;
+    }
   }
 
   const slug = `provisional-${bookData.googleBooksId || Date.now()}`;
