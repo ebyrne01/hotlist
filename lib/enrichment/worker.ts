@@ -30,6 +30,8 @@ import { classifyReviews } from "@/lib/spice/review-classifier";
 import { inferAndUpsertTropes } from "@/lib/spice/trope-inference";
 import { fetchAllReviews } from "@/lib/spice/review-fetcher";
 import { runAuthorCrawl } from "@/lib/books/author-crawl";
+import { generateReadingVibes } from "@/lib/books/reading-vibes";
+import { searchBookPlaylists } from "@/lib/spotify/search";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -477,6 +479,81 @@ async function processJob(job: QueuedJob): Promise<void> {
       if (book_goodreads_id) {
         await runAuthorCrawl(book_goodreads_id, book_author ?? "");
       }
+      break;
+    }
+
+    case "booktrack_prompt": {
+      // Generate AI reading vibes prompt — needs tropes + synopsis for context
+      const { data: bookRow } = await supabase
+        .from("books")
+        .select("description, ai_synopsis, genres, booktrack_prompt")
+        .eq("id", book_id)
+        .single();
+
+      // Skip if already generated
+      if (bookRow?.booktrack_prompt) break;
+
+      // Get tropes for this book
+      const { data: bookTropes } = await supabase
+        .from("book_tropes")
+        .select("tropes(name)")
+        .eq("book_id", book_id);
+
+      const tropes = (bookTropes ?? [])
+        .map((bt: Record<string, unknown>) =>
+          ((bt.tropes as Record<string, unknown>)?.name as string) ?? ""
+        )
+        .filter(Boolean);
+
+      // Get best available spice signal
+      const { data: spiceSignal } = await supabase
+        .from("spice_signals")
+        .select("spice_value")
+        .eq("book_id", book_id)
+        .in("source", ["community", "romance_io", "llm_inference"])
+        .order("confidence", { ascending: false })
+        .limit(1)
+        .single();
+
+      const synopsis =
+        (bookRow?.ai_synopsis as string) ?? (bookRow?.description as string) ?? null;
+
+      // Not enough context — skip for now
+      if (!synopsis && tropes.length === 0) break;
+
+      const result = await generateReadingVibes({
+        title: book_title ?? "",
+        author: book_author ?? "",
+        tropes,
+        spiceLevel: (spiceSignal?.spice_value as number) ?? null,
+        synopsis,
+        genres: (bookRow?.genres as string[]) ?? [],
+      });
+
+      if (result) {
+        await supabase
+          .from("books")
+          .update({
+            booktrack_prompt: result.prompt,
+            booktrack_moods: result.moodTags,
+          })
+          .eq("id", book_id);
+      }
+      break;
+    }
+
+    case "spotify_playlists": {
+      if (!book_title || !book_author) break;
+
+      const playlists = await searchBookPlaylists(book_title, book_author);
+
+      await supabase
+        .from("books")
+        .update({
+          spotify_playlists: playlists.length > 0 ? playlists : null,
+          spotify_fetched_at: new Date().toISOString(),
+        })
+        .eq("id", book_id);
       break;
     }
 

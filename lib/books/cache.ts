@@ -1,5 +1,5 @@
 import { getAdminClient } from "@/lib/supabase/admin";
-import type { Book, BookData, BookDetail, Rating, SpiceRating, Trope } from "@/lib/types";
+import type { Book, BookData, BookDetail, Rating, SpiceRating, SpotifyPlaylistResult, Trope } from "@/lib/types";
 import { getCompositeSpice, getCompositeSpiceBatch } from "@/lib/spice/compute-composite";
 import { generateBookSlug } from "./goodreads-search";
 import { isJunkTitle } from "./romance-filter";
@@ -582,6 +582,9 @@ export function mapDbBook(row: Record<string, unknown>): Book {
     amazonAsin: (row.amazon_asin as string) ?? null,
     romanceIoSlug: (row.romance_io_slug as string) ?? null,
     romanceIoHeatLabel: (row.romance_io_heat_label as string) ?? null,
+    booktrackPrompt: (row.booktrack_prompt as string) ?? null,
+    booktrackMoods: (row.booktrack_moods as string[]) ?? null,
+    spotifyPlaylists: (row.spotify_playlists as SpotifyPlaylistResult[]) ?? null,
     genres: (row.genres as string[]) ?? [],
     subgenre: (row.subgenre as string) ?? null,
     metadataSource: (row.metadata_source as Book["metadataSource"]) ?? "google_books",

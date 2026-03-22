@@ -21,6 +21,7 @@ import SpiceSection from "./SpiceSection";
 import BookTokMentions from "@/components/books/BookTokMentions";
 import CreateShareCardButton from "@/components/books/CreateShareCardButton";
 import ExpandableText from "@/components/ui/ExpandableText";
+import BooktrackSection from "@/components/books/BooktrackSection";
 
 // ── Helpers ──────────────────────────────────────────
 
@@ -629,8 +630,13 @@ export default async function BookPage({ params }: PageProps) {
           {/* ── Sidebar (280px on desktop, full-width stacked on mobile) ── */}
           <div className="space-y-6">
 
-            {/* Reading Vibes — FUTURE SLOT */}
-            {/* <ReadingVibesSection ... /> */}
+            {/* Booktrack — Spotify playlists + AI reading vibes prompt */}
+            <BooktrackSection
+              spotifyPlaylists={book.spotifyPlaylists}
+              booktrackPrompt={book.booktrackPrompt}
+              booktrackMoods={book.booktrackMoods}
+              bookTitle={book.title}
+            />
 
             {/* Series navigation */}
             {book.seriesName && seriesBooks.length > 1 && (

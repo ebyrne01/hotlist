@@ -64,13 +64,6 @@ export async function POST(request: NextRequest) {
 
     if (!existingJobs || existingJobs.length === 0) {
       // No queue jobs exist — this book predates the enrichment queue.
-      // Check if it already has a Goodreads ID to skip that job.
-      const { data: bookRow } = await supabase
-        .from("books")
-        .select("goodreads_id")
-        .eq("id", bookId)
-        .single();
-
       await queueEnrichmentJobs(bookId, title, author);
     }
 

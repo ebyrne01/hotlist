@@ -2,6 +2,17 @@
 // Core data types for Hotlist
 // ────────────────────────────────────────────────────
 
+export interface SpotifyPlaylistResult {
+  id: string;
+  name: string;
+  description: string | null;
+  externalUrl: string;
+  imageUrl: string | null;
+  trackCount: number;
+  ownerName: string;
+  uri: string;
+}
+
 export interface Book {
   id: string;
   isbn: string | null;
@@ -22,6 +33,9 @@ export interface Book {
   amazonAsin: string | null;
   romanceIoSlug: string | null;
   romanceIoHeatLabel: string | null;
+  booktrackPrompt: string | null;
+  booktrackMoods: string[] | null;
+  spotifyPlaylists: SpotifyPlaylistResult[] | null;
   genres: string[];
   subgenre: string | null;
   metadataSource: "goodreads" | "google_books" | "open_library" | "manual";
