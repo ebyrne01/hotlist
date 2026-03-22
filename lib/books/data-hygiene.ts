@@ -105,7 +105,7 @@ async function findCanonical(
   junkId: string
 ): Promise<string | null> {
   // Extract the real title from common junk patterns
-  let cleanTitle = junkTitle
+  const cleanTitle = junkTitle
     .replace(/^\[?\(?\s*/, "") // Leading brackets
     .replace(/\]\s*\[By.*$/i, "") // [By: Author] suffix
     .replace(/\]\s*\[Author.*$/i, "")

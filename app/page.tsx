@@ -18,6 +18,49 @@ import { getTopBuzzBooks, getBuzzScoresForBooks } from "@/lib/books/buzz-score";
 import { TrendingUp, Sparkles, Swords, Flame } from "lucide-react";
 import type { BookDetail } from "@/lib/types";
 
+// Authors who appear on bestseller lists but don't match Hotlist's
+// BookTok/romantasy/spice-aware audience. These are women's fiction,
+// thriller, inspirational, or legacy mass-market authors whose presence
+// in "What's Hot" would signal the wrong brand.
+const EXCLUDED_AUTHORS = new Set([
+  // Women's fiction / family saga (no HEA, no tropes, no spice)
+  "danielle steel",
+  "nicholas sparks",
+  "jodi picoult",
+  "kristin hannah",
+  "elin hilderbrand",
+  "liane moriarty",
+  "barbara taylor bradford",
+  "maeve binchy",
+  "fern michaels",
+
+  // Thriller/suspense authors with romance subplots
+  "j.d. robb",          // Nora Roberts pen name, police procedural
+  "james patterson",
+  "catherine coulter",
+  "iris johansen",
+  "janet evanovich",
+  "sandra brown",
+
+  // Hallmark/sweet/clean romance (wrong demographic)
+  "debbie macomber",
+  "robyn carr",
+  "raeanne thayne",
+  "sherryl woods",
+  "susan mallery",
+
+  // Inspirational/Christian romance
+  "karen kingsbury",
+  "francine rivers",
+  "beverly lewis",
+  "dee henderson",
+  "irene hannon",
+
+  // Legacy/gothic (dated or wrong genre)
+  "v.c. andrews",
+  "jude deveraux",
+]);
+
 /** Confirmed spice sources — not estimated/inferred */
 const CONFIRMED_SPICE_SOURCES = new Set(["community", "romance_io"]);
 const CONFIRMED_LEGACY_SPICE = new Set(["romance_io", "hotlist_community"]);
@@ -34,6 +77,7 @@ function hasConfirmedSpice(book: BookDetail): boolean {
 function isHomepageQualified(book: BookDetail): boolean {
   if (!book.coverUrl) return false;
   if (isCompilationTitle(book.title)) return false;
+  if (EXCLUDED_AUTHORS.has(book.author.toLowerCase())) return false;
   // Must have Goodreads rating
   const grRating = book.ratings.find((r) => r.source === "goodreads");
   if (!grRating || (grRating.ratingCount ?? 0) < 100) return false;
@@ -278,13 +322,21 @@ const ROMANTASY_TROPE_SLUGS = new Set([
   "fae-faerie", "fated-mates", "dragon-riders", "court-academy",
   "morally-grey", "chosen-one", "found-family", "mortal-immortal",
   "enemies-to-lovers", "forbidden-romance",
+  "magic-system", "quest-adventure", "warrior-heroine", "dark-fantasy",
+  "prophecy", "royal-court", "soulmates", "slow-burn", "world-building",
+  "paranormal", "shapeshifter", "vampire", "witch-wizard", "angels-demons",
 ]);
 
 function isRomantasyQualified(book: BookDetail): boolean {
-  if (!isHomepageQualified(book)) return false;
-  // Minimum GR 3.9 for "picks" curation
+  if (!book.coverUrl) return false;
+  if (isCompilationTitle(book.title)) return false;
+  if (EXCLUDED_AUTHORS.has(book.author.toLowerCase())) return false;
+  // Minimum GR 3.9 for "picks" curation (but don't gate on review count —
+  // newer romantasy often has low counts and our scraped counts are unreliable)
   const gr = book.ratings.find((r) => r.source === "goodreads");
   if (!gr || gr.rating === null || gr.rating < 3.9) return false;
+  // Must have at least one trope
+  if (book.tropes.length === 0) return false;
   // Must have at least one romantasy trope
   return book.tropes.some((t) => ROMANTASY_TROPE_SLUGS.has(t.slug));
 }
