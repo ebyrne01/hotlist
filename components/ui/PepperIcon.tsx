@@ -1,14 +1,12 @@
 /**
- * PEPPER ICON — SVG pepper with filled/hollow states.
+ * PEPPER ICON — Uses the 🌶️ emoji directly for the pepper.
  *
  * Used everywhere spice is displayed: book detail, cards, tables, share cards.
- * Replaces emoji 🌶️ for consistent cross-platform rendering and clear
- * filled vs hollow visual differentiation.
  *
- * - filled + default: solid fire color (known spice)
- * - filled + estimated: 50% opacity fire (estimated spice)
+ * - filled + default: full opacity (known spice)
+ * - filled + estimated: 50% opacity (estimated spice)
  * - filled + muted: 50% opacity (secondary display, e.g. community row)
- * - hollow: warm stone border color (empty pepper slot)
+ * - hollow: 20% opacity (empty pepper slot)
  */
 
 import { clsx } from "clsx";
@@ -31,36 +29,23 @@ export function PepperIcon({
   className,
 }: PepperIconProps) {
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
+    <span
+      style={{ fontSize: size, lineHeight: 1 }}
       className={clsx(
-        "shrink-0",
+        "shrink-0 select-none",
         filled
           ? muted
-            ? "text-fire/50"
+            ? "opacity-50"
             : estimated
-              ? "text-fire/50"
-              : "text-fire"
-          : "text-border",
+              ? "opacity-50"
+              : "opacity-100"
+          : "opacity-20 grayscale",
         className,
       )}
       aria-hidden="true"
     >
-      {/* Stem — small curved calyx */}
-      <path
-        d="M11.5 4.5C11.5 3.5 12.5 2 13.5 1.5C14.5 1 15 1.5 14.5 2.5C14 3.5 12.5 5 11.5 4.5Z"
-        fill="currentColor"
-      />
-      {/* Chili body — long curved taper like 🌶️ */}
-      <path
-        d="M12 5C14.5 5.5 17 8 17.5 11.5C18 15 16.5 18.5 14 21C12.5 22.5 11 23 10.5 22.5C10 22 10.5 20.5 11.5 18C12.5 15.5 13 13 12.5 10C12 7.5 11 6 10.5 5.5C10 5 10.5 4.5 12 5Z"
-        fill="currentColor"
-      />
-    </svg>
+      🌶️
+    </span>
   );
 }
 
