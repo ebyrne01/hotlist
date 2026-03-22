@@ -32,13 +32,19 @@ export async function searchBookPlaylists(
   const lowerTitle = title.toLowerCase();
   const authorLastName = author.split(" ").pop()?.toLowerCase() ?? "";
 
+  // Extract significant words from title (3+ chars, skip common words)
+  const stopWords = new Set(["the", "and", "for", "with", "from", "that", "this", "book"]);
+  const titleWords = lowerTitle
+    .split(/\s+/)
+    .filter((w) => w.length >= 3 && !stopWords.has(w));
+
   for (const query of queries) {
     try {
       const res = await fetch(
         `https://api.spotify.com/v1/search?${new URLSearchParams({
           q: query,
           type: "playlist",
-          limit: "8",
+          limit: "10",
         })}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -53,11 +59,15 @@ export async function searchBookPlaylists(
         if ((item.tracks?.total ?? 0) < 5) continue;
 
         const playlistName = (item.name ?? "").toLowerCase();
+        const playlistDesc = (item.description ?? "").toLowerCase();
+        const searchText = `${playlistName} ${playlistDesc}`;
 
-        // Relevance filter: playlist name must contain the book title or author last name
-        const matchesTitle = playlistName.includes(lowerTitle);
-        const matchesAuthor = authorLastName.length > 2 && playlistName.includes(authorLastName);
-        if (!matchesTitle && !matchesAuthor) continue;
+        // Relevance filter: check full title, significant title words, or author last name
+        const matchesFullTitle = searchText.includes(lowerTitle);
+        const matchingWords = titleWords.filter((w) => searchText.includes(w));
+        const matchesTitleWords = titleWords.length > 0 && matchingWords.length >= Math.min(titleWords.length, 2);
+        const matchesAuthor = authorLastName.length > 2 && searchText.includes(authorLastName);
+        if (!matchesFullTitle && !matchesTitleWords && !matchesAuthor) continue;
 
         results.set(item.id, {
           id: item.id,
@@ -75,12 +85,19 @@ export async function searchBookPlaylists(
     }
   }
 
-  // Rank: prefer playlists with the book title in the name, then by track count
+  // Rank: prefer playlists with the full book title in the name, then word matches, then track count
   return Array.from(results.values())
     .sort((a, b) => {
-      const aHasTitle = a.name.toLowerCase().includes(lowerTitle) ? 1 : 0;
-      const bHasTitle = b.name.toLowerCase().includes(lowerTitle) ? 1 : 0;
-      if (aHasTitle !== bHasTitle) return bHasTitle - aHasTitle;
+      const aName = a.name.toLowerCase();
+      const bName = b.name.toLowerCase();
+      // Full title match in name is best
+      const aFullTitle = aName.includes(lowerTitle) ? 2 : 0;
+      const bFullTitle = bName.includes(lowerTitle) ? 2 : 0;
+      if (aFullTitle !== bFullTitle) return bFullTitle - aFullTitle;
+      // Then prefer more title word matches
+      const aWords = titleWords.filter((w) => aName.includes(w)).length;
+      const bWords = titleWords.filter((w) => bName.includes(w)).length;
+      if (aWords !== bWords) return bWords - aWords;
       return b.trackCount - a.trackCount;
     })
     .slice(0, 3);
