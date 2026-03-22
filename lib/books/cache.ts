@@ -103,7 +103,7 @@ export async function searchBooksInCache(query: string): Promise<BookDetail[]> {
       .textSearch("title", tsQuery, { config: "english" })
       .limit(15),
     titleWordQuery.limit(15),
-    authorWordQuery.limit(40),
+    authorWordQuery.limit(80),
   ]);
 
   // Merge and deduplicate
@@ -213,8 +213,8 @@ export async function searchBooksInCache(query: string): Promise<BookDetail[]> {
     return popB - popA;
   });
 
-  // For author-like queries, show more results (prolific authors can have 20+ books)
-  const displayLimit = looksLikeAuthor ? 24 : 12;
+  // For author-like queries, show more results (prolific authors can have 50+ books)
+  const displayLimit = looksLikeAuthor ? 48 : 12;
   const top = allBooks.slice(0, displayLimit);
   const results = await Promise.all(
     top.map((book) => hydrateBookDetail(supabase, book))
