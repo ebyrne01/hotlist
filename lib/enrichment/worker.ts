@@ -32,6 +32,7 @@ import { fetchAllReviews } from "@/lib/spice/review-fetcher";
 import { runAuthorCrawl } from "@/lib/books/author-crawl";
 import { generateReadingVibes } from "@/lib/books/reading-vibes";
 import { searchBookPlaylists } from "@/lib/spotify/search";
+import { generateRecommendations } from "@/lib/books/ai-recommendations";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -556,6 +557,51 @@ async function processJob(job: QueuedJob): Promise<void> {
           spotify_fetched_at: new Date().toISOString(),
         })
         .eq("id", book_id);
+      break;
+    }
+
+    case "ai_recommendations": {
+      if (!book_title || !book_author) break;
+
+      const { data: recBook } = await supabase
+        .from("books")
+        .select("id, title, author, description, genres, series_name")
+        .eq("id", book_id)
+        .single();
+
+      if (recBook) {
+        // Fetch tropes and spice for context
+        const [{ data: tropeRows }, { data: spiceRows }] = await Promise.all([
+          supabase
+            .from("book_tropes")
+            .select("tropes(name)")
+            .eq("book_id", book_id),
+          supabase
+            .from("spice_signals")
+            .select("spice_value, confidence")
+            .eq("book_id", book_id)
+            .in("source", ["community", "romance_io"])
+            .order("confidence", { ascending: false })
+            .limit(1),
+        ]);
+
+        const tropes = (tropeRows
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ?.map((r: any) => r.tropes?.name as string | undefined)
+          .filter(Boolean) ?? []) as string[];
+        const spiceLevel = spiceRows?.[0]?.spice_value ?? null;
+
+        await generateRecommendations({
+          id: recBook.id,
+          title: recBook.title,
+          author: recBook.author,
+          description: recBook.description,
+          genres: recBook.genres ?? [],
+          seriesName: recBook.series_name,
+          tropes,
+          spiceLevel,
+        });
+      }
       break;
     }
 

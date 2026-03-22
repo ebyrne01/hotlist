@@ -31,7 +31,8 @@ export type JobType =
   | "llm_spice"
   | "author_crawl"
   | "booktrack_prompt"
-  | "spotify_playlists";
+  | "spotify_playlists"
+  | "ai_recommendations";
 
 export interface QueuedJob {
   id: string;
@@ -61,7 +62,7 @@ export async function queueEnrichmentJobs(
   const jobs: JobType[] = [
     "goodreads_detail", "goodreads_rating", "amazon_rating", "romance_io_spice",
     "metadata", "ai_synopsis", "trope_inference", "review_classifier", "llm_spice",
-    "booktrack_prompt", "spotify_playlists",
+    "booktrack_prompt", "spotify_playlists", "ai_recommendations",
   ];
 
   const rows = jobs.map((jobType) => ({
@@ -93,7 +94,7 @@ export const JOB_TYPE_PRIORITY: JobType[][] = [
   // Tier 2: Core data + tropes — covers, descriptions, ISBNs, trope tags
   ["goodreads_detail", "metadata", "trope_inference", "review_classifier"],
   // Tier 3: Nice-to-have enrichments
-  ["ai_synopsis", "author_crawl", "booktrack_prompt", "spotify_playlists"],
+  ["ai_synopsis", "author_crawl", "booktrack_prompt", "spotify_playlists", "ai_recommendations"],
 ];
 
 /**

@@ -66,9 +66,47 @@ async function getRelatedBooks(
   book: BookDetail,
   limit: number = 10
 ): Promise<BookDetail[]> {
+  const supabase = getAdminClient();
+
+  // Phase 1: Try AI-powered recommendations (cached in book_recommendations)
+  const { data: aiRecs } = await supabase
+    .from("book_recommendations")
+    .select("recommended_book_id")
+    .eq("book_id", book.id)
+    .order("position", { ascending: true })
+    .limit(limit * 2);
+
+  if (aiRecs && aiRecs.length > 0) {
+    const recIds = aiRecs.map((r) => r.recommended_book_id);
+    const { data: recBooks } = await supabase
+      .from("books")
+      .select("*")
+      .in("id", recIds)
+      .not("cover_url", "is", null);
+
+    if (recBooks && recBooks.length > 0) {
+      const results: BookDetail[] = [];
+      for (const b of recBooks as Record<string, unknown>[]) {
+        if (isJunkTitle(b.title as string)) continue;
+        results.push(await hydrateBookDetail(supabase, b));
+      }
+
+      // Preserve AI ordering
+      const orderMap = new Map(recIds.map((id, i) => [id, i]));
+      results.sort((a, b) => (orderMap.get(a.id) ?? 99) - (orderMap.get(b.id) ?? 99));
+
+      const qualified = deduplicateBooks(results)
+        .filter((b) => !!b.coverUrl)
+        .slice(0, limit);
+
+      if (qualified.length >= 3) return qualified;
+      // If AI recs are too sparse (books deleted, etc.), fall through to trope matching
+    }
+  }
+
+  // Phase 2: Trope-based matching (fallback)
   if (book.tropes.length === 0) {
     // No tropes — fall back to same-author books
-    const supabase = getAdminClient();
     const { data: authorBooks } = await supabase
       .from("books")
       .select("*")
@@ -82,24 +120,15 @@ async function getRelatedBooks(
 
     const results: BookDetail[] = [];
     for (const b of authorBooks as Record<string, unknown>[]) {
-      const title = b.title as string;
-      if (isJunkTitle(title)) continue;
+      if (isJunkTitle(b.title as string)) continue;
       results.push(await hydrateBookDetail(supabase, b));
     }
 
-    // Quality threshold for related books
-    const qualified = deduplicateBooks(results)
-      .filter((b) => {
-        if (!b.coverUrl) return false;
-        const grRating = b.ratings.find((r) => r.source === "goodreads");
-        return grRating && (grRating.ratingCount ?? 0) >= 500;
-      })
+    return deduplicateBooks(results)
+      .filter((b) => !!b.coverUrl)
       .slice(0, limit);
-    return qualified;
   }
 
-  // Find books sharing the most tropes
-  const supabase = getAdminClient();
   const tropeIds = book.tropes.map((t) => t.id);
 
   const { data: sharedTropes } = await supabase
@@ -110,14 +139,13 @@ async function getRelatedBooks(
 
   if (!sharedTropes || sharedTropes.length === 0) return [];
 
-  // Count overlapping tropes per book and pick the top ones
   const overlapCount = new Map<string, number>();
   for (const row of sharedTropes) {
     overlapCount.set(row.book_id, (overlapCount.get(row.book_id) ?? 0) + 1);
   }
   const sortedIds = Array.from(overlapCount.entries())
     .sort((a, b) => b[1] - a[1])
-    .slice(0, limit * 3) // fetch extra to account for dedup
+    .slice(0, limit * 3)
     .map(([id]) => id);
 
   if (sortedIds.length === 0) return [];
@@ -132,24 +160,16 @@ async function getRelatedBooks(
 
   const results: BookDetail[] = [];
   for (const b of relatedDbBooks as Record<string, unknown>[]) {
-    const title = b.title as string;
-    if (isJunkTitle(title)) continue;
+    if (isJunkTitle(b.title as string)) continue;
     results.push(await hydrateBookDetail(supabase, b));
   }
 
-  // Preserve overlap order
   const orderMap = new Map(sortedIds.map((id, i) => [id, i]));
   results.sort((a, b) => (orderMap.get(a.id) ?? 99) - (orderMap.get(b.id) ?? 99));
 
-  // Quality threshold for related books
-  const qualified = deduplicateBooks(results)
-    .filter((b) => {
-      if (!b.coverUrl) return false;
-      const grRating = b.ratings.find((r) => r.source === "goodreads");
-      return grRating && (grRating.ratingCount ?? 0) >= 500;
-    })
+  return deduplicateBooks(results)
+    .filter((b) => !!b.coverUrl)
     .slice(0, limit);
-  return qualified;
 }
 
 // ── SEO metadata ─────────────────────────────────────
