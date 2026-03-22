@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { clsx } from "clsx";
+import { Headphones } from "lucide-react";
 
 type CoverSize = "sm" | "table" | "md" | "lg" | "fill";
 
@@ -17,6 +18,22 @@ const sizeStyles: Record<Exclude<CoverSize, "fill">, { className: string; width:
   table: { className: "w-[64px] h-[90px] text-base", width: 64, height: 90 },
   md: { className: "w-[80px] h-[120px] text-xl", width: 80, height: 120 },
   lg: { className: "w-[120px] h-[180px] text-3xl", width: 120, height: 180 },
+};
+
+const badgeSize: Record<CoverSize, string> = {
+  sm: "text-[8px] px-0.5 py-px gap-0.5",
+  table: "text-[9px] px-1 py-0.5 gap-0.5",
+  md: "text-[10px] px-1 py-0.5 gap-0.5",
+  lg: "text-xs px-1.5 py-0.5 gap-1",
+  fill: "text-xs px-1.5 py-0.5 gap-1",
+};
+
+const iconSize: Record<CoverSize, number> = {
+  sm: 8,
+  table: 10,
+  md: 10,
+  lg: 12,
+  fill: 12,
 };
 
 function Placeholder({ title, sizeClass, className }: { title: string; sizeClass: string; className?: string }) {
@@ -41,24 +58,49 @@ export default function BookCover({
   className,
 }: BookCoverProps) {
   const [failed, setFailed] = useState(false);
+  const [isAudiobook, setIsAudiobook] = useState(false);
   const isFill = size === "fill";
   const sizeClass = isFill ? "" : sizeStyles[size].className;
+
+  const handleLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget;
+    if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+      const ratio = img.naturalHeight / img.naturalWidth;
+      // Audiobook covers are square (1:1). Print books are ~1.5:1.
+      // Threshold of 1.15 catches square covers with slight variance.
+      setIsAudiobook(ratio < 1.15);
+    }
+  }, []);
 
   if (!coverUrl || failed) {
     return <Placeholder title={title} sizeClass={sizeClass} className={className} />;
   }
 
   return (
-    <img
-      src={coverUrl}
-      alt={`Cover of ${title}`}
-      {...(!isFill && { width: sizeStyles[size].width, height: sizeStyles[size].height })}
-      className={clsx(
-        "rounded-md shadow-sm",
-        sizeClass,
-        className
+    <div className="relative inline-block">
+      <img
+        src={coverUrl}
+        alt={`Cover of ${title}`}
+        {...(!isFill && { width: sizeStyles[size].width, height: sizeStyles[size].height })}
+        className={clsx(
+          "rounded-md shadow-sm",
+          sizeClass,
+          className
+        )}
+        onLoad={handleLoad}
+        onError={() => setFailed(true)}
+      />
+      {isAudiobook && (
+        <span
+          className={clsx(
+            "absolute bottom-1 left-1 inline-flex items-center rounded bg-ink/80 text-cream font-mono font-medium backdrop-blur-sm",
+            badgeSize[size]
+          )}
+        >
+          <Headphones size={iconSize[size]} />
+          {size !== "sm" && "Audio"}
+        </span>
       )}
-      onError={() => setFailed(true)}
-    />
+    </div>
   );
 }
