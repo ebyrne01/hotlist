@@ -206,7 +206,7 @@ export default function SpiceSection({
     : null;
 
   return (
-    <div className="mt-4 pb-4 border-b border-border">
+    <div>
       {/* Header with tooltip */}
       <h2 className="text-xs font-mono text-muted uppercase tracking-wide mb-2 flex items-center gap-1.5">
         Spice Level

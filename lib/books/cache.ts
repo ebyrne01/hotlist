@@ -12,6 +12,11 @@ function cleanCoverUrl(url: string | null | undefined): string | null {
   return url;
 }
 
+/** Strip invisible Unicode characters (zero-width spaces, BOM, etc.) from text */
+function cleanText(text: string): string {
+  return text.replace(/[\u200B\u200C\u200D\u200E\u200F\uFEFF]/g, "").trim();
+}
+
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 // ── Read from cache ──────────────────────────────────
@@ -98,7 +103,7 @@ export async function searchBooksInCache(query: string): Promise<BookDetail[]> {
       .textSearch("title", tsQuery, { config: "english" })
       .limit(15),
     titleWordQuery.limit(15),
-    authorWordQuery.limit(20),
+    authorWordQuery.limit(40),
   ]);
 
   // Merge and deduplicate
@@ -191,18 +196,26 @@ export async function searchBooksInCache(query: string): Promise<BookDetail[]> {
     return Math.max(titleScore, authorScore);
   }
 
-  // Sort by relevance score descending, then by Goodreads popularity as tiebreaker
+  // Sort by relevance score descending, then tiebreak
   allBooks.sort((a, b) => {
     const scoreA = relevanceScore(a.title as string, a.author as string);
     const scoreB = relevanceScore(b.title as string, b.author as string);
     if (scoreB !== scoreA) return scoreB - scoreA;
-    // Tiebreak: more popular books (higher rating count) surface first
+    // For author searches, tiebreak by newest first (readers want latest books)
+    // For title searches, tiebreak by popularity (most-reviewed edition first)
+    if (looksLikeAuthor) {
+      const yearA = (a.published_year as number) ?? 0;
+      const yearB = (b.published_year as number) ?? 0;
+      if (yearB !== yearA) return yearB - yearA;
+    }
     const popA = popularityMap.get(a.id as string) ?? 0;
     const popB = popularityMap.get(b.id as string) ?? 0;
     return popB - popA;
   });
 
-  const top = allBooks.slice(0, 12);
+  // For author-like queries, show more results (prolific authors can have 20+ books)
+  const displayLimit = looksLikeAuthor ? 24 : 12;
+  const top = allBooks.slice(0, displayLimit);
   const results = await Promise.all(
     top.map((book) => hydrateBookDetail(supabase, book))
   );
@@ -210,10 +223,18 @@ export async function searchBooksInCache(query: string): Promise<BookDetail[]> {
   // Filter junk, then deduplicate (keeps edition with most reviews)
   const filtered = results.filter((b) => !isJunkTitle(b.title));
   const deduped = deduplicateBooks(filtered);
-  // Sort books without covers to the bottom but still return them
+  // For author searches, sort newest first with coverless books at bottom
+  // For other searches, just push coverless books to bottom
   return deduped.sort((a, b) => {
+    // Coverless books always sort to the bottom
     if (a.coverUrl && !b.coverUrl) return -1;
     if (!a.coverUrl && b.coverUrl) return 1;
+    // Within covered books, sort by year for author searches
+    if (looksLikeAuthor) {
+      const yearA = a.publishedYear ?? 0;
+      const yearB = b.publishedYear ?? 0;
+      return yearB - yearA;
+    }
     return 0;
   });
 }
@@ -257,8 +278,8 @@ export async function saveGoodreadsBookToCache(bookData: BookData): Promise<Book
   const slug = generateBookSlug(bookData.title, bookData.goodreadsId);
 
   const row = {
-    title: bookData.title,
-    author: bookData.author,
+    title: cleanText(bookData.title),
+    author: cleanText(bookData.author),
     isbn: bookData.isbn ?? null,
     isbn13: bookData.isbn13 ?? null,
     google_books_id: bookData.googleBooksId ?? null,
@@ -353,8 +374,8 @@ export async function saveProvisionalBook(bookData: BookData): Promise<Book | nu
 
   const slug = `provisional-${bookData.googleBooksId || Date.now()}`;
   const row = {
-    title: bookData.title,
-    author: bookData.author,
+    title: cleanText(bookData.title),
+    author: cleanText(bookData.author),
     isbn: bookData.isbn ?? null,
     isbn13: bookData.isbn13 ?? null,
     google_books_id: bookData.googleBooksId ?? null,
