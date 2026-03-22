@@ -24,7 +24,9 @@ interface ReadingVibesResult {
 }
 
 /**
- * Check how many booktrack prompts have been generated today.
+ * Check how many booktrack prompts have been successfully generated today.
+ * Counts actual prompts stored in books table (via updated_at), not queue
+ * job completions, to avoid inflating the count with retries and re-runs.
  */
 async function getDailyBooktrackUsage(): Promise<number> {
   const supabase = getAdminClient();
@@ -32,11 +34,10 @@ async function getDailyBooktrackUsage(): Promise<number> {
   todayStart.setHours(0, 0, 0, 0);
 
   const { count } = await supabase
-    .from("enrichment_queue")
+    .from("books")
     .select("*", { count: "exact", head: true })
-    .eq("job_type", "booktrack_prompt")
-    .eq("status", "completed")
-    .gte("completed_at", todayStart.toISOString());
+    .not("booktrack_prompt", "is", null)
+    .gte("updated_at", todayStart.toISOString());
 
   return count ?? 0;
 }
