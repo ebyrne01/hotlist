@@ -125,7 +125,6 @@ function injectWidget(data, title, author) {
       ? `<div class="hotlist-ratings-row">
           <span class="hotlist-rating-badge">
             <span class="hotlist-rating-value">${book.goodreadsRating.toFixed(1)}</span>
-            ${book.goodreadsRatingCount ? `<span class="hotlist-rating-count">(${formatCount(book.goodreadsRatingCount)})</span>` : ""}
           </span>
         </div>`
       : `<span class="hotlist-spice-unknown">—</span>`;

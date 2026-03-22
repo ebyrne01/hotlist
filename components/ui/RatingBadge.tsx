@@ -1,12 +1,6 @@
 import { clsx } from "clsx";
 import { ExternalLink } from "lucide-react";
 
-function abbreviateCount(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return n.toLocaleString();
-}
-
 interface RatingBadgeProps {
   score: number | null;
   source: string;
@@ -26,7 +20,6 @@ const sourceLabels: Record<string, string> = {
 export default function RatingBadge({
   score,
   source,
-  ratingCount,
   loading,
   className,
   external,
@@ -53,11 +46,6 @@ export default function RatingBadge({
         {label}
         {external && <ExternalLink size={10} className="text-muted/70" />}
       </span>
-      {ratingCount != null && ratingCount > 0 && (
-        <span className="text-xs font-mono text-muted/80">
-          {abbreviateCount(ratingCount)} ratings
-        </span>
-      )}
     </div>
   );
 }
