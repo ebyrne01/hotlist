@@ -47,6 +47,14 @@ const JUNK_PATTERNS: Array<{ label: string; sql: string }> = [
     label: '"By Author - Title" inverted format',
     sql: `title ~ '^By\\s+\\w+\\s+\\w+\\s*-\\s*'`,
   },
+  {
+    label: "dramatized adaptation / abridged parts",
+    sql: `title ~* '\\[Dramatized Adaptation\\]' OR title ~* '\\(Part \\d+ of \\d+\\)\\s*\\[' OR title ~* '\\bAbridged Edition\\b'`,
+  },
+  {
+    label: "Wing and Claw / special edition bundles",
+    sql: `title ~* '\\(Wing and Claw Collection\\)'`,
+  },
 ];
 
 /**
