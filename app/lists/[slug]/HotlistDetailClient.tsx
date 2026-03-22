@@ -251,6 +251,7 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
             updatedAt: now,
             dataRefreshedAt: null,
             enrichmentStatus: null,
+            isAudiobook: false,
             ratings: [],
             spice: [],
             compositeSpice: null,

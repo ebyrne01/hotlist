@@ -181,7 +181,7 @@ export default function HotlistTable({
               <div className="flex gap-3">
                 {/* Cover + title */}
                 <Link href={`/book/${slug}`} className="shrink-0">
-                  <BookCover title={hb.book.title} coverUrl={hb.book.coverUrl} size="sm" />
+                  <BookCover title={hb.book.title} coverUrl={hb.book.coverUrl} size="sm" isAudiobook={hb.book.isAudiobook} />
                 </Link>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
@@ -363,7 +363,7 @@ export default function HotlistTable({
                 <tr key={hb.id} className="border-b border-border/50 hover:bg-white/60 transition-colors">
                   <td className="px-3 py-3">
                     <Link href={`/book/${slug}`} className="flex items-center gap-3 group">
-                      <BookCover title={hb.book.title} coverUrl={hb.book.coverUrl} size="table" />
+                      <BookCover title={hb.book.title} coverUrl={hb.book.coverUrl} size="table" isAudiobook={hb.book.isAudiobook} />
                       <div className="min-w-0">
                         <p className="font-display font-bold text-ink text-sm leading-tight group-hover:text-fire transition-colors line-clamp-2">
                           {hb.book.title}

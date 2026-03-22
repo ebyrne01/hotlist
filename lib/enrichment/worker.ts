@@ -33,6 +33,7 @@ import { runAuthorCrawl } from "@/lib/books/author-crawl";
 import { generateReadingVibes } from "@/lib/books/reading-vibes";
 import { searchBookPlaylists } from "@/lib/spotify/search";
 import { generateRecommendations } from "@/lib/books/ai-recommendations";
+import { detectAndSaveAudiobookStatus } from "@/lib/books/audiobook-detect";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -214,6 +215,8 @@ async function processJob(job: QueuedJob): Promise<void> {
                 updated_at: new Date().toISOString(),
               })
               .eq("id", book_id);
+            // Detect audiobook from new cover
+            await detectAndSaveAudiobookStatus(book_id, detail.coverUrl ?? null);
           }
         }
       } else if (book_goodreads_id) {
@@ -233,6 +236,8 @@ async function processJob(job: QueuedJob): Promise<void> {
             pageCount: detail.pageCount,
             genres: detail.genres,
           });
+          // Detect audiobook from cover
+          await detectAndSaveAudiobookStatus(book_id, detail.coverUrl ?? null);
         }
       }
       // Run genre bucketing after Goodreads genres are saved

@@ -372,6 +372,7 @@ export default async function BookPage({ params }: PageProps) {
               title={book.title}
               coverUrl={coverUrl}
               size="fill"
+              isAudiobook={book.isAudiobook}
               className="w-[140px] h-[210px] sm:w-[200px] sm:h-[300px] object-contain rounded-lg shadow-lg shadow-ink/10"
             />
           </div>

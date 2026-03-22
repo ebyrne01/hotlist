@@ -45,7 +45,7 @@ export default function BookCard({ book, layout = "grid", className }: BookCardP
           className
         )}
       >
-        <BookCover title={book.title} coverUrl={book.coverUrl} size="md" />
+        <BookCover title={book.title} coverUrl={book.coverUrl} size="md" isAudiobook={book.isAudiobook} />
         <div className="flex flex-col gap-1 flex-1 min-w-0 py-0.5">
           <h3 className="font-display font-bold text-ink text-sm leading-tight truncate">
             {book.title}
@@ -112,6 +112,7 @@ export default function BookCard({ book, layout = "grid", className }: BookCardP
           title={book.title}
           coverUrl={book.coverUrl}
           size="fill"
+          isAudiobook={book.isAudiobook}
           className="w-full h-full object-contain !rounded-none"
         />
       </div>

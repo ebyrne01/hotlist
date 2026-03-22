@@ -932,5 +932,6 @@ function mapDbBookInline(row: Record<string, unknown>): import("@/lib/types").Bo
     updatedAt: row.updated_at as string,
     dataRefreshedAt: (row.data_refreshed_at as string) ?? null,
     enrichmentStatus: (row.enrichment_status as import("@/lib/types").Book["enrichmentStatus"]) ?? null,
+    isAudiobook: (row.is_audiobook as boolean) ?? false,
   };
 }

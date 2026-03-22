@@ -598,5 +598,6 @@ export function mapDbBook(row: Record<string, unknown>): Book {
     updatedAt: row.updated_at as string,
     dataRefreshedAt: (row.data_refreshed_at as string) ?? null,
     enrichmentStatus: (row.enrichment_status as Book["enrichmentStatus"]) ?? null,
+    isAudiobook: (row.is_audiobook as boolean) ?? false,
   };
 }

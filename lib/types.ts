@@ -44,6 +44,7 @@ export interface Book {
   updatedAt: string;
   dataRefreshedAt: string | null;
   enrichmentStatus: "pending" | "partial" | "complete" | null;
+  isAudiobook: boolean;
 }
 
 export interface Rating {

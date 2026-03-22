@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { clsx } from "clsx";
 import { Headphones } from "lucide-react";
 
@@ -11,6 +11,7 @@ interface BookCoverProps {
   coverUrl?: string | null;
   size?: CoverSize;
   className?: string;
+  isAudiobook?: boolean;
 }
 
 const sizeStyles: Record<Exclude<CoverSize, "fill">, { className: string; width: number; height: number }> = {
@@ -56,51 +57,47 @@ export default function BookCover({
   coverUrl,
   size = "md",
   className,
+  isAudiobook = false,
 }: BookCoverProps) {
   const [failed, setFailed] = useState(false);
-  const [isAudiobook, setIsAudiobook] = useState(false);
   const isFill = size === "fill";
   const sizeClass = isFill ? "" : sizeStyles[size].className;
-
-  const handleLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
-    const img = e.currentTarget;
-    if (img.naturalWidth > 0 && img.naturalHeight > 0) {
-      const ratio = img.naturalHeight / img.naturalWidth;
-      // Audiobook covers are square (1:1). Print books are ~1.5:1.
-      // Threshold of 1.15 catches square covers with slight variance.
-      setIsAudiobook(ratio < 1.15);
-    }
-  }, []);
 
   if (!coverUrl || failed) {
     return <Placeholder title={title} sizeClass={sizeClass} className={className} />;
   }
 
-  return (
-    <div className="relative inline-block">
+  // When not an audiobook, render a plain img (no wrapper div) to preserve layout
+  if (!isAudiobook) {
+    return (
       <img
         src={coverUrl}
         alt={`Cover of ${title}`}
         {...(!isFill && { width: sizeStyles[size].width, height: sizeStyles[size].height })}
-        className={clsx(
-          "rounded-md shadow-sm",
-          sizeClass,
-          className
-        )}
-        onLoad={handleLoad}
+        className={clsx("rounded-md shadow-sm", sizeClass, className)}
         onError={() => setFailed(true)}
       />
-      {isAudiobook && (
-        <span
-          className={clsx(
-            "absolute bottom-1 left-1 inline-flex items-center rounded bg-ink/80 text-cream font-mono font-medium backdrop-blur-sm",
-            badgeSize[size]
-          )}
-        >
-          <Headphones size={iconSize[size]} />
-          {size !== "sm" && "Audio"}
-        </span>
-      )}
+    );
+  }
+
+  return (
+    <div className={clsx("relative", isFill ? "w-full h-full" : "inline-block")}>
+      <img
+        src={coverUrl}
+        alt={`Cover of ${title}`}
+        {...(!isFill && { width: sizeStyles[size].width, height: sizeStyles[size].height })}
+        className={clsx("rounded-md shadow-sm", sizeClass, className)}
+        onError={() => setFailed(true)}
+      />
+      <span
+        className={clsx(
+          "absolute bottom-1 left-1 inline-flex items-center rounded bg-fire text-white font-mono font-semibold backdrop-blur-sm",
+          badgeSize[size]
+        )}
+      >
+        <Headphones size={iconSize[size]} />
+        {size !== "sm" && "Audio"}
+      </span>
     </div>
   );
 }
