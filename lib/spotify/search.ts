@@ -41,7 +41,10 @@ export async function searchBookPlaylists(
     .split(/\s+/)
     .filter((w) => w.length >= 3 && !stopWords.has(w));
 
-  for (const query of queries) {
+  for (let i = 0; i < queries.length; i++) {
+    const query = queries[i];
+    // Small delay between queries to avoid rate limits
+    if (i > 0) await new Promise((r) => setTimeout(r, 200));
     try {
       const res = await fetch(
         `https://api.spotify.com/v1/search?${new URLSearchParams({
@@ -52,6 +55,10 @@ export async function searchBookPlaylists(
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
+      if (res.status === 429) {
+        const retryAfter = res.headers.get("Retry-After");
+        throw new Error(`Spotify rate limited (retry after ${retryAfter ?? "?"}s)`);
+      }
       if (!res.ok) continue;
 
       const data = await res.json();
