@@ -490,7 +490,7 @@ export async function getRomanceIoSpice(
     // which reliably contains spice + heat label but often cuts off the star rating
     // that lives higher up. This second query anchors on the rating section instead.
     // Only fires when we already confirmed a match — costs ~$0.001 per extra call.
-    if (!bestRating && confidence !== "low") {
+    if (!bestRating) {
       try {
         const ratingQuery = `site:romance.io "${title}" "of 5 stars"`;
         const ratingRes = await fetch(SERPER_ENDPOINT, {
