@@ -22,14 +22,17 @@ export async function searchBookPlaylists(
 ): Promise<SpotifyPlaylistResult[]> {
   const token = await getSpotifyToken();
 
+  // Strip series suffix like "(The Empyrean, #1)" from title
+  const cleanTitle = title.replace(/\s*\(.*#\d+\)$/, "").replace(/\s*\(.*Series\)$/i, "").trim();
+
   // Two search strategies to catch official + fan playlists
   const queries = [
-    `${title} playlist`,
-    `${title} ${author}`,
+    `${cleanTitle} playlist`,
+    `${cleanTitle} ${author}`,
   ];
 
   const results = new Map<string, SpotifyPlaylistResult>();
-  const lowerTitle = title.toLowerCase();
+  const lowerTitle = cleanTitle.toLowerCase();
   const authorLastName = author.split(" ").pop()?.toLowerCase() ?? "";
 
   // Extract significant words from title (3+ chars, skip common words)
