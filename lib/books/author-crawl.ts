@@ -244,9 +244,7 @@ export async function runAuthorCrawl(
 
       if (book) {
         discovered++;
-        await queueEnrichmentJobs(book.id, book.title, book.author, {
-          hasGoodreadsId: true,
-        });
+        await queueEnrichmentJobs(book.id, book.title, book.author);
       }
     } catch {
       // Continue with remaining books if one fails

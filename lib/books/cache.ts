@@ -298,9 +298,7 @@ export async function saveGoodreadsBookToCache(bookData: BookData): Promise<Book
   const createdAt = new Date(data.created_at as string).getTime();
   const isNewBook = Date.now() - createdAt < 60_000;
   if (isNewBook) {
-    await queueEnrichmentJobs(data.id as string, bookData.title, bookData.author, {
-      hasGoodreadsId: true,
-    });
+    await queueEnrichmentJobs(data.id as string, bookData.title, bookData.author);
   }
 
   return mapDbBook(data);

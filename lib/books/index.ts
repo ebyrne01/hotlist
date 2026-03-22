@@ -74,25 +74,33 @@ export async function findBook(query: string): Promise<BookDetail[]> {
     return deduplicateBooks(filteredCache);
   }
 
-  // Step 3: Not enough cache results — supplement with Google Books
-  try {
-    const googleResults = await withTimeout(searchGoogleBooks(query), 3000);
+  // Step 3: Not enough cache results — search Google Books AND Goodreads in parallel.
+  // Goodreads results are saved immediately so users see them on the first search
+  // (previously Goodreads was fire-and-forget, requiring a second search).
+  const [googleSettled, goodreadsSettled] = await Promise.allSettled([
+    withTimeout(searchGoogleBooks(query), 3000),
+    withTimeout(inlineGoodreadsDiscovery(query), 5000),
+  ]);
 
-    for (const bookData of googleResults.slice(0, 5)) {
+  // Add Google Books provisional entries
+  if (googleSettled.status === "fulfilled") {
+    for (const bookData of googleSettled.value.slice(0, 5)) {
       if (isJunkTitle(bookData.title)) continue;
-
-      // Save as provisional entry (no goodreads_id yet)
       const book = await saveProvisionalBook(bookData);
       if (book && !filteredCache.some((b) => b.id === book.id)) {
         filteredCache.push({ ...book, ratings: [], spice: [], compositeSpice: null, tropes: [] });
       }
     }
-  } catch {
-    console.log("[findBook] Google Books fallback timed out for:", query);
   }
 
-  // Step 4: Queue Goodreads discovery for this query
-  queueGoodreadsDiscovery(query).catch(() => {});
+  // Add Goodreads results (already saved to DB inside inlineGoodreadsDiscovery)
+  if (goodreadsSettled.status === "fulfilled") {
+    for (const book of goodreadsSettled.value) {
+      if (!filteredCache.some((b) => b.id === book.id || b.goodreadsId === book.goodreadsId)) {
+        filteredCache.push({ ...book, ratings: [], spice: [], compositeSpice: null, tropes: [] });
+      }
+    }
+  }
 
   return deduplicateBooks(filteredCache);
 }
@@ -110,47 +118,45 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 }
 
 /**
- * Queue a background Goodreads search for a query.
- * Discovers new books and saves them to the DB without blocking the user's search.
- * Also queues enrichment jobs for each newly discovered book.
+ * Inline Goodreads discovery — searches Goodreads and saves results to DB immediately.
+ * Returns the saved books so they can be included in the current search response.
+ * Only saves basic metadata from the search results page (no per-book detail scrape).
+ * Full detail is filled in by the enrichment queue (goodreads_detail job).
+ */
+async function inlineGoodreadsDiscovery(query: string): Promise<BookDetail[]> {
+  const results = await searchGoodreads(query);
+  const saved: BookDetail[] = [];
+
+  for (const result of results.slice(0, 5)) {
+    if (isJunkTitle(result.title)) continue;
+
+    // Save using search-level data (title, author, cover, goodreadsId).
+    // saveGoodreadsBookToCache handles dedup via goodreads_id upsert.
+    const book = await saveGoodreadsBookToCache({
+      title: result.title,
+      author: result.author,
+      goodreadsId: result.goodreadsId,
+      goodreadsUrl: result.goodreadsUrl,
+      coverUrl: result.coverUrl,
+    });
+
+    if (book) {
+      // Queue enrichment (goodreads_detail will fill in description, genres, etc.)
+      queueEnrichmentJobs(book.id, book.title, book.author).catch(() => {});
+      saved.push({ ...book, ratings: [], spice: [], compositeSpice: null, tropes: [] });
+    }
+  }
+
+  return saved;
+}
+
+/**
+ * Background Goodreads discovery — fire-and-forget version for when we already
+ * have enough cache results but want to discover new books for future searches.
  */
 async function queueGoodreadsDiscovery(query: string): Promise<void> {
   try {
-    const results = await searchGoodreads(query);
-    for (const result of results.slice(0, 5)) {
-      if (isJunkTitle(result.title)) continue;
-
-      // Check if already in DB
-      const supabase = getAdminClient();
-      const { data: existing } = await supabase
-        .from("books")
-        .select("id")
-        .eq("goodreads_id", result.goodreadsId)
-        .single();
-      if (existing) continue;
-
-      // Fetch detail and save
-      const detail = await getGoodreadsBookById(result.goodreadsId).catch(() => null);
-      if (!detail) continue;
-
-      const book = await saveGoodreadsBookToCache({
-        title: detail.title,
-        author: detail.author,
-        goodreadsId: detail.goodreadsId,
-        goodreadsUrl: detail.goodreadsUrl,
-        coverUrl: detail.coverUrl,
-        description: detail.description,
-        seriesName: detail.seriesName,
-        seriesPosition: detail.seriesPosition,
-        publishedYear: detail.publishedYear,
-        pageCount: detail.pageCount,
-        genres: detail.genres,
-      });
-
-      if (book) {
-        await queueEnrichmentJobs(book.id, book.title, book.author);
-      }
-    }
+    await inlineGoodreadsDiscovery(query);
   } catch {
     // Background — swallow errors
   }
@@ -246,9 +252,7 @@ export async function getBookDetail(identifier: string): Promise<BookDetail | nu
 
   if (needsEnrichment) {
     // Queue via the enrichment system (retryable, tracked) instead of legacy fire-and-forget
-    queueEnrichmentJobs(detail.id, detail.title, detail.author, {
-      hasGoodreadsId: !!detail.goodreadsId,
-    }).catch(() => {});
+    queueEnrichmentJobs(detail.id, detail.title, detail.author).catch(() => {});
   }
 
   return detail;

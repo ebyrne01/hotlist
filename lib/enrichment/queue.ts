@@ -50,18 +50,16 @@ export async function queueEnrichmentJobs(
   bookId: string,
   title: string,
   author: string,
-  options?: {
-    /** Skip Goodreads detail if we already have it */
-    hasGoodreadsId?: boolean;
-    /** Priority jobs to run first */
-    priority?: JobType[];
-  }
 ): Promise<void> {
   const supabase = getAdminClient();
 
-  const jobs: JobType[] = options?.hasGoodreadsId
-    ? ["goodreads_rating", "amazon_rating", "romance_io_spice", "metadata", "ai_synopsis", "trope_inference", "review_classifier", "llm_spice"]
-    : ["goodreads_detail", "goodreads_rating", "amazon_rating", "romance_io_spice", "metadata", "ai_synopsis", "trope_inference", "review_classifier", "llm_spice"];
+  // Always include goodreads_detail — even if we have a goodreads_id, the book
+  // may have been saved from search results with minimal data (no description,
+  // cover, genres). The worker re-scrapes when goodreads_id exists.
+  const jobs: JobType[] = [
+    "goodreads_detail", "goodreads_rating", "amazon_rating", "romance_io_spice",
+    "metadata", "ai_synopsis", "trope_inference", "review_classifier", "llm_spice",
+  ];
 
   const rows = jobs.map((jobType) => ({
     book_id: bookId,

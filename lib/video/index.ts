@@ -474,9 +474,7 @@ async function grabPipeline(
 function queueEnrichmentForResolved(resolved: ResolvedBook[]) {
   for (const book of resolved) {
     if (book.matched) {
-      queueEnrichmentJobs(book.book.id, book.book.title, book.book.author, {
-        hasGoodreadsId: !!book.book.goodreadsId,
-      }).catch((err) =>
+      queueEnrichmentJobs(book.book.id, book.book.title, book.book.author).catch((err) =>
         console.warn(`[grab] Failed to queue enrichment for "${book.book.title}":`, err)
       );
     }

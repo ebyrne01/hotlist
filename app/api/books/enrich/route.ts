@@ -71,8 +71,7 @@ export async function POST(request: NextRequest) {
         .eq("id", bookId)
         .single();
 
-      const hasGoodreadsId = !!bookRow?.goodreads_id;
-      await queueEnrichmentJobs(bookId, title, author, { hasGoodreadsId });
+      await queueEnrichmentJobs(bookId, title, author);
     }
 
     return NextResponse.json({ status: "enrichment_started", bookId });
