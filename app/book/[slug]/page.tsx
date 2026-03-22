@@ -20,6 +20,7 @@ import { InlineUserRating } from "./InlineRatings";
 import SpiceSection from "./SpiceSection";
 import BookTokMentions from "@/components/books/BookTokMentions";
 import CreateShareCardButton from "@/components/books/CreateShareCardButton";
+import ExpandableText from "@/components/ui/ExpandableText";
 
 // ── Helpers ──────────────────────────────────────────
 
@@ -271,11 +272,18 @@ export default async function BookPage({ params }: PageProps) {
   const amazonSearchUrl = amazonTag
     ? `https://www.amazon.com/s?k=${searchTerms}&tag=${amazonTag}`
     : `https://www.amazon.com/s?k=${searchTerms}`;
-  const kindleUrl = amazonSearchUrl + "&i=digital-text";
-  const bnUrl = `https://www.barnesandnoble.com/s/${searchTerms}?store=EBOOK${bnTag ? `&utm_source=${bnTag}` : ""}`;
-  const bookshopUrl = bookshopTag
-    ? `https://bookshop.org/a/${bookshopTag}/books/search?keywords=${searchTerms}`
-    : `https://bookshop.org/books/search?keywords=${searchTerms}`;
+  const amazonDirectUrl = book.amazonAsin
+    ? `https://www.amazon.com/dp/${book.amazonAsin}${amazonTag ? `?tag=${amazonTag}` : ""}`
+    : null;
+  const kindleUrl = amazonDirectUrl ?? (amazonSearchUrl + "&i=digital-text");
+  const bnUrl = book.isbn13
+    ? `https://www.barnesandnoble.com/w/?ean=${book.isbn13}`
+    : `https://www.barnesandnoble.com/s/${searchTerms}?store=EBOOK${bnTag ? `&utm_source=${bnTag}` : ""}`;
+  const bookshopUrl = book.isbn13
+    ? `https://bookshop.org/p/books/-/${book.isbn13}${bookshopTag ? `?a_aid=${bookshopTag}` : ""}`
+    : bookshopTag
+      ? `https://bookshop.org/a/${bookshopTag}/books/search?keywords=${searchTerms}`
+      : `https://bookshop.org/books/search?keywords=${searchTerms}`;
 
   // JSON-LD structured data
   const jsonLd = {
@@ -383,12 +391,14 @@ export default async function BookPage({ params }: PageProps) {
                 source="goodreads"
                 ratingCount={goodreadsRating?.ratingCount}
               />
-              <RatingBadge
-                score={amazonRating?.rating ?? null}
-                source="amazon"
-                ratingCount={amazonRating?.ratingCount}
-              />
-              {romanceIoRating && (
+              {amazonRating?.rating != null && (
+                <RatingBadge
+                  score={amazonRating.rating}
+                  source="amazon"
+                  ratingCount={amazonRating.ratingCount}
+                />
+              )}
+              {(romanceIoRating?.rating != null || romanceIoSpice) && (
                 <a
                   href={book.romanceIoSlug
                     ? `https://romance.io/books/${book.romanceIoSlug}`
@@ -398,16 +408,13 @@ export default async function BookPage({ params }: PageProps) {
                   className="group"
                 >
                   <RatingBadge
-                    score={romanceIoRating.rating ?? null}
+                    score={romanceIoRating?.rating ?? null}
                     source="romance_io"
-                    ratingCount={romanceIoRating.ratingCount}
+                    ratingCount={romanceIoRating?.ratingCount}
                     external
                   />
                 </a>
               )}
-              <div className="border-l border-border pl-4 sm:pl-6">
-                <InlineUserRating bookId={book.id} />
-              </div>
             </div>
 
             {/* Add to Hotlist — desktop only */}
@@ -425,6 +432,9 @@ export default async function BookPage({ params }: PageProps) {
         <div className="mt-8 sm:mt-12 grid grid-cols-1 sm:grid-cols-[240px_1fr] gap-8">
           {/* Sidebar: spice + metadata + buy links + reading status */}
           <div className="order-2 sm:order-1 flex flex-col gap-4">
+            {/* Your rating — star rating adjacent to spice */}
+            <InlineUserRating bookId={book.id} />
+
             {/* Spice level */}
             <SpiceSection
               bookId={book.id}
@@ -505,7 +515,7 @@ export default async function BookPage({ params }: PageProps) {
               </p>
               <div className="flex gap-2">
                 <a
-                  href={amazonSearchUrl}
+                  href={amazonDirectUrl ?? amazonSearchUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex-1 inline-flex items-center justify-center rounded-lg bg-white text-ink border border-border font-body text-xs px-2 min-h-[38px] hover:bg-cream transition-colors"
@@ -566,9 +576,12 @@ export default async function BookPage({ params }: PageProps) {
               </h2>
               {hasSynopsis ? (
                 <div>
-                  <p className="font-body text-ink/90 leading-[1.85]" style={{ fontSize: "0.95rem" }}>
-                    {cleanSynopsis(book.aiSynopsis!, book.title, book.author)}
-                  </p>
+                  <ExpandableText
+                    text={cleanSynopsis(book.aiSynopsis!, book.title, book.author)}
+                    maxLines={3}
+                    className="font-body text-ink/90 leading-[1.85]"
+                    style={{ fontSize: "0.95rem" }}
+                  />
                   <span className="inline-block mt-2 text-xs font-mono text-muted/70">
                     AI-generated synopsis
                   </span>
@@ -613,15 +626,31 @@ export default async function BookPage({ params }: PageProps) {
           <div className="flex items-center gap-3">
             <Video size={20} className="text-fire" aria-hidden="true" />
             <div>
-              <p className="text-sm font-body text-ink font-medium">
-                Saw this on BookTok?
-              </p>
-              <Link
-                href="/booktok"
-                className="text-xs font-mono text-fire hover:text-fire/80 transition-colors"
-              >
-                Paste that video link and find every book &rarr;
-              </Link>
+              {creatorMentions.length > 0 ? (
+                <>
+                  <p className="text-sm font-body text-ink font-medium">
+                    Recommended by @{creatorMentions[0].creatorHandle}
+                  </p>
+                  <Link
+                    href={`/discover/${encodeURIComponent(creatorMentions[0].creatorHandle)}`}
+                    className="text-xs font-mono text-fire hover:text-fire/80 transition-colors"
+                  >
+                    See all their picks &rarr;
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-body text-ink font-medium">
+                    Saw this on BookTok?
+                  </p>
+                  <Link
+                    href="/booktok"
+                    className="text-xs font-mono text-fire hover:text-fire/80 transition-colors"
+                  >
+                    Paste that video link and find every book &rarr;
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </section>

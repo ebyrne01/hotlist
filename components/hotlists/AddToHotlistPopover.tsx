@@ -379,7 +379,7 @@ export default function AddToHotlistPopover({
 
       {/* Desktop: dropdown popover */}
       {open && !isMobile && (
-        <div className="absolute top-full left-0 mt-2 w-72 bg-white rounded-lg border border-border shadow-lg z-40 overflow-hidden">
+        <div className="absolute top-full left-0 mt-2 w-80 bg-white rounded-lg border border-border shadow-lg z-40 overflow-hidden">
           {panelContent}
         </div>
       )}
