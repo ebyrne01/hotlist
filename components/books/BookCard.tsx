@@ -41,7 +41,7 @@ export default function BookCard({ book, layout = "grid", className }: BookCardP
       <Link
         href={`/book/${slug}`}
         className={clsx(
-          "flex gap-3 rounded-lg border border-border bg-white p-3 hover:shadow-md hover:border-fire/30 transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire",
+          "flex gap-3 rounded-lg border border-border bg-white p-3 hover:shadow-md hover:border-fire/30 transition-all overflow-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire",
           className
         )}
       >
@@ -82,14 +82,14 @@ export default function BookCard({ book, layout = "grid", className }: BookCardP
             ) : null}
           </div>
           {topTropes.length > 0 && (
-            <div className="flex items-center gap-1 mt-1">
+            <div className="flex items-center gap-1 mt-1 overflow-hidden">
               {topTropes.map((t) => (
-                <Badge key={t.id} variant="trope">
+                <Badge key={t.id} variant="trope" className="shrink-0">
                   {t.name}
                 </Badge>
               ))}
               {tropeOverflow > 0 && (
-                <span className="text-xs font-mono text-muted/60">+{tropeOverflow}</span>
+                <span className="text-xs font-mono text-muted/60 shrink-0">+{tropeOverflow}</span>
               )}
             </div>
           )}
