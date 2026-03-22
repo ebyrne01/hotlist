@@ -293,6 +293,16 @@ export async function saveGoodreadsBookToCache(bookData: BookData): Promise<Book
     return null;
   }
 
+  // Queue enrichment jobs only for newly created books (not re-saves of existing ones).
+  // On INSERT, created_at is set to now() by the DB default; on UPDATE it stays unchanged.
+  const createdAt = new Date(data.created_at as string).getTime();
+  const isNewBook = Date.now() - createdAt < 60_000;
+  if (isNewBook) {
+    await queueEnrichmentJobs(data.id as string, bookData.title, bookData.author, {
+      hasGoodreadsId: true,
+    });
+  }
+
   return mapDbBook(data);
 }
 
