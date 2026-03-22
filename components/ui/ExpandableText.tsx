@@ -12,7 +12,7 @@ interface ExpandableTextProps {
 
 export default function ExpandableText({
   text,
-  maxLines = 3,
+  maxLines: _maxLines = 3,
   className,
   style,
 }: ExpandableTextProps) {

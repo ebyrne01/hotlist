@@ -15,10 +15,6 @@
 import { getAdminClient } from "@/lib/supabase/admin";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 /** Queue specific enrichment job types for a book */
 async function queueSpecificJobs(
   supabase: SupabaseClient,

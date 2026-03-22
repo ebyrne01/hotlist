@@ -456,7 +456,7 @@ export async function getRomanceIoSpice(
 
     let bestSpice: { spiceLevel: number; heatLabel: string } | null = null;
     let bestRating: number | null = null;
-    let allTags: string[] = [];
+    const allTags: string[] = [];
 
     for (const result of romanceIoResults) {
       // Try Serper's structured rating field first (most reliable)
