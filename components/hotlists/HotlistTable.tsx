@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import BookCover from "@/components/ui/BookCover";
-import Badge from "@/components/ui/Badge";
 import { PepperRow } from "@/components/ui/PepperIcon";
 import type { HotlistBookDetail, Rating, SpiceRating } from "@/lib/types";
 
@@ -130,8 +129,6 @@ export default function HotlistTable({
   const hasAnyAmazon = books.some((hb) => getRating(hb.book.ratings, "amazon") !== null);
   const hasAnyRomanceIo = books.some((hb) => getRating(hb.book.ratings, "romance_io") !== null);
 
-  // Hide Status column when all books share the same status (e.g., all "Unread")
-  const showStatusColumn = books.length > 1 && !books.every(() => true); // Simplified: always show for now
   // Compute trope frequency for shared-trope highlighting
   const tropeFrequency = new Map<string, number>();
   for (const hb of books) {
