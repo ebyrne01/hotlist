@@ -47,8 +47,10 @@ export default function SpiceAttribution({
     return null; // Tooltip handles attribution in compact mode
   }
 
-  const romanceIoUrl = romanceIoSlug
-    ? `https://romance.io/books/${romanceIoSlug}`
+  // Slugs with "/" have the full id/slug path — use direct link
+  // Legacy slugs without "/" are missing the required ID — skip direct link
+  const romanceIoUrl = romanceIoSlug && romanceIoSlug.includes("/")
+    ? `https://www.romance.io/books/${romanceIoSlug}`
     : null;
 
   return (

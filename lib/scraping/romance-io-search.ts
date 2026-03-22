@@ -405,11 +405,12 @@ export async function getRomanceIoSpice(
 
     const primaryResult = bookPageResult || romanceIoResults[0];
 
-    // Extract slug from the primary result URL
-    const urlParts = primaryResult.link.split("/");
-    const slug = urlParts[urlParts.length - 1] || urlParts[urlParts.length - 2];
-    // Strip query params from slug
-    const cleanSlug = slug.split("?")[0];
+    // Extract the path after /books/ (includes numeric ID + slug, e.g. "67d.../title-author")
+    // Romance.io URLs are /books/{id}/{slug} — we need both parts for valid links
+    const booksMatch = primaryResult.link.match(/romance\.io\/books\/(.+)/);
+    const cleanSlug = booksMatch
+      ? booksMatch[1].split("?")[0]
+      : (primaryResult.link.split("/").pop() || "").split("?")[0];
 
     const titleWords = getTitleWords(title);
 
@@ -537,9 +538,12 @@ export async function getRomanceIoSpice(
 
     // Use the book page URL if available, otherwise the best match
     const bestUrl = bookPageResult?.link || primaryResult.link;
+    // Only store a slug from confirmed /books/ URLs — slugs from /series/ or
+    // /authors/ pages produce broken links when we reconstruct the URL.
+    // Capture full path after /books/ (id + slug) since romance.io requires both.
     const bestSlug = bookPageResult
-      ? (bookPageResult.link.split("/").pop() || "").split("?")[0]
-      : cleanSlug;
+      ? (bookPageResult.link.match(/romance\.io\/books\/(.+)/)?.[1] || "").split("?")[0]
+      : "";
 
     if (!bestSpice) {
       console.log(

@@ -426,9 +426,9 @@ export default async function BookPage({ params }: PageProps) {
               )}
               {(romanceIoRating?.rating != null || romanceIoSpice) && (
                 <a
-                  href={book.romanceIoSlug
-                    ? `https://romance.io/books/${book.romanceIoSlug}`
-                    : `https://romance.io/search?q=${encodeURIComponent(book.title + " " + book.author)}`}
+                  href={book.romanceIoSlug?.includes("/")
+                    ? `https://www.romance.io/books/${book.romanceIoSlug}`
+                    : `https://www.google.com/search?q=${encodeURIComponent(`site:romance.io "${book.title}" "${book.author}"`)}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="group"

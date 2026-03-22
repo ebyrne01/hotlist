@@ -200,9 +200,9 @@ export default function SpiceSection({
       ? Math.abs(userSpice - referenceLevel)
       : 0;
 
-  // romance.io URL
-  const romanceIoUrl = romanceIoSlug
-    ? `https://romance.io/books/${romanceIoSlug}`
+  // romance.io URL — only use direct link if slug has the full id/slug path
+  const romanceIoUrl = romanceIoSlug && romanceIoSlug.includes("/")
+    ? `https://www.romance.io/books/${romanceIoSlug}`
     : null;
 
   return (

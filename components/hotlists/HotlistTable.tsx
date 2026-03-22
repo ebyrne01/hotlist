@@ -61,9 +61,12 @@ function goodreadsUrl(goodreadsId: string | null): string | null {
 
 /** Build a romance.io book page URL */
 function romanceIoUrl(slug: string | null, title: string, author: string): string {
-  return slug
-    ? `https://romance.io/books/${slug}`
-    : `https://romance.io/search?q=${encodeURIComponent(title + " " + author)}`;
+  // Slugs with "/" have the full id/slug path (e.g. "67d.../title-author") — use direct link
+  // Legacy slugs without "/" are missing the required ID — use Google search fallback
+  // (romance.io search is JS-based with no URL query support)
+  return slug && slug.includes("/")
+    ? `https://www.romance.io/books/${slug}`
+    : `https://www.google.com/search?q=${encodeURIComponent(`site:romance.io "${title}" "${author}"`)}`;
 }
 
 /** Build an Amazon product page URL */
