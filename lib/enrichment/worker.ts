@@ -91,7 +91,7 @@ async function recoverStuckJobs(): Promise<number> {
       next_retry_at: new Date().toISOString(),
     })
     .eq("status", "running")
-    .lt("updated_at", cutoff)
+    .lt("last_attempt_at", cutoff)
     .select("id");
 
   if (error) {
