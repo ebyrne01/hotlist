@@ -386,17 +386,43 @@ export default async function BookPage({ params }: PageProps) {
 
             {/* Ratings row */}
             <div data-rating-row className="flex flex-wrap items-start gap-4 sm:gap-6 mt-4">
-              <RatingBadge
-                score={goodreadsRating?.rating ?? null}
-                source="goodreads"
-                ratingCount={goodreadsRating?.ratingCount}
-              />
-              {amazonRating?.rating != null && (
+              {book.goodreadsId ? (
+                <a
+                  href={`https://www.goodreads.com/book/show/${book.goodreadsId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group"
+                >
+                  <RatingBadge
+                    score={goodreadsRating?.rating ?? null}
+                    source="goodreads"
+                    ratingCount={goodreadsRating?.ratingCount}
+                    external
+                  />
+                </a>
+              ) : (
                 <RatingBadge
-                  score={amazonRating.rating}
-                  source="amazon"
-                  ratingCount={amazonRating.ratingCount}
+                  score={goodreadsRating?.rating ?? null}
+                  source="goodreads"
+                  ratingCount={goodreadsRating?.ratingCount}
                 />
+              )}
+              {amazonRating?.rating != null && (
+                <a
+                  href={book.amazonAsin
+                    ? `https://www.amazon.com/dp/${book.amazonAsin}${amazonTag ? `?tag=${amazonTag}` : ""}`
+                    : `https://www.amazon.com/s?k=${searchTerms}${amazonTag ? `&tag=${amazonTag}` : ""}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group"
+                >
+                  <RatingBadge
+                    score={amazonRating.rating}
+                    source="amazon"
+                    ratingCount={amazonRating.ratingCount}
+                    external
+                  />
+                </a>
               )}
               {(romanceIoRating?.rating != null || romanceIoSpice) && (
                 <a
@@ -416,6 +442,18 @@ export default async function BookPage({ params }: PageProps) {
                 </a>
               )}
             </div>
+
+            {/* Source links */}
+            {book.goodreadsId && (
+              <a
+                href={`https://www.goodreads.com/book/show/${book.goodreadsId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs font-mono text-muted/60 hover:text-fire transition-colors mt-3"
+              >
+                See reviews on Goodreads {"\u2197"}
+              </a>
+            )}
 
             {/* Add to Hotlist — desktop only */}
             <div className="hidden sm:block mt-4">
@@ -587,9 +625,21 @@ export default async function BookPage({ params }: PageProps) {
                   </span>
                 </div>
               ) : hasDescription ? (
-                <p className="font-body text-ink/80 text-sm leading-relaxed">
-                  {book.description}
-                </p>
+                <div>
+                  <p className="font-body text-ink/80 text-sm leading-relaxed">
+                    {book.description}
+                  </p>
+                  {book.goodreadsId && (
+                    <a
+                      href={`https://www.goodreads.com/book/show/${book.goodreadsId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-block mt-2 text-xs font-mono text-muted/60 hover:text-fire transition-colors"
+                    >
+                      Description from Goodreads {"\u2197"}
+                    </a>
+                  )}
+                </div>
               ) : (
                 <p className="font-body text-muted/70 text-sm italic">
                   No synopsis available yet.

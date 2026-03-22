@@ -18,6 +18,7 @@ import {
 import { scrapeGoodreadsRating } from "@/lib/scraping/goodreads";
 import { getAmazonRatingViaSerper } from "@/lib/scraping/amazon-search";
 import { getRomanceIoSpice } from "@/lib/scraping/romance-io-search";
+import { classifyRomanceIoTags } from "@/lib/scraping/romance-io-tags";
 import { enrichBookMetadata } from "@/lib/books/metadata-enrichment";
 import { generateSynopsis } from "@/lib/books/ai-synopsis";
 import { getGoodreadsBookById, resolveToGoodreadsId, generateBookSlug } from "@/lib/books/goodreads-search";
@@ -327,6 +328,31 @@ async function processJob(job: QueuedJob): Promise<void> {
           romance_io_slug: spiceData.romanceIoSlug,
           romance_io_heat_label: spiceData.heatLabel,
         }).eq("id", book_id);
+
+        // Store romance.io tags as tropes (if any)
+        if (spiceData.rawTags && spiceData.rawTags.length > 0) {
+          const classified = classifyRomanceIoTags(spiceData.rawTags);
+          if (classified.tropes.length > 0) {
+            // Look up canonical trope IDs
+            const { data: tropeRows } = await supabase
+              .from("tropes")
+              .select("id, slug")
+              .in("slug", classified.tropes.map((t) => t.canonicalSlug));
+
+            if (tropeRows && tropeRows.length > 0) {
+              const tropeInserts = tropeRows.map((tr) => ({
+                book_id,
+                trope_id: tr.id,
+                source: "romance_io",
+              }));
+
+              // Upsert to avoid duplicates
+              await supabase
+                .from("book_tropes")
+                .upsert(tropeInserts, { onConflict: "book_id,trope_id" });
+            }
+          }
+        }
       }
       // Always run genre bucketing as a fallback signal
       await upsertGenreBucketing(supabase, book_id);

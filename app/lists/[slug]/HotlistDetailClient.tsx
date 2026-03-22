@@ -301,15 +301,15 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
     <div className="max-w-5xl mx-auto px-4 py-8">
       {/* Non-owner banner */}
       {!isOwner && (
-        <div className="mb-6 px-4 py-3 bg-cream border border-border rounded-lg flex items-center justify-between flex-wrap gap-2">
+        <div className="mb-6 px-4 py-3 bg-fire/5 border border-fire/15 rounded-lg flex items-center justify-between flex-wrap gap-2">
           <p className="text-sm font-body text-muted">
             <strong className="text-ink">{hotlist.ownerName ?? "A reader"}&apos;s</strong> Hotlist
           </p>
           <Link
             href="/"
-            className="text-xs font-mono text-fire hover:underline"
+            className="inline-flex items-center gap-1 text-xs font-mono text-fire hover:text-fire/80 transition-colors font-semibold"
           >
-            Build your own on Hotlist &rarr;
+            Build your own Hotlist &rarr;
           </Link>
         </div>
       )}
@@ -332,18 +332,34 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
               autoFocus
             />
           ) : (
-            <h1
-              className={`font-display text-2xl font-bold text-ink ${isOwner ? "cursor-pointer hover:text-fire/80 transition-colors" : ""}`}
-              onClick={() => {
-                if (isOwner) {
-                  setEditing(true);
-                  setTimeout(() => nameInputRef.current?.focus(), 0);
-                }
-              }}
-              title={isOwner ? "Click to edit name" : undefined}
-            >
-              {name}
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1
+                className={`font-display text-2xl font-bold text-ink line-clamp-2 ${isOwner ? "cursor-pointer hover:text-fire/80 transition-colors" : ""}`}
+                onClick={() => {
+                  if (isOwner) {
+                    setEditing(true);
+                    setTimeout(() => nameInputRef.current?.focus(), 0);
+                  }
+                }}
+                title={isOwner ? "Click to edit name" : undefined}
+              >
+                {name}
+              </h1>
+              {isOwner && (
+                <button
+                  onClick={() => {
+                    setEditing(true);
+                    setTimeout(() => nameInputRef.current?.focus(), 0);
+                  }}
+                  className="shrink-0 text-muted/50 hover:text-fire transition-colors p-1"
+                  title="Edit name"
+                >
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M8.5 2.5l3 3M1.5 9.5l6-6 3 3-6 6H1.5v-3z" />
+                  </svg>
+                </button>
+              )}
+            </div>
           )}
           <p className="text-xs font-mono text-muted mt-1">
             {hotlist.sourceCreatorHandle && (

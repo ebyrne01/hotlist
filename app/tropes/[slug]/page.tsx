@@ -1,12 +1,57 @@
 export const dynamic = "force-dynamic";
 
+import type { Metadata } from "next";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { hydrateBookDetail } from "@/lib/books/cache";
+import { deduplicateBooks, isCompilationTitle } from "@/lib/books/utils";
+import { isJunkTitle } from "@/lib/books/romance-filter";
 import type { BookDetail } from "@/lib/types";
 import TropeFilterClient from "./TropeFilterClient";
 
 interface TropePageProps {
   params: { slug: string };
+}
+
+function deduplicateByTitleAuthor(books: BookDetail[]): BookDetail[] {
+  const seen = new Map<string, BookDetail>();
+  for (const book of books) {
+    const key = `${book.title.toLowerCase().trim()}::${book.author.toLowerCase().trim()}`;
+    const existing = seen.get(key);
+    if (!existing) {
+      seen.set(key, book);
+    } else {
+      const existingRatings = existing.ratings.reduce((sum, r) => sum + (r.ratingCount ?? 0), 0);
+      const bookRatings = book.ratings.reduce((sum, r) => sum + (r.ratingCount ?? 0), 0);
+      if (bookRatings > existingRatings) {
+        seen.set(key, book);
+      }
+    }
+  }
+  return Array.from(seen.values());
+}
+
+export async function generateMetadata({ params }: TropePageProps): Promise<Metadata> {
+  const supabase = getAdminClient();
+  const { data: trope } = await supabase
+    .from("tropes")
+    .select("name, description")
+    .eq("slug", params.slug)
+    .single();
+
+  if (!trope) {
+    return { title: "Trope Not Found — Hotlist" };
+  }
+
+  const title = `${trope.name} Romance Books — Hotlist`;
+  const description = trope.description
+    ? `${trope.description} Browse ${trope.name} books with spice levels, ratings, and trope tags.`
+    : `Browse ${trope.name} romance and romantasy books. Compare spice levels, ratings, and tropes on Hotlist.`;
+
+  return {
+    title,
+    description,
+    openGraph: { title, description, type: "website" },
+  };
 }
 
 export default async function TropePage({ params }: TropePageProps) {
@@ -97,17 +142,40 @@ export default async function TropePage({ params }: TropePageProps) {
     .sort((a, b) => b.count - a.count)
     .slice(0, 15);
 
+  // Deduplicate and filter junk
+  const dedupedBooks = deduplicateBooks(books);
+  const cleanBooks = deduplicateByTitleAuthor(dedupedBooks).filter((book) => {
+    if (isJunkTitle(book.title)) return false;
+    if (isCompilationTitle(book.title)) return false;
+    if (/\[.*\]/.test(book.title) && book.title.includes("Author:")) return false;
+    if (book.title.length > 100) return false;
+    return true;
+  });
+
   // Shape initial books for client
-  const initialBooks = books.map((b) => ({
-    id: b.id,
-    title: b.title,
-    author: b.author,
-    slug: b.slug,
-    coverUrl: b.coverUrl,
-    goodreadsRating: b.ratings.find((r) => r.source === "goodreads")?.rating ?? null,
-    spiceLevel: b.compositeSpice?.score ? Math.round(b.compositeSpice.score) : null,
-    tropes: b.tropes.map((t) => t.name),
-  }));
+  const initialBooks = cleanBooks.map((b) => {
+    // Sanitize bad cover URLs so the fallback renders cleanly
+    let coverUrl = b.coverUrl;
+    if (
+      coverUrl &&
+      (coverUrl.includes("nophoto") ||
+        coverUrl.includes("no-cover") ||
+        coverUrl.includes("placeholder"))
+    ) {
+      coverUrl = null;
+    }
+
+    return {
+      id: b.id,
+      title: b.title,
+      author: b.author,
+      slug: b.slug,
+      coverUrl,
+      goodreadsRating: b.ratings.find((r) => r.source === "goodreads")?.rating ?? null,
+      spiceLevel: b.compositeSpice?.score ? Math.round(b.compositeSpice.score) : null,
+      tropes: b.tropes.map((t) => t.name),
+    };
+  });
 
   return (
     <TropeFilterClient
@@ -118,7 +186,7 @@ export default async function TropePage({ params }: TropePageProps) {
       }}
       relatedTropes={relatedTropes}
       initialBooks={initialBooks}
-      initialBookCount={totalBookCount ?? books.length}
+      initialBookCount={cleanBooks.length}
     />
   );
 }

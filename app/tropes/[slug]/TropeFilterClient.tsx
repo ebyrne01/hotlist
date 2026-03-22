@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import Link from "next/link";
-import Image from "next/image";
+import { useSearchParams } from "next/navigation";
+import BookCover from "@/components/ui/BookCover";
 import { PepperRow } from "@/components/ui/PepperIcon";
 
 interface ShapedBook {
@@ -29,16 +30,21 @@ interface Props {
   initialBookCount: number;
 }
 
+const PAGE_SIZE = 18;
+
 export default function TropeFilterClient({
   primaryTrope,
   relatedTropes,
   initialBooks,
   initialBookCount,
 }: Props) {
+  const searchParams = useSearchParams();
   const [selectedSlugs, setSelectedSlugs] = useState<string[]>([primaryTrope.slug]);
   const [books, setBooks] = useState<ShapedBook[]>(initialBooks);
   const [bookCount, setBookCount] = useState(initialBookCount);
   const [loading, setLoading] = useState(false);
+  const [sortBy, setSortBy] = useState<string>("rating");
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   const fetchBooks = useCallback(async (slugs: string[]) => {
     setLoading(true);
@@ -54,24 +60,51 @@ export default function TropeFilterClient({
     }
   }, []);
 
-  function handleToggle(slug: string) {
-    let next: string[];
-
-    if (slug === primaryTrope.slug) {
-      // Can't deselect the primary trope
-      return;
+  // Restore filter state from URL on mount
+  useEffect(() => {
+    const also = searchParams.get("also");
+    if (also) {
+      const additionalSlugs = also.split(",").filter(Boolean);
+      const validSlugs = additionalSlugs.filter((s) =>
+        relatedTropes.some((t) => t.slug === s)
+      );
+      if (validSlugs.length > 0) {
+        const allSlugs = [primaryTrope.slug, ...validSlugs];
+        setSelectedSlugs(allSlugs);
+        fetchBooks(allSlugs);
+      }
     }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  function handleToggle(slug: string) {
+    if (slug === primaryTrope.slug) return;
+
+    let next: string[];
     if (selectedSlugs.includes(slug)) {
-      // Deselect
       next = selectedSlugs.filter((s) => s !== slug);
     } else {
-      // Select
       next = [...selectedSlugs, slug];
     }
 
+    // Push filter state to URL
+    const additionalSlugs = next.filter((s) => s !== primaryTrope.slug);
+    const params = new URLSearchParams(window.location.search);
+    if (additionalSlugs.length > 0) {
+      params.set("also", additionalSlugs.join(","));
+    } else {
+      params.delete("also");
+    }
+    const newUrl = `${window.location.pathname}${params.toString() ? "?" + params.toString() : ""}`;
+    window.history.replaceState({}, "", newUrl);
+
     setSelectedSlugs(next);
+    setVisibleCount(PAGE_SIZE);
     fetchBooks(next);
+  }
+
+  function handleSortChange(value: string) {
+    setSortBy(value);
+    setVisibleCount(PAGE_SIZE);
   }
 
   const selectedNames = new Set(
@@ -80,8 +113,36 @@ export default function TropeFilterClient({
       .map((t) => t.name)
   );
 
+  // Sort books client-side
+  const sortedBooks = useMemo(() => {
+    return [...books].sort((a, b) => {
+      switch (sortBy) {
+        case "rating":
+          return (b.goodreadsRating ?? 0) - (a.goodreadsRating ?? 0);
+        case "spice":
+          return (b.spiceLevel ?? 0) - (a.spiceLevel ?? 0);
+        case "title":
+          return a.title.localeCompare(b.title);
+        default:
+          return 0;
+      }
+    });
+  }, [books, sortBy]);
+
+  const visibleBooks = sortedBooks.slice(0, visibleCount);
+
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
+      {/* Breadcrumb */}
+      <nav className="mb-3 text-xs font-mono text-muted" aria-label="Breadcrumb">
+        <Link
+          href="/#tropes"
+          className="hover:text-fire transition-colors"
+        >
+          &larr; All Tropes
+        </Link>
+      </nav>
+
       <header className="mb-6">
         <h1 className="font-display text-3xl sm:text-4xl font-bold text-ink italic">
           {primaryTrope.name}
@@ -91,12 +152,6 @@ export default function TropeFilterClient({
             {primaryTrope.description}
           </p>
         )}
-        <p className="mt-1 text-xs font-mono text-muted/60">
-          {bookCount} book{bookCount !== 1 ? "s" : ""} matching
-          {selectedSlugs.length > 1 && (
-            <span> all {selectedSlugs.length} tropes</span>
-          )}
-        </p>
       </header>
 
       {/* Multi-select trope pills */}
@@ -156,62 +211,94 @@ export default function TropeFilterClient({
           </p>
         </div>
       ) : !loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {books.map((book) => (
-            <Link
-              key={book.id}
-              href={`/book/${book.slug}`}
-              className="flex gap-3 p-3 bg-white border border-border rounded-lg hover:border-muted/40 transition-colors"
-            >
-              {book.coverUrl ? (
-                <Image
-                  src={book.coverUrl}
-                  alt={book.title}
-                  width={56}
-                  height={84}
-                  className="rounded-md object-cover shrink-0"
-                />
-              ) : (
-                <div className="w-14 h-[84px] rounded-md bg-cream shrink-0 flex items-center justify-center">
-                  <span className="text-[9px] text-muted italic text-center px-1">
-                    {book.title}
-                  </span>
-                </div>
+        <>
+          {/* Sort + count bar */}
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-xs font-mono text-muted/60">
+              {bookCount} book{bookCount !== 1 ? "s" : ""}
+              {selectedSlugs.length > 1 && (
+                <span> matching all {selectedSlugs.length} tropes</span>
               )}
-              <div className="min-w-0 flex-1">
-                <h3 className="font-display text-sm font-bold text-ink leading-tight truncate">
-                  {book.title}
-                </h3>
-                <p className="text-xs font-body text-muted mt-0.5">{book.author}</p>
-                <div className="flex items-center gap-2 mt-1.5">
-                  {book.goodreadsRating && (
-                    <span className="text-xs font-mono text-muted">
-                      {book.goodreadsRating.toFixed(1)} GR
-                    </span>
-                  )}
-                  {book.spiceLevel && book.spiceLevel > 0 && (
-                    <PepperRow level={book.spiceLevel} size={12} />
+            </p>
+            <div className="flex items-center gap-2">
+              <label htmlFor="sort-select" className="text-xs font-mono text-muted">
+                Sort by
+              </label>
+              <select
+                id="sort-select"
+                value={sortBy}
+                onChange={(e) => handleSortChange(e.target.value)}
+                className="text-xs font-mono border border-border rounded-lg px-2 py-1.5 bg-white text-ink focus:ring-2 focus:ring-fire/30 focus:border-fire/40 focus:outline-none"
+              >
+                <option value="rating">Highest Rated</option>
+                <option value="spice">Most Spicy</option>
+                <option value="title">Title A&ndash;Z</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {visibleBooks.map((book) => (
+              <Link
+                key={book.id}
+                href={`/book/${book.slug}`}
+                className="flex gap-3 p-3 bg-white border border-border rounded-lg hover:border-muted/40 transition-colors"
+              >
+                <div className="w-14 h-[84px] shrink-0 overflow-hidden">
+                  <BookCover
+                    title={book.title}
+                    coverUrl={book.coverUrl}
+                    size="sm"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-display text-sm font-bold text-ink leading-tight truncate">
+                    {book.title}
+                  </h3>
+                  <p className="text-xs font-body text-muted mt-0.5">{book.author}</p>
+                  <div className="flex items-center gap-2 mt-1.5">
+                    {book.goodreadsRating && (
+                      <span className="text-xs font-mono text-muted">
+                        {book.goodreadsRating.toFixed(1)} GR
+                      </span>
+                    )}
+                    {book.spiceLevel && book.spiceLevel > 0 && (
+                      <PepperRow level={book.spiceLevel} size={12} />
+                    )}
+                  </div>
+                  {/* Show which selected tropes this book has */}
+                  {selectedSlugs.length > 1 && (
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {book.tropes
+                        .filter((t) => selectedNames.has(t))
+                        .map((t) => (
+                          <span
+                            key={t}
+                            className="text-[10px] font-mono text-[#6B5A2E] bg-[#F5EFE0] px-1.5 py-0.5 rounded"
+                          >
+                            {t}
+                          </span>
+                        ))}
+                    </div>
                   )}
                 </div>
-                {/* Show which selected tropes this book has */}
-                {selectedSlugs.length > 1 && (
-                  <div className="flex flex-wrap gap-1 mt-1.5">
-                    {book.tropes
-                      .filter((t) => selectedNames.has(t))
-                      .map((t) => (
-                        <span
-                          key={t}
-                          className="text-[10px] font-mono text-[#6B5A2E] bg-[#F5EFE0] px-1.5 py-0.5 rounded"
-                        >
-                          {t}
-                        </span>
-                      ))}
-                  </div>
-                )}
-              </div>
-            </Link>
-          ))}
-        </div>
+              </Link>
+            ))}
+          </div>
+
+          {/* Show more */}
+          {visibleCount < sortedBooks.length && (
+            <div className="text-center mt-6">
+              <button
+                onClick={() => setVisibleCount((prev) => prev + PAGE_SIZE)}
+                className="px-5 py-2.5 bg-white border border-border rounded-lg text-sm font-mono text-ink hover:border-fire/30 hover:text-fire transition-colors"
+              >
+                Show more ({sortedBooks.length - visibleCount} remaining)
+              </button>
+            </div>
+          )}
+        </>
       ) : null}
     </div>
   );

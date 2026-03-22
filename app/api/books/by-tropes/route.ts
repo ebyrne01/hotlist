@@ -7,6 +7,9 @@
 
 import { getAdminClient } from "@/lib/supabase/admin";
 import { hydrateBookDetail } from "@/lib/books/cache";
+import { deduplicateBooks, isCompilationTitle } from "@/lib/books/utils";
+import { isJunkTitle } from "@/lib/books/romance-filter";
+import type { BookDetail } from "@/lib/types";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest) {
@@ -83,21 +86,42 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ books: [] });
   }
 
-  const books = await Promise.all(
+  const rawBooks: BookDetail[] = await Promise.all(
     (dbBooks as Record<string, unknown>[]).map((b) => hydrateBookDetail(supabase, b))
   );
 
+  // Deduplicate and filter junk
+  const cleanBooks = deduplicateBooks(rawBooks).filter((book) => {
+    if (isJunkTitle(book.title)) return false;
+    if (isCompilationTitle(book.title)) return false;
+    if (/\[.*\]/.test(book.title) && book.title.includes("Author:")) return false;
+    if (book.title.length > 100) return false;
+    return true;
+  });
+
   // Shape for client
-  const shaped = books.map((b) => ({
-    id: b.id,
-    title: b.title,
-    author: b.author,
-    slug: b.slug,
-    coverUrl: b.coverUrl,
-    goodreadsRating: b.ratings.find((r) => r.source === "goodreads")?.rating ?? null,
-    spiceLevel: b.compositeSpice?.score ? Math.round(b.compositeSpice.score) : null,
-    tropes: b.tropes.map((t) => t.name),
-  }));
+  const shaped = cleanBooks.map((b) => {
+    let coverUrl = b.coverUrl;
+    if (
+      coverUrl &&
+      (coverUrl.includes("nophoto") ||
+        coverUrl.includes("no-cover") ||
+        coverUrl.includes("placeholder"))
+    ) {
+      coverUrl = null;
+    }
+
+    return {
+      id: b.id,
+      title: b.title,
+      author: b.author,
+      slug: b.slug,
+      coverUrl,
+      goodreadsRating: b.ratings.find((r) => r.source === "goodreads")?.rating ?? null,
+      spiceLevel: b.compositeSpice?.score ? Math.round(b.compositeSpice.score) : null,
+      tropes: b.tropes.map((t) => t.name),
+    };
+  });
 
   return NextResponse.json({ books: shaped });
 }

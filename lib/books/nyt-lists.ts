@@ -29,6 +29,7 @@ import { saveGoodreadsBookToCache, hydrateBookDetail } from "./cache";
 import { scheduleEnrichment } from "@/lib/scraping";
 import { scheduleMetadataEnrichment } from "./metadata-enrichment";
 import { isJunkTitle, isKnownRomanceAuthor } from "./romance-filter";
+import { recordBuzzSignal } from "./buzz-signals";
 import type { BookDetail } from "@/lib/types";
 
 const CACHE_KEY = "nyt_bestseller_romance";
@@ -153,6 +154,11 @@ export async function getNYTBestsellerRomance(): Promise<BookDetail[]> {
             },
             { onConflict: "book_id,list_name" }
           );
+          await recordBuzzSignal(existing.id, "nyt_bestseller", {
+            rank: nytBook.rank,
+            list: nytBook.listName,
+            weeks: nytBook.weeks_on_list,
+          });
         }
         continue;
       }
@@ -187,7 +193,7 @@ export async function getNYTBestsellerRomance(): Promise<BookDetail[]> {
       if (saved) {
         bookIds.push(saved.id);
 
-        // Store NYT rank
+        // Store NYT rank + buzz signal
         await supabase.from("nyt_trending").upsert(
           {
             book_id: saved.id,
@@ -199,6 +205,11 @@ export async function getNYTBestsellerRomance(): Promise<BookDetail[]> {
           },
           { onConflict: "book_id,list_name" }
         );
+        await recordBuzzSignal(saved.id, "nyt_bestseller", {
+          rank: nytBook.rank,
+          list: nytBook.listName,
+          weeks: nytBook.weeks_on_list,
+        });
 
         // Background enrichment
         scheduleMetadataEnrichment(saved.id, saved.title, saved.author, saved.isbn);

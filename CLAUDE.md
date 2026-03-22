@@ -47,6 +47,7 @@ CRON_SECRET=                   # shared secret for Vercel cron job auth
 SPICE_LLM_DAILY_LIMIT=        # optional, default 100 — max LLM spice inferences per day
 AI_SYNOPSIS_DAILY_LIMIT=      # optional, default 1000 — max AI synopsis generations per day
 TROPE_INFERENCE_DAILY_LIMIT=  # optional, default 1000 — max trope inferences per day
+APIFY_API_TOKEN=              # from apify.com — Amazon product scraping for bulk enrichment
 ```
 
 ## Brand
@@ -70,7 +71,7 @@ TROPE_INFERENCE_DAILY_LIMIT=  # optional, default 1000 — max trope inferences 
 | **Open Library** | Metadata fallback | ISBN, page count, publisher (if Google Books misses) |
 | **NYT Books API** | Discovery only | "What's Hot" row. Every NYT title resolved to Goodreads ID before storing. |
 | **Amazon** | Affiliate links + rating | ASIN for buy links, ratings via Serper Google search. ASIN extraction is independent of rating — worker saves ASINs even when Amazon suppresses star ratings (~58% of books). Rating hit rate ceiling is ~42% due to Amazon blocking rating data from Google search results. |
-| **Romance.io** | Spice ratings (high confidence) | Spice level + heat label, scraped via Serper Google search |
+| **Romance.io** | Spice + tropes (high confidence) | Spice level + heat label + star rating + trope tags, scraped via Serper Google search. Two-query approach: (1) `site:romance.io "{title}" "tagged as"` anchors snippet on the tag section for spice + tags, (2) `site:romance.io "{title}" "of 5 stars"` anchors on the rating section — only fires when query 1 matched but missed the star rating. Tag classification maps romance.io tags → canonical trope slugs via `romance-io-tags.ts`. |
 
 **Book identity rule:** Books may enter the database without a Goodreads ID (from Google Books, BookTok, imports). The enrichment queue attempts to resolve them to Goodreads. Books with a Goodreads ID get richer data (genres, series, description).
 
@@ -128,6 +129,7 @@ All tables in the public schema:
 | `creator_handles` | Auto-populated from video grabs. Tracks every BookTok creator. Unique on (handle, platform). |
 | `creator_book_mentions` | Junction: creators ↔ books. Denormalized from video_grabs for fast queries. Includes sentiment + quote. |
 | `user_follows` | Readers follow creator handles. RLS: users manage own follows. |
+| `book_buzz_signals` | Buzz events from discovery channels (reddit_mention, amazon_bestseller, booktok_grab, nyt_bestseller). One per book per source per day. Powers "What's Hot" ranking via time-decayed composite scoring. |
 | `cron_logs` | Cron job execution logs |
 | `pro_waitlist` | Email capture for future Pro tier |
 
@@ -161,6 +163,11 @@ All tables in the public schema:
   romance-filter.ts           — romance genre guard + junk title filter
   ai-synopsis.ts              — Claude-generated synopses (daily cap via AI_SYNOPSIS_DAILY_LIMIT)
   author-crawl.ts             — Crawl author's full bibliography (romance genre guard filters non-romance)
+  buzz-signals.ts             — Record buzz events (reddit, amazon, booktok, nyt) to book_buzz_signals table
+  buzz-score.ts               — Composite buzz scoring: time-decayed weighted signals, used by "What's Hot"
+  reddit-discovery.ts         — Reddit romance community discovery via Serper + Haiku
+  amazon-bestseller-discovery.ts — Amazon bestseller discovery via Serper
+  spice-gap-monitor.ts        — Monthly audit of spice coverage gaps
 
 /lib/creators/                — Creator discovery system
   register.ts                 — Upsert creator handle + book mentions after each grab
@@ -172,7 +179,8 @@ All tables in the public schema:
 /lib/scraping/                — Per-site scrapers
   goodreads.ts                — Goodreads rating scraper
   amazon-search.ts            — Amazon ratings + ASINs via Serper (3-strategy fallback, returns ASINs even without ratings)
-  romance-io-search.ts        — Romance.io spice+rating via Serper (structured fields + snippet parsing, searches books/series/author pages)
+  romance-io-search.ts        — Romance.io spice+rating+tags via Serper (query: `site:romance.io "{title}" "tagged as"`, fallback to `romance.io rating "{title}" "{author}"`)
+  romance-io-tags.ts          — Tag classification: maps romance.io tags → canonical trope slugs, categorizes genres/CWs/character/relationship tags
   amazon.ts                   — DEPRECATED: direct Amazon scraping (returns 503)
 
 /lib/hotlists.ts              — Hotlist CRUD operations (getUserHotlists, getHotlistWithBooks)
@@ -302,15 +310,121 @@ Book data flows through two independent systems:
 
 | Path | Schedule | Purpose |
 |------|----------|---------|
-| `/api/cron/enrichment-worker` | Every 5 min | Process pending enrichment queue jobs |
+| `/api/cron/enrichment-worker` | Every 2 min | Process pending enrichment queue jobs |
 | `/api/cron/spice-backfill` | Every 6 hours | LLM inference + review classifier backfill |
 | `/api/cron/refresh-spice` | Daily 4 AM UTC | Re-aggregate community signals, queue stale romance_io re-scrapes, recompute genre bucketing |
+| `/api/cron/new-releases-discovery` | Daily 5 AM UTC | Google Books new romance releases |
+| `/api/cron/seed-lists` | Daily 6 AM UTC | Seed/refresh curated book lists |
+| `/api/cron/amazon-bestsellers` | Daily 7 AM UTC | Discover Amazon romance bestsellers via Serper |
+| `/api/cron/openlibrary-discovery` | Daily 4 AM UTC | Discover new books via Open Library |
+| `/api/cron/reddit-discovery` | Fridays 6 AM UTC | Reddit romance community buzz (Serper + Haiku title extraction) |
+| `/api/cron/author-expansion` | Mondays 3 AM UTC | Crawl bibliographies for known authors |
 | `/api/cron/weekly-refresh` | Tuesdays 10 AM UTC | Refresh stale book data |
 | `/api/cron/monthly-enrichment` | 1st of month 2 AM UTC | Bulk enrichment pass |
-| `/api/cron/seed-lists` | Sundays 6 AM UTC | Seed/refresh curated book lists |
-| `/api/cron/openlibrary-discovery` | Wednesdays 4 AM UTC | Discover new books via Open Library |
+| `/api/cron/spice-gap-monitor` | 1st of month 3 AM UTC | Audit spice coverage gaps, re-queue missing signals |
 
 All cron endpoints require `Authorization: Bearer $CRON_SECRET`.
+
+## Database Strategy
+
+### Philosophy
+Hotlist acquires books through **multiple automated discovery channels** that run daily/weekly, then enriches every book through a **unified async enrichment queue**. No single source is critical — if one breaks, the others keep the catalog growing. All discovery runs through Vercel crons with cost controls.
+
+### Discovery channels (how books enter the DB)
+
+| Channel | Frequency | Source | How it works | Est. cost |
+|---------|-----------|--------|-------------|-----------|
+| **BookTok grabs** | On-demand | User-submitted videos | Two-phase Haiku+Sonnet pipeline extracts books from video | ~$0.03/grab |
+| **Amazon bestsellers** | Daily | Serper → Amazon | Scrapes Amazon romance bestseller lists via Serper, resolves to Goodreads | ~$0.01/run |
+| **New releases** | Daily | Google Books API | Queries Google Books for recent romance/romantasy releases | Free |
+| **Open Library** | Daily | Open Library API | Discovers new romance books from Open Library subjects | Free |
+| **Author expansion** | Weekly | Goodreads scraping | Crawls full bibliographies of authors already in DB, romance-gated | Free (scraping) |
+| **Seed lists** | Daily | Curated | Refreshes editorial/curated book lists | Minimal |
+| **Reddit buzz** | Weekly (Fri) | Serper + Haiku | Scans r/RomanceBooks, r/Romantasy, r/romancelandia, r/Fantasy for book mentions. Haiku extracts titles from snippets. | ~$0.05/run |
+
+### Enrichment pipeline (how books get data)
+
+Every discovered book enters the `enrichment_queue`. The enrichment worker (every 2 min) processes jobs in priority order:
+
+- **Tier 1** (ratings + spice): goodreads_rating, amazon_rating, romance_io_spice, llm_spice
+- **Tier 2** (metadata): goodreads_detail, metadata (Google Books + Open Library), trope_inference, review_classifier
+- **Tier 3** (AI-generated): ai_synopsis, author_crawl
+
+Each job retries up to 3× with exponential backoff. Books progress through `enrichment_status`: pending → partial → complete.
+
+### Spice quality assurance
+
+The **spice gap monitor** (monthly) audits spice coverage:
+1. Books with zero spice signals → re-queues romance_io + llm_spice
+2. Top 500 books missing romance.io → re-queues romance_io_spice
+3. Hierarchy violations (romance.io vs LLM disagreement >2.0) → logged
+4. Books stuck at genre-bucketing only → re-queues for upgrade
+
+### Amazon enrichment (bulk, ad-hoc)
+
+For bulk ASIN lookups beyond what the daily enrichment worker handles, use the Apify `junglee~free-amazon-product-scraper` actor via scripts in `/scripts/amazon-enrichment/`. This is run manually when needed (e.g., after a large book import). The enrichment worker handles ongoing Amazon rating lookups via Serper.
+
+### Serper query patterns
+
+| Target | Query format | Notes |
+|--------|-------------|-------|
+| Amazon rating | `site:amazon.com "{title}" "{author}"` | 3-strategy fallback in `amazon-search.ts` |
+| Romance.io spice+tags | `site:romance.io "{title}" "tagged as"` | Anchors on tag section for spice + tags |
+| Romance.io rating | `site:romance.io "{title}" "of 5 stars"` | Follow-up query, only when first query missed the star rating |
+| Goodreads genres | `site:goodreads.com "{title}" {author} "genres"` | Best coverage (7.5 avg shelves/book) |
+| Reddit mentions | `site:reddit.com/r/RomanceBooks ...` | 9 queries across 4 subreddits |
+
+### Key decisions
+- **No Goodreads Apify actor needed** — Serper + direct scraping covers our needs at lower cost
+- **Kindle Unlimited status paused** — no reliable detection method found (Amazon puts KU promo text on ALL pages, Apify free actor returns null prices for all Kindle editions)
+- **`discovery_source` column** tracks how each book entered the DB (e.g., `reddit_mention`, `amazon_bestseller`, `booktok_grab`, `author_crawl`)
+- **Cost target**: <$5/month total for all automated discovery + enrichment
+
+## Buzz Scoring System
+
+Books are ranked for the "What's Hot" carousel using a composite buzz score computed from multiple discovery signals. The system is analogous to composite spice — multiple weighted sources, time-decayed.
+
+### How it works
+
+1. **Signal recording**: Every discovery channel records a `book_buzz_signals` row when it encounters a book (even if already in DB). One signal per book per source per day.
+2. **Scoring**: `getTopBuzzBooks()` in `/lib/books/buzz-score.ts` computes a time-decayed weighted score across all signals from the last 30 days.
+3. **"What's Hot" integration**: `getWhatsHot()` in `app/page.tsx` pulls top buzz books as candidates alongside NYT bestsellers. Final sort uses buzz score as the primary factor, with enrichment quality as tiebreaker.
+
+### Signal weights and decay
+
+| Source | Weight | Where recorded |
+|--------|--------|----------------|
+| `nyt_bestseller` | 5.0 | `nyt-lists.ts` — on every NYT bestseller fetch |
+| `booktok_grab` | 3.0 | `creators/register.ts` — on every BookTok grab |
+| `amazon_bestseller` | 2.0 | `amazon-bestseller-discovery.ts` — daily bestseller scan |
+| `reddit_mention` | 1.5 | `reddit-discovery.ts` — weekly Reddit scan |
+
+- **Time decay**: Half-life of 7 days (signal loses 50% value every 7 days)
+- **Diversity bonus**: Books with signals from 2+ different sources get a 1.5x multiplier
+- **Lookback**: 30 days
+
+### Files
+- `/lib/books/buzz-signals.ts` — `recordBuzzSignal()`, `recordBuzzSignalsBatch()` — write helpers
+- `/lib/books/buzz-score.ts` — `getTopBuzzBooks()`, `getBuzzScoresForBooks()` — scoring engine
+
+## Source Attribution Standard
+
+**Rule**: If we show a number, score, or data point from an external source, the user must be able to reach the source page for that book in one click. We are a layer on top of these sources, not a replacement.
+
+| Source | Data type | Links to |
+|--------|----------|----------|
+| **Goodreads** | Rating, review count, description | `goodreads.com/book/show/{goodreadsId}` |
+| **Romance.io** | Rating, spice level, tropes | `romance.io/books/{romanceIoSlug}` or search fallback |
+| **Amazon** | Rating | `amazon.com/dp/{asin}?tag={affiliateTag}` or search fallback |
+| **Hotlist community** | Spice rating, star rating | No external link (our own data) |
+| **AI inference** | Synopsis, estimated spice | No external link, labeled "AI-generated" |
+
+**Visual treatment**: Small `↗` arrow on external-linked ratings. Consistent `hover:text-fire` on all source links. `RatingBadge` has an `external` prop that shows a small ExternalLink icon.
+
+**Surfaces implemented**:
+- Book detail page: All RatingBadges are clickable links. "See reviews on Goodreads ↗" below ratings. Goodreads description fallback shows "Description from Goodreads ↗".
+- Hotlist comparison table (desktop + mobile): All rating columns (GR, AMZ, RIO) are clickable links with ↗ arrows. Spice peppers link to romance.io when `primarySource === "romance_io"`.
+- SpiceSection on book detail: Already linked via SpiceAttribution.
 
 ## Coding style
 - TypeScript everywhere

@@ -420,8 +420,9 @@ export async function hydrateBookDetail(
     const rating = r.rating ? parseFloat(r.rating as string) : null;
     const ratingCount = r.rating_count as number | null;
 
-    // Suppress Amazon ratings with too few reviews — show as "—" instead
-    if (source === "amazon" && (ratingCount == null || ratingCount < MIN_AMAZON_RATING_COUNT)) {
+    // Suppress Amazon ratings only when count exists but is suspiciously low
+    // (likely a wrong-edition match). Null count = Serper just didn't find it — show the rating.
+    if (source === "amazon" && ratingCount != null && ratingCount < MIN_AMAZON_RATING_COUNT) {
       return { source, rating: null, ratingCount };
     }
 

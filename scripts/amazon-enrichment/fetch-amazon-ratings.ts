@@ -352,11 +352,31 @@ async function main() {
     return JSON.parse(readFileSync(path, "utf-8"));
   };
 
-  let booksWithAsin = loadFile("books-with-asin.json");
-  let booksWithIsbn = loadFile("books-with-isbn.json");
-  let booksTitleOnly = loadFile("books-title-only.json");
+  // ASIN-only mode: load from priority-asin-targets.json if available,
+  // otherwise fall back to books-with-asin.json
+  const ASIN_ONLY = process.argv.includes("--asin-only");
+  const priorityPath = join(OUT_DIR, "priority-asin-targets.json");
+  let booksWithAsin: BookInput[];
+  if (ASIN_ONLY && existsSync(priorityPath)) {
+    // priority-asin-targets.json has slightly different field names — normalize
+    const raw = JSON.parse(readFileSync(priorityPath, "utf-8"));
+    booksWithAsin = raw
+      .filter((b: { asin?: string }) => b.asin)
+      .map((b: { book_id: string; title: string; author: string; asin: string; isbn13?: string }) => ({
+        id: b.book_id,
+        title: b.title,
+        author: b.author,
+        amazon_asin: b.asin,
+        isbn: null,
+      }));
+  } else {
+    booksWithAsin = loadFile("books-with-asin.json");
+  }
+  let booksWithIsbn: BookInput[] = ASIN_ONLY ? [] : loadFile("books-with-isbn.json");
+  let booksTitleOnly: BookInput[] = [];
 
   console.log(`Loaded: ${booksWithAsin.length} ASIN, ${booksWithIsbn.length} ISBN, ${booksTitleOnly.length} title-only`);
+  if (ASIN_ONLY) console.log(`(ASIN-only mode — ISBN and title lookups disabled)`);
 
   // In test mode, take a sample from each category
   if (TEST_MODE) {
@@ -364,6 +384,23 @@ async function main() {
     booksWithIsbn = booksWithIsbn.slice(0, 20);
     booksTitleOnly = booksTitleOnly.slice(0, 20);
     console.log(`Test sample: ${booksWithAsin.length} ASIN, ${booksWithIsbn.length} ISBN, ${booksTitleOnly.length} title-only`);
+  }
+
+  // Deduplicate: remove books that already have Amazon ratings in DB
+  if (ASIN_ONLY) {
+    const { createClient } = await import("@supabase/supabase-js");
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+    const { data: existingRatings } = await supabase
+      .from("book_ratings")
+      .select("book_id")
+      .eq("source", "amazon");
+    const alreadyRated = new Set((existingRatings ?? []).map((r) => r.book_id));
+    const before = booksWithAsin.length;
+    booksWithAsin = booksWithAsin.filter((b) => !alreadyRated.has(b.id));
+    console.log(`Deduplication: ${before} → ${booksWithAsin.length} (removed ${before - booksWithAsin.length} already-rated books)`);
   }
 
   const allResults: AmazonResult[] = [];

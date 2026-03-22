@@ -17,6 +17,12 @@
     },
     "app/api/cron/amazon-bestsellers/route.ts": {
       "maxDuration": 300
+    },
+    "app/api/cron/reddit-discovery/route.ts": {
+      "maxDuration": 300
+    },
+    "app/api/cron/spice-gap-monitor/route.ts": {
+      "maxDuration": 300
     }
   },
   "crons": [
@@ -59,6 +65,14 @@
     {
       "path": "/api/cron/amazon-bestsellers",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/reddit-discovery",
+      "schedule": "0 6 * * 5"
+    },
+    {
+      "path": "/api/cron/spice-gap-monitor",
+      "schedule": "0 3 1 * *"
     }
   ]
 }

@@ -17,6 +17,7 @@ import { saveGoodreadsBookToCache } from "./cache";
 import { scheduleEnrichment } from "@/lib/scraping";
 import { scheduleMetadataEnrichment } from "./metadata-enrichment";
 import { isJunkTitle, isRomanceByGenres } from "./romance-filter";
+import { recordBuzzSignalsBatch } from "./buzz-signals";
 
 const GOODREADS_DELAY_MS = 1500;
 
@@ -235,9 +236,9 @@ export async function discoverAmazonBestsellers(
     `[amazon-bestsellers] ${unique.length} unique titles extracted from ${progress.queriesRun} queries`
   );
 
-  // Step 2: Check which titles are already in our database
-  // We do a fuzzy check — exact title+author match
-  const existingBooks = new Set<string>();
+  // Step 2: Check which titles are already in our database — record buzz for existing books
+  const existingKeys = new Set<string>();
+  const existingBuzzIds: string[] = [];
   for (const book of unique) {
     const { data } = await supabase
       .from("books")
@@ -245,17 +246,28 @@ export async function discoverAmazonBestsellers(
       .ilike("title", book.title)
       .limit(1);
     if (data && data.length > 0) {
-      existingBooks.add(`${book.title.toLowerCase()}::${book.author.toLowerCase()}`);
+      existingKeys.add(`${book.title.toLowerCase()}::${book.author.toLowerCase()}`);
+      existingBuzzIds.push(data[0].id);
     }
+  }
+
+  // Record buzz signals for books already in our DB
+  if (existingBuzzIds.length > 0) {
+    await recordBuzzSignalsBatch(
+      existingBuzzIds.map((id) => ({ bookId: id, source: "amazon_bestseller" as const }))
+    );
+    onProgress?.(
+      `[amazon-bestsellers] Recorded buzz signals for ${existingBuzzIds.length} existing books`
+    );
   }
 
   const toResolve = unique.filter(
     (b) =>
-      !existingBooks.has(`${b.title.toLowerCase()}::${b.author.toLowerCase()}`)
+      !existingKeys.has(`${b.title.toLowerCase()}::${b.author.toLowerCase()}`)
   );
 
   onProgress?.(
-    `[amazon-bestsellers] ${toResolve.length} new titles to resolve (${existingBooks.size} already in DB)`
+    `[amazon-bestsellers] ${toResolve.length} new titles to resolve (${existingKeys.size} already in DB)`
   );
 
   // Step 3: Resolve each new title via Goodreads search
@@ -312,6 +324,9 @@ export async function discoverAmazonBestsellers(
       });
 
       if (saved) {
+        await recordBuzzSignalsBatch([
+          { bookId: saved.id, source: "amazon_bestseller" },
+        ]);
         progress.added++;
         scheduleMetadataEnrichment(saved.id, saved.title, saved.author, saved.isbn);
         scheduleEnrichment(saved.id, saved.title, saved.author, saved.isbn);

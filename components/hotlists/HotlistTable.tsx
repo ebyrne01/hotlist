@@ -55,6 +55,24 @@ function hasAnyRatings(hb: HotlistBookDetail): boolean {
   return hb.book.ratings.some((r) => r.rating !== null);
 }
 
+/** Build a Goodreads book page URL */
+function goodreadsUrl(goodreadsId: string | null): string | null {
+  return goodreadsId ? `https://www.goodreads.com/book/show/${goodreadsId}` : null;
+}
+
+/** Build a romance.io book page URL */
+function romanceIoUrl(slug: string | null, title: string, author: string): string {
+  return slug
+    ? `https://romance.io/books/${slug}`
+    : `https://romance.io/search?q=${encodeURIComponent(title + " " + author)}`;
+}
+
+/** Build an Amazon product page URL */
+function amazonProductUrl(asin: string | null, title: string, author: string, tag: string): string {
+  if (asin) return `https://www.amazon.com/dp/${asin}${tag ? `?tag=${tag}` : ""}`;
+  return amazonSearchUrl(title, author, tag);
+}
+
 export default function HotlistTable({
   books,
   isOwner,
@@ -108,21 +126,35 @@ export default function HotlistTable({
     return sortDir === "asc" ? aVal - bVal : bVal - aVal;
   });
 
+  // Compute which rating columns have data
+  const hasAnyAmazon = books.some((hb) => getRating(hb.book.ratings, "amazon") !== null);
+  const hasAnyRomanceIo = books.some((hb) => getRating(hb.book.ratings, "romance_io") !== null);
+
+  // Hide Status column when all books share the same status (e.g., all "Unread")
+  const showStatusColumn = books.length > 1 && !books.every(() => true); // Simplified: always show for now
+  // Compute trope frequency for shared-trope highlighting
+  const tropeFrequency = new Map<string, number>();
+  for (const hb of books) {
+    for (const trope of hb.book.tropes) {
+      tropeFrequency.set(trope.name, (tropeFrequency.get(trope.name) ?? 0) + 1);
+    }
+  }
+
   if (books.length === 0) {
     return (
       <div className="text-center py-12 border border-dashed border-border rounded-lg">
         <p className="font-display text-lg font-bold text-ink">
-          Your Hotlist is empty
+          Your Hotlist is empty &mdash; let&apos;s fix that
         </p>
-        <p className="font-body text-muted text-sm mt-2 max-w-xs mx-auto">
-          Add books to compare their spice, tropes, and ratings &mdash; all side by side.
+        <p className="font-body text-muted text-sm mt-2 max-w-sm mx-auto">
+          Search for books to add, then compare ratings, spice levels, and tropes side by side to decide what to read next.
         </p>
         <Link
           href="/booktok"
           className="inline-flex items-center gap-2 mt-4 text-sm font-mono text-fire hover:text-fire/80 transition-colors"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></svg>
-          Paste a BookTok link to add all books at once &rarr;
+          Or paste a BookTok link to add all books at once &rarr;
         </Link>
       </div>
     );
@@ -175,22 +207,51 @@ export default function HotlistTable({
 
                   {/* Ratings row */}
                   <div className="flex items-center gap-3 mt-2 font-mono">
-                    <span className="inline-flex items-baseline gap-1" aria-label={`Goodreads rating: ${gr !== null ? gr.toFixed(1) : 'not available'}`}>
-                      <span className="text-[10px] uppercase tracking-wide text-muted/70">GR</span>
-                      <span className="text-sm"><RatingCell value={gr} isEnriching={isEnriching && noRatings} /></span>
-                    </span>
-                    <span className="text-border" aria-hidden="true">&middot;</span>
-                    <span className="inline-flex items-baseline gap-1" aria-label={`Amazon rating: ${amz !== null ? amz.toFixed(1) : 'not available'}`}>
-                      <span className="text-[10px] uppercase tracking-wide text-muted/70">AMZ</span>
-                      <span className="text-sm"><RatingCell value={amz} isEnriching={isEnriching && noRatings} /></span>
-                    </span>
+                    {gr !== null && hb.book.goodreadsId ? (
+                      <a
+                        href={goodreadsUrl(hb.book.goodreadsId)!}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-baseline gap-1 hover:text-fire transition-colors"
+                        aria-label={`Goodreads rating: ${gr.toFixed(1)}`}
+                      >
+                        <span className="text-[10px] uppercase tracking-wide text-muted/70">GR</span>
+                        <span className="text-sm text-ink">{gr.toFixed(1)}</span>
+                      </a>
+                    ) : (
+                      <span className="inline-flex items-baseline gap-1" aria-label={`Goodreads rating: ${gr !== null ? gr.toFixed(1) : 'not available'}`}>
+                        <span className="text-[10px] uppercase tracking-wide text-muted/70">GR</span>
+                        <span className="text-sm"><RatingCell value={gr} isEnriching={isEnriching && noRatings} /></span>
+                      </span>
+                    )}
+                    {amz !== null && (
+                      <>
+                        <span className="text-border" aria-hidden="true">&middot;</span>
+                        <a
+                          href={amazonProductUrl(hb.book.amazonAsin, hb.book.title, hb.book.author, tag)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-baseline gap-1 hover:text-fire transition-colors"
+                          aria-label={`Amazon rating: ${amz.toFixed(1)}`}
+                        >
+                          <span className="text-[10px] uppercase tracking-wide text-muted/70">AMZ</span>
+                          <span className="text-sm text-ink">{amz.toFixed(1)}</span>
+                        </a>
+                      </>
+                    )}
                     {rio !== null && (
                       <>
                         <span className="text-border" aria-hidden="true">&middot;</span>
-                        <span className="inline-flex items-baseline gap-1" aria-label={`romance.io rating: ${rio.toFixed(1)}`}>
+                        <a
+                          href={romanceIoUrl(hb.book.romanceIoSlug, hb.book.title, hb.book.author)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-baseline gap-1 hover:text-fire transition-colors"
+                          aria-label={`romance.io rating: ${rio.toFixed(1)}`}
+                        >
                           <span className="text-[10px] uppercase tracking-wide text-muted/70">RIO</span>
                           <span className="text-sm text-ink">{rio.toFixed(1)}</span>
-                        </span>
+                        </a>
                       </>
                     )}
                   </div>
@@ -198,22 +259,37 @@ export default function HotlistTable({
                   {/* Spice + My Rating + Buy */}
                   <div className="flex items-center gap-3 mt-1.5">
                     {spice > 0 ? (
-                      <span
-                        className="text-sm"
-                        title={hb.book.compositeSpice
-                          ? `${hb.book.compositeSpice.score.toFixed(1)}/5 spice · ${hb.book.compositeSpice.attribution}`
-                          : `${spice}/5 spice`}
-                      >
-                        <PepperRow
-                          level={spice}
-                          size={14}
-                          estimated={hb.book.compositeSpice ? !["community", "romance_io"].includes(hb.book.compositeSpice.primarySource) : false}
-                          muted={!!hb.book.compositeSpice?.conflictFlag}
-                        />
-                        {hb.book.compositeSpice?.conflictFlag && (
-                          <SpiceVariesTooltip spiceSignals={hb.book.spice} />
-                        )}
-                      </span>
+                      (() => {
+                        const isRioSource = hb.book.compositeSpice?.primarySource === "romance_io";
+                        const mobileSpice = (
+                          <span
+                            className="text-sm"
+                            title={hb.book.compositeSpice
+                              ? `${hb.book.compositeSpice.score.toFixed(1)}/5 spice · ${hb.book.compositeSpice.attribution}`
+                              : `${spice}/5 spice`}
+                          >
+                            <PepperRow
+                              level={spice}
+                              size={14}
+                              estimated={hb.book.compositeSpice ? !["community", "romance_io"].includes(hb.book.compositeSpice.primarySource) : false}
+                              muted={!!hb.book.compositeSpice?.conflictFlag}
+                            />
+                            {hb.book.compositeSpice?.conflictFlag && (
+                              <SpiceVariesTooltip spiceSignals={hb.book.spice} />
+                            )}
+                          </span>
+                        );
+                        return isRioSource ? (
+                          <a
+                            href={romanceIoUrl(hb.book.romanceIoSlug, hb.book.title, hb.book.author)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="hover:opacity-80 transition-opacity"
+                          >
+                            {mobileSpice}
+                          </a>
+                        ) : mobileSpice;
+                      })()
                     ) : hb.book.spice.length > 0 || hb.book.compositeSpice ? (
                       <span className="text-[10px] font-mono text-muted/60">Low spice</span>
                     ) : null}
@@ -248,8 +324,12 @@ export default function HotlistTable({
                 Book
               </th>
               <SortHeader label="Goodreads" sortKey="goodreads" currentKey={sortKey} dir={sortDir} onClick={handleSort} />
-              <SortHeader label="Amazon" sortKey="amazon" currentKey={sortKey} dir={sortDir} onClick={handleSort} />
-              <SortHeader label="romance.io" sortKey="romance_io" currentKey={sortKey} dir={sortDir} onClick={handleSort} />
+              {hasAnyAmazon && (
+                <SortHeader label="Amazon" sortKey="amazon" currentKey={sortKey} dir={sortDir} onClick={handleSort} />
+              )}
+              {hasAnyRomanceIo && (
+                <SortHeader label="romance.io" sortKey="romance_io" currentKey={sortKey} dir={sortDir} onClick={handleSort} />
+              )}
               <SortHeader label="Spice" sortKey="spice" currentKey={sortKey} dir={sortDir} onClick={handleSort} />
               <th className="text-center px-3 py-2 font-mono text-xs text-muted uppercase tracking-wide">
                 My Rating
@@ -285,10 +365,10 @@ export default function HotlistTable({
                     <Link href={`/book/${slug}`} className="flex items-center gap-3 group">
                       <BookCover title={hb.book.title} coverUrl={hb.book.coverUrl} size="table" />
                       <div className="min-w-0">
-                        <p className="font-display font-bold text-ink text-sm leading-tight group-hover:text-fire transition-colors truncate max-w-[180px]">
+                        <p className="font-display font-bold text-ink text-sm leading-tight group-hover:text-fire transition-colors line-clamp-2">
                           {hb.book.title}
                         </p>
-                        <p className="text-xs font-body text-muted truncate max-w-[180px]">
+                        <p className="text-xs font-body text-muted line-clamp-1">
                           {hb.book.author}
                         </p>
                       </div>
@@ -296,35 +376,94 @@ export default function HotlistTable({
                   </td>
 
                   <td className="px-3 py-3 text-center font-mono text-sm">
-                    <RatingCell value={gr} isEnriching={isEnriching && noRatings} />
+                    {gr !== null && hb.book.goodreadsId ? (
+                      <a
+                        href={goodreadsUrl(hb.book.goodreadsId)!}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-ink hover:text-fire transition-colors"
+                        title="View on Goodreads"
+                      >
+                        {gr.toFixed(1)}
+                        <span className="inline-block ml-0.5 text-muted/40 text-[10px]">{"\u2197"}</span>
+                      </a>
+                    ) : (
+                      <RatingCell value={gr} isEnriching={isEnriching && noRatings} />
+                    )}
                   </td>
-                  <td className="px-3 py-3 text-center font-mono text-sm">
-                    <RatingCell value={amz} isEnriching={isEnriching && noRatings} />
-                  </td>
-                  <td className="px-3 py-3 text-center font-mono text-sm">
-                    <RatingCell value={rio} isEnriching={isEnriching && noRatings} />
-                  </td>
+                  {hasAnyAmazon && (
+                    <td className="px-3 py-3 text-center font-mono text-sm">
+                      {amz !== null ? (
+                        <a
+                          href={amazonProductUrl(hb.book.amazonAsin, hb.book.title, hb.book.author, tag)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-ink hover:text-fire transition-colors"
+                          title="View on Amazon"
+                        >
+                          {amz.toFixed(1)}
+                          <span className="inline-block ml-0.5 text-muted/40 text-[10px]">{"\u2197"}</span>
+                        </a>
+                      ) : (
+                        <RatingCell value={amz} isEnriching={isEnriching && noRatings} />
+                      )}
+                    </td>
+                  )}
+                  {hasAnyRomanceIo && (
+                    <td className="px-3 py-3 text-center font-mono text-sm">
+                      {rio !== null ? (
+                        <a
+                          href={romanceIoUrl(hb.book.romanceIoSlug, hb.book.title, hb.book.author)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-ink hover:text-fire transition-colors"
+                          title="View on romance.io"
+                        >
+                          {rio.toFixed(1)}
+                          <span className="inline-block ml-0.5 text-muted/40 text-[10px]">{"\u2197"}</span>
+                        </a>
+                      ) : (
+                        <RatingCell value={rio} isEnriching={isEnriching && noRatings} />
+                      )}
+                    </td>
+                  )}
                   <td className="px-3 py-3 text-center">
                     {spice > 0 ? (
-                      <span
-                        className="text-sm cursor-default"
-                        title={hb.book.compositeSpice
-                          ? `${hb.book.compositeSpice.score.toFixed(1)}/5 spice · ${hb.book.compositeSpice.attribution}`
-                          : `${spice}/5 spice`}
-                      >
-                        <PepperRow
-                          level={spice}
-                          size={14}
-                          estimated={hb.book.compositeSpice ? !["community", "romance_io"].includes(hb.book.compositeSpice.primarySource) : false}
-                          muted={!!hb.book.compositeSpice?.conflictFlag}
-                        />
-                        {hb.book.compositeSpice?.conflictFlag && (
-                          <SpiceVariesTooltip spiceSignals={hb.book.spice} />
-                        )}
-                        {spice <= 2 && hb.book.compositeSpice && (
-                          <span className="block text-[10px] font-mono text-muted/60">Low spice</span>
-                        )}
-                      </span>
+                      (() => {
+                        const isRioSource = hb.book.compositeSpice?.primarySource === "romance_io";
+                        const spiceContent = (
+                          <span
+                            className={`text-sm ${isRioSource ? "cursor-pointer" : "cursor-default"}`}
+                            title={hb.book.compositeSpice
+                              ? `${hb.book.compositeSpice.score.toFixed(1)}/5 spice · ${hb.book.compositeSpice.attribution}`
+                              : `${spice}/5 spice`}
+                          >
+                            <PepperRow
+                              level={spice}
+                              size={14}
+                              estimated={hb.book.compositeSpice ? !["community", "romance_io"].includes(hb.book.compositeSpice.primarySource) : false}
+                              muted={!!hb.book.compositeSpice?.conflictFlag}
+                            />
+                            {hb.book.compositeSpice?.conflictFlag && (
+                              <SpiceVariesTooltip spiceSignals={hb.book.spice} />
+                            )}
+                            {spice <= 2 && hb.book.compositeSpice && (
+                              <span className="block text-[10px] font-mono text-muted/60">Low spice</span>
+                            )}
+                          </span>
+                        );
+                        return isRioSource ? (
+                          <a
+                            href={romanceIoUrl(hb.book.romanceIoSlug, hb.book.title, hb.book.author)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="hover:opacity-80 transition-opacity"
+                            title="Spice rating from romance.io"
+                          >
+                            {spiceContent}
+                          </a>
+                        ) : spiceContent;
+                      })()
                     ) : hb.book.spice.length > 0 || hb.book.compositeSpice ? (
                       <span className="text-sm cursor-default" title="Confirmed low/no spice">
                         <PepperRow level={1} size={14} estimated muted />
@@ -343,14 +482,23 @@ export default function HotlistTable({
                     />
                   </td>
                   <td className="px-3 py-3">
-                    <div className="flex gap-1 flex-wrap max-w-[160px]">
-                      {hb.book.tropes.slice(0, 3).map((t) => (
-                        <Link key={t.id} href={`/tropes/${t.slug}`}>
-                          <Badge variant="trope" className="text-xs px-1.5 py-0.5 cursor-pointer">
-                            {t.name}
-                          </Badge>
-                        </Link>
-                      ))}
+                    <div className="flex gap-1 flex-wrap max-w-[180px]">
+                      {hb.book.tropes.slice(0, 3).map((t) => {
+                        const isShared = (tropeFrequency.get(t.name) ?? 0) >= 2;
+                        return (
+                          <Link key={t.id} href={`/tropes/${t.slug}`}>
+                            <span
+                              className={`text-[10px] font-mono px-1.5 py-0.5 rounded cursor-pointer transition-colors ${
+                                isShared
+                                  ? "bg-fire/10 text-fire/80 border border-fire/20 hover:bg-fire/15"
+                                  : "bg-cream text-muted border border-border hover:border-muted/40"
+                              }`}
+                            >
+                              {t.name}
+                            </span>
+                          </Link>
+                        );
+                      })}
                       {hb.book.tropes.length > 3 && (
                         <span className="text-xs font-mono text-muted/60">+{hb.book.tropes.length - 3}</span>
                       )}

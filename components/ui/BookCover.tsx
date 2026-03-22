@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { clsx } from "clsx";
 
 type CoverSize = "sm" | "table" | "md" | "lg" | "fill";
@@ -16,31 +19,7 @@ const sizeStyles: Record<Exclude<CoverSize, "fill">, { className: string; width:
   lg: { className: "w-[120px] h-[180px] text-3xl", width: 120, height: 180 },
 };
 
-export default function BookCover({
-  title,
-  coverUrl,
-  size = "md",
-  className,
-}: BookCoverProps) {
-  const isFill = size === "fill";
-  const sizeClass = isFill ? "" : sizeStyles[size].className;
-  const initial = title.charAt(0).toUpperCase();
-
-  if (coverUrl) {
-    return (
-      <img
-        src={coverUrl}
-        alt={`Cover of ${title}`}
-        {...(!isFill && { width: sizeStyles[size].width, height: sizeStyles[size].height })}
-        className={clsx(
-          "rounded-md shadow-sm",
-          sizeClass,
-          className
-        )}
-      />
-    );
-  }
-
+function Placeholder({ title, sizeClass, className }: { title: string; sizeClass: string; className?: string }) {
   return (
     <div
       className={clsx(
@@ -50,7 +29,36 @@ export default function BookCover({
       )}
       aria-label={`Cover placeholder for ${title}`}
     >
-      {initial}
+      {title.charAt(0).toUpperCase()}
     </div>
+  );
+}
+
+export default function BookCover({
+  title,
+  coverUrl,
+  size = "md",
+  className,
+}: BookCoverProps) {
+  const [failed, setFailed] = useState(false);
+  const isFill = size === "fill";
+  const sizeClass = isFill ? "" : sizeStyles[size].className;
+
+  if (!coverUrl || failed) {
+    return <Placeholder title={title} sizeClass={sizeClass} className={className} />;
+  }
+
+  return (
+    <img
+      src={coverUrl}
+      alt={`Cover of ${title}`}
+      {...(!isFill && { width: sizeStyles[size].width, height: sizeStyles[size].height })}
+      className={clsx(
+        "rounded-md shadow-sm",
+        sizeClass,
+        className
+      )}
+      onError={() => setFailed(true)}
+    />
   );
 }

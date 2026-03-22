@@ -14,6 +14,7 @@ import { getRomanceNewReleases } from "@/lib/books/new-releases";
 import { hydrateBookDetail } from "@/lib/books/cache";
 import { isJunkTitle } from "@/lib/books/romance-filter";
 import { deduplicateBooks, diversifyByAuthor, isCompilationTitle, hasYAGenre } from "@/lib/books/utils";
+import { getTopBuzzBooks, getBuzzScoresForBooks } from "@/lib/books/buzz-score";
 import { TrendingUp, Sparkles, Swords, Flame } from "lucide-react";
 import type { BookDetail } from "@/lib/types";
 
@@ -102,11 +103,35 @@ async function getWhatsHot(): Promise<BookDetail[]> {
 
   // Apply homepage quality filter (confirmed spice + Goodreads rating)
   const qualified = deduplicateBooks(nytBooks).filter(isHomepageQualified);
+  const existingIds = new Set(qualified.map((b) => b.id));
 
-  // Backfill with well-enriched books if we don't have enough
+  // Pull in top buzz books as additional candidates
+  const buzzResults = await getTopBuzzBooks(30);
+  const buzzCandidateIds = buzzResults
+    .map((b) => b.bookId)
+    .filter((id) => !existingIds.has(id));
+
+  if (buzzCandidateIds.length > 0) {
+    const { data: buzzBooks } = await supabase
+      .from("books")
+      .select("*")
+      .in("id", buzzCandidateIds.slice(0, 20))
+      .not("cover_url", "is", null);
+
+    if (buzzBooks) {
+      for (const row of buzzBooks as Record<string, unknown>[]) {
+        if (isJunkTitle(row.title as string)) continue;
+        const hydrated = await hydrateBookDetail(supabase, row);
+        if (isHomepageQualified(hydrated) && !existingIds.has(hydrated.id)) {
+          qualified.push(hydrated);
+          existingIds.add(hydrated.id);
+        }
+      }
+    }
+  }
+
+  // Backfill with well-enriched books if we still don't have enough
   if (qualified.length < MIN_HOT_BOOKS) {
-    const existingIds = new Set(qualified.map((b) => b.id));
-
     // Find books with confirmed spice from romance_io or community
     const { data: spiceRows } = await supabase
       .from("spice_signals")
@@ -145,11 +170,16 @@ async function getWhatsHot(): Promise<BookDetail[]> {
   }
 
   if (qualified.length > 0) {
-    // Sort: books with tropes first, then by number of rating sources
+    // Sort by buzz score (primary) + enrichment quality (secondary)
+    const buzzScores = await getBuzzScoresForBooks(qualified.map((b) => b.id));
     qualified.sort((a, b) => {
-      const aScore = (a.tropes.length > 0 ? 10 : 0) + a.ratings.length;
-      const bScore = (b.tropes.length > 0 ? 10 : 0) + b.ratings.length;
-      return bScore - aScore;
+      const aBuzz = buzzScores.get(a.id) ?? 0;
+      const bBuzz = buzzScores.get(b.id) ?? 0;
+      if (aBuzz !== bBuzz) return bBuzz - aBuzz;
+      // Tiebreak: tropes presence + number of rating sources
+      const aQuality = (a.tropes.length > 0 ? 10 : 0) + a.ratings.length;
+      const bQuality = (b.tropes.length > 0 ? 10 : 0) + b.ratings.length;
+      return bQuality - aQuality;
     });
     return diversifyByAuthor(qualified).slice(0, TARGET_HOT_BOOKS);
   }

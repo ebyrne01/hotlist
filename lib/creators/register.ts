@@ -5,6 +5,7 @@
 
 import { getAdminClient } from "@/lib/supabase/admin";
 import type { ResolvedBook } from "@/lib/video/book-resolver";
+import { recordBuzzSignalsBatch } from "@/lib/books/buzz-signals";
 
 interface RegisterInput {
   handle: string;
@@ -70,6 +71,15 @@ export async function registerCreatorMentions(input: RegisterInput): Promise<voi
     await supabase
       .from("creator_book_mentions")
       .upsert(mentionRows, { onConflict: "creator_handle_id,book_id,video_grab_id" });
+
+    // Record buzz signals for all matched books
+    await recordBuzzSignalsBatch(
+      matchedBooks.map((book) => ({
+        bookId: book.book.id,
+        source: "booktok_grab" as const,
+        metadata: { creator: normalizedHandle, platform: input.platform },
+      }))
+    );
   }
 
   // Update book_count

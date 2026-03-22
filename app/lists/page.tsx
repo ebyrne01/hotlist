@@ -293,7 +293,7 @@ export default function MyHotlistsPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3">
                         <h3 className="font-display font-bold text-ink text-base truncate max-w-[280px] sm:max-w-[400px] group-hover:text-fire transition-colors">
-                          {hl.name}
+                          {hl.name || "Untitled Hotlist"}
                         </h3>
                         <button
                           onClick={(e) => {
