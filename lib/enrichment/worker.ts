@@ -518,8 +518,10 @@ async function processJob(job: QueuedJob): Promise<void> {
       const synopsis =
         (bookRow?.ai_synopsis as string) ?? (bookRow?.description as string) ?? null;
 
-      // Not enough context — skip for now
-      if (!synopsis && tropes.length === 0) break;
+      // Not enough context yet — throw so the job retries after synopsis/tropes populate
+      if (!synopsis && tropes.length === 0) {
+        throw new Error("No synopsis or tropes yet — will retry after enrichment progresses");
+      }
 
       const result = await generateReadingVibes({
         title: book_title ?? "",

@@ -43,7 +43,7 @@ export default function BooktrackSection({
 
   const topPlaylist = spotifyPlaylists?.[0] ?? null;
 
-  function handleCopyPrompt() {
+  function handleCopyAndOpen() {
     if (!booktrackPrompt) return;
     navigator.clipboard.writeText(booktrackPrompt);
     setCopied(true);
@@ -146,7 +146,7 @@ export default function BooktrackSection({
           </p>
           <div className="flex items-center gap-2 mt-2.5">
             <button
-              onClick={handleCopyPrompt}
+              onClick={handleCopyAndOpen}
               className="inline-flex items-center gap-1.5 text-xs font-mono px-3 py-1.5 rounded-full border border-[#1DB954]/30 text-[#1DB954] hover:bg-[#1DB954]/5 transition-colors"
             >
               {copied ? (
@@ -154,13 +154,21 @@ export default function BooktrackSection({
               ) : (
                 <>
                   <SpotifyLogo size={12} />
-                  Copy for AI Playlist
+                  Copy prompt
                 </>
               )}
             </button>
+            <a
+              href="https://open.spotify.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs font-mono px-3 py-1.5 rounded-full bg-[#1DB954] text-white hover:bg-[#1ed760] transition-colors"
+            >
+              Open Spotify
+            </a>
           </div>
           <p className="text-[10px] font-mono text-muted/40 mt-2">
-            Paste into Spotify&apos;s AI Playlist (Premium) to generate a custom soundtrack
+            Paste into Spotify&apos;s Prompted Playlists (Premium) to generate a custom soundtrack
           </p>
         </div>
       )}

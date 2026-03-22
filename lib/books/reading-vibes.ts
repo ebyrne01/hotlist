@@ -78,7 +78,7 @@ export async function generateReadingVibes(
       messages: [
         {
           role: "user",
-          content: `Generate a Spotify AI Playlist prompt for someone reading this book. The prompt should evoke the book's EMOTIONAL MOOD and ATMOSPHERE — not describe the plot.
+          content: `Generate a Spotify Prompted Playlist prompt for someone reading this book. The prompt should evoke the book's EMOTIONAL MOOD and ATMOSPHERE — not describe the plot.
 
 Book: "${input.title}" by ${input.author}
 Tropes: ${input.tropes.join(", ") || "none tagged"}
@@ -87,11 +87,12 @@ ${spiceContext}
 ${input.synopsis ? `Synopsis: ${input.synopsis.slice(0, 500)}` : ""}
 
 Rules:
-- Write a prompt under 60 words that a Spotify AI Playlist would understand
+- The prompt MUST start with: "Create a playlist called ${input.title}."
+- After that opening line, write under 50 words that Spotify's Prompted Playlists feature would understand
 - Reference real musical artists, genres, or moods that match the book's vibe
 - Match the energy to the spice level (sweet = soft/acoustic, scorching = intense/sensual)
 - Match the setting (fae/fantasy = ethereal/orchestral, contemporary = pop/indie/R&B, dark = industrial/gothic)
-- NEVER mention the book title, author, or character names
+- Do NOT mention the author or character names in the rest of the prompt (the title is already in the opening line)
 - Make it evocative — a reader should think "yes, that's exactly the vibe"
 
 Also provide 3-5 single-word mood tags (e.g. "yearning", "dark", "ethereal", "passionate", "cozy").
