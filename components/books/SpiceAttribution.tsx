@@ -77,9 +77,9 @@ export default function SpiceAttribution({
         <span>{composite.attribution}</span>
       )}
 
-      {!composite.conflictFlag && composite.signalCount > 1 && (
+      {!composite.conflictFlag && composite.signalCount > 1 && composite.primarySource !== "romance_io" && (
         <span className="ml-1 text-muted/70">
-          ({composite.signalCount} signals)
+          ({composite.signalCount} sources)
         </span>
       )}
     </div>
