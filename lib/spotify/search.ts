@@ -5,6 +5,17 @@
 
 import { getSpotifyToken } from "./client";
 
+// Simple rate limiter: ensure at least 2s between Spotify search calls
+let lastCallTime = 0;
+async function rateLimit() {
+  const now = Date.now();
+  const elapsed = now - lastCallTime;
+  if (elapsed < 2000) {
+    await new Promise((r) => setTimeout(r, 2000 - elapsed));
+  }
+  lastCallTime = Date.now();
+}
+
 export interface SpotifyPlaylistResult {
   id: string;
   name: string;
@@ -20,6 +31,7 @@ export async function searchBookPlaylists(
   title: string,
   author: string
 ): Promise<SpotifyPlaylistResult[]> {
+  await rateLimit();
   const token = await getSpotifyToken();
 
   // Strip series suffix like "(The Empyrean, #1)" from title
@@ -91,6 +103,8 @@ export async function searchBookPlaylists(
         });
       }
     } catch (err) {
+      // Re-throw rate limit errors so the enrichment worker retries the job
+      if (err instanceof Error && err.message.includes("rate limited")) throw err;
       console.warn("[spotify-search] Query failed:", err);
     }
   }
