@@ -73,6 +73,10 @@
     {
       "path": "/api/cron/spice-gap-monitor",
       "schedule": "0 3 1 * *"
+    },
+    {
+      "path": "/api/cron/data-hygiene",
+      "schedule": "0 2 * * 0"
     }
   ]
 }

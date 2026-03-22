@@ -322,6 +322,7 @@ Book data flows through two independent systems:
 | `/api/cron/weekly-refresh` | Tuesdays 10 AM UTC | Refresh stale book data |
 | `/api/cron/monthly-enrichment` | 1st of month 2 AM UTC | Bulk enrichment pass |
 | `/api/cron/spice-gap-monitor` | 1st of month 3 AM UTC | Audit spice coverage gaps, re-queue missing signals |
+| `/api/cron/data-hygiene` | Sundays 2 AM UTC | Remove junk book entries (scraping artifacts, summaries, box sets, non-books) |
 
 All cron endpoints require `Authorization: Bearer $CRON_SECRET`.
 
@@ -359,6 +360,31 @@ The **spice gap monitor** (monthly) audits spice coverage:
 2. Top 500 books missing romance.io → re-queues romance_io_spice
 3. Hierarchy violations (romance.io vs LLM disagreement >2.0) → logged
 4. Books stuck at genre-bucketing only → re-queues for upgrade
+
+### Data hygiene (automated cleanup)
+
+The **data hygiene** cron (weekly, Sundays 2 AM UTC) detects and removes junk book entries that slip through discovery channels. Zero API cost — SQL pattern matching only.
+
+**What it catches:**
+1. **Garbled scraping artifacts**: `[Title] [By: Author]`, `[AudioCD(2012)]`, `[Paperback]`, `[Hardcover]` formats
+2. **Summary/study guide parasites**: "Summary of...", "SparkNotes", "CliffsNotes", "BookCaps"
+3. **Non-book entries**: Magazines, directories, yearbooks, planners (especially with "Unknown Author")
+4. **Box sets / compilations**: "Books 1-3", "Complete Series", "Box Set", "Omnibus"
+5. **"Title by Author" Unknown Author dupes**: Scraping artifacts where the author name ended up in the title
+6. **Series page entries**: "Series by Author" (Goodreads series pages, not actual books)
+
+**Safety rules:**
+- Never deletes a book that's in a user's hotlist or has user ratings — unless a canonical version exists to migrate refs to
+- Migrates `hotlist_books` and `user_ratings` to the canonical edition before deleting duplicates
+- Logs everything: deletions, migrations, and skipped entries (visible in Vercel function logs)
+
+**Prevention (write-time):**
+- `saveGoodreadsBookToCache()` and `saveProvisionalBook()` in `cache.ts` use `normalizeTitle()` to deduplicate at write time — strips series suffixes, subtitles, "by Author" prefixes
+- `isCompilationTitle()` in `utils.ts` filters box sets before they enter curated rows
+
+**Files:**
+- `/lib/books/data-hygiene.ts` — detection patterns + cleanup logic
+- `/app/api/cron/data-hygiene/route.ts` — cron endpoint
 
 ### Amazon enrichment (bulk, ad-hoc)
 
