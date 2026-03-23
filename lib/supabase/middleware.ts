@@ -32,6 +32,15 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
+  const pathname = request.nextUrl.pathname;
+
+  // Skip session refresh on the OAuth callback — getUser() here would
+  // consume the auth state cookie before exchangeCodeForSession() can use it,
+  // causing "bad_oauth_state" errors.
+  if (pathname.startsWith("/auth/callback")) {
+    return response;
+  }
+
   // Refresh the session — this keeps the user logged in
   const {
     data: { user },
@@ -40,7 +49,6 @@ export async function updateSession(request: NextRequest) {
   // Protected routes: if not logged in, redirect to home
   // Note: /lists/[slug] is PUBLIC (shared hotlists), only /lists exactly is protected
   const protectedPaths = ["/dashboard", "/profile", "/admin"];
-  const pathname = request.nextUrl.pathname;
   const isProtected =
     protectedPaths.some((path) => pathname.startsWith(path)) ||
     pathname === "/lists";
