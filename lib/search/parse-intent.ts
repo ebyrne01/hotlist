@@ -140,6 +140,7 @@ Respond with ONLY a JSON object, no markdown, no explanation:
 }
 
 Rules:
+- IMPORTANT: Return at most 3 tropes. Pick the 2-3 most specific tropes the reader explicitly asked for. Do NOT infer extra tropes from reference books — "like ACOTAR" should set similarTo, NOT add fae-faerie + enemies-to-lovers + chosen-one.
 - Map reader language to trope slugs: "fae" → "fae-faerie", "morally grey" → "morally-grey", "why choose" → "reverse-harem"
 - "spicy" or "steamy" → spiceMin: 3. "really spicy" → spiceMin: 4. "scorching" → spiceMin: 5.
 - "clean" or "sweet" → spiceMax: 1. "low spice" → spiceMax: 2. "closed door" → spiceMax: 2.
@@ -148,10 +149,10 @@ Rules:
 - "new" or "recent" or "2025" or "2026" → sortBy: "newest"
 - "finished series" or "completed" → seriesComplete: true
 - "standalone" → standalone: true
-- "like ACOTAR" → similarTo: "A Court of Thorns and Roses", plus infer tropes from the reference
+- "like ACOTAR" → similarTo: "A Court of Thorns and Roses". Only add tropes the reader explicitly mentioned BEYOND the reference — e.g. "like ACOTAR but with slow burn" → similarTo + tropes: ["slow-burn"]
 - "but spicier" → adjust spiceMin up from reference book's level
 - "cozy", "dark", "angsty", "funny", "emotional", "fluffy", "brooding" → moods array
-- If the query mentions a subgenre (contemporary, historical, paranormal, romantasy, etc.) set subgenre
+- subgenre: set ONLY if the reader explicitly names the subgenre (contemporary, historical, paranormal, romantasy, etc.). Do NOT infer subgenre from a reference book.
 - If the query mentions a specific author name, put it in textQuery
 - If you can't parse anything meaningful, set textQuery to the original query`,
       },
@@ -168,7 +169,8 @@ Rules:
     const validSlugs = new Set(tropeSlugs);
 
     const filters: SearchFilters = {
-      tropes: (parsed.tropes ?? []).filter((s: string) => validSlugs.has(s)),
+      // Cap at 3 tropes to avoid over-narrow intersection
+      tropes: (parsed.tropes ?? []).filter((s: string) => validSlugs.has(s)).slice(0, 3),
       excludeTropes: (parsed.excludeTropes ?? []).filter((s: string) =>
         validSlugs.has(s)
       ),
