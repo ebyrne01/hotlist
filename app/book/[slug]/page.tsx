@@ -273,7 +273,7 @@ export default async function BookPage({ params }: PageProps) {
       .limit(50);
 
     if (sBooks) {
-      // Filter out compilations, box sets, and junk titles
+      // Filter out compilations, box sets, junk, volume splits, foreign editions, and companions
       const cleaned = sBooks
         .filter((sb) => {
           const title = sb.title as string;
@@ -281,6 +281,15 @@ export default async function BookPage({ params }: PageProps) {
           if (isJunkTitle(title)) return false;
           // Titles containing "/" or "&" with multiple book names are bundles
           if (/\s\/\s/.test(title) && title.length > 60) return false;
+          // Volume splits: "Vol. 1 of 3", "Part 1 of 2"
+          if (/\bvol(?:ume)?\.?\s*\d+\s*(?:of|\/)\s*\d+/i.test(title)) return false;
+          if (/\bpart\s*\d+\s*(?:of|\/)\s*\d+/i.test(title)) return false;
+          // Foreign-language editions (non-ASCII titles with "Tom" = Polish volume)
+          if (/\bTom\s+\d+/i.test(title) && /[^\x00-\x7F]/.test(title)) return false;
+          // Companion/guide books
+          if (/\bcomplete\s+guide\s+to\b/i.test(title)) return false;
+          if (/\breading\s+companion\b/i.test(title)) return false;
+          if (/\breal-time\s+reading\b/i.test(title)) return false;
           return true;
         });
 
