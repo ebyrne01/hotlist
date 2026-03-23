@@ -165,7 +165,7 @@ export default function SearchBar({ variant = "navbar", className, inputId, onSe
             ref={inputRef}
             id={inputId}
             type="text"
-            placeholder="Search by title, author, or trope..."
+            placeholder="Search by title, author, trope, or vibe..."
             value={query}
             onChange={(e) => {
               const val = e.target.value;

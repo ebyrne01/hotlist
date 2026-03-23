@@ -1,11 +1,17 @@
 /**
  * GET /api/books/search?q={query}
  *
- * Returns romance-focused book search results.
- * Source: Supabase cache first, then Goodreads, then Google Books fallback.
+ * Unified search pipeline:
+ * - title/author queries → existing FTS (fast, free)
+ * - discovery/comparison/question queries → Haiku intent parsing → structured filters
+ * - video URLs → redirect signal for client
  */
 
 import { findBook } from "@/lib/books";
+import { classifyQuery } from "@/lib/search/classify-query";
+import { parseSearchIntent } from "@/lib/search/parse-intent";
+import { executeFilteredSearch } from "@/lib/search/execute-filters";
+import type { BookDetail } from "@/lib/types";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest) {
@@ -19,22 +25,87 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const books = await findBook(query);
+    const intent = classifyQuery(query);
 
-    // Shape results for the frontend — keep it lean for search
-    const results = books.map((book) => {
-      const rated = book.ratings.filter((r) => r.rating !== null);
-      const averageRating =
-        rated.length > 0
-          ? rated.reduce((s, r) => s + (r.rating ?? 0), 0) / rated.length
-          : null;
+    // ── Fast path: title/author → existing keyword search ──
+    if (intent.type === "title_author") {
+      const books = await findBook(intent.query);
+      return NextResponse.json({
+        query,
+        intent: "title_author",
+        total: books.length,
+        books: shapeResults(books),
+      });
+    }
 
+    // ── Video URL → redirect signal ──
+    if (intent.type === "video_url") {
+      return NextResponse.json({
+        query,
+        intent: "video_url",
+        redirect: `/booktok?url=${encodeURIComponent(intent.url)}`,
+      });
+    }
+
+    // ── Smart path: discovery/comparison/question → Haiku ──
+    const filters = await parseSearchIntent(query, intent.type);
+
+    // If Haiku couldn't extract structure, fall back to keyword search
+    if (
+      filters.textQuery &&
+      filters.tropes.length === 0 &&
+      !filters.similarTo &&
+      !filters.spiceMin &&
+      !filters.spiceMax &&
+      !filters.trending
+    ) {
+      const books = await findBook(filters.textQuery);
+      return NextResponse.json({
+        query,
+        intent: "title_author_fallback",
+        total: books.length,
+        books: shapeResults(books),
+      });
+    }
+
+    const results = await executeFilteredSearch(filters);
+
+    return NextResponse.json({
+      query,
+      intent: intent.type,
+      filters,
+      total: results.length,
+      books: shapeResults(results),
+    });
+  } catch (err) {
+    // If anything in the smart path fails, fall back to keyword search
+    console.warn("[search] Smart search failed, falling back to keyword:", err);
+    try {
+      const books = await findBook(query);
+      return NextResponse.json({
+        query,
+        intent: "title_author_fallback",
+        total: books.length,
+        books: shapeResults(books),
+      });
+    } catch (fallbackErr) {
+      console.error("Book search failed completely:", fallbackErr);
+      return NextResponse.json(
+        { error: "Search failed" },
+        { status: 500 }
+      );
+    }
+  }
+}
+
+/** Shape BookDetail[] into the lean search result format for the frontend */
+function shapeResults(books: BookDetail[]) {
+  const seenTitles = new Set<string>();
+
+  return books
+    .map((book) => {
       const goodreadsRating =
         book.ratings.find((r) => r.source === "goodreads")?.rating ?? null;
-
-      const topSpice = book.spice.length > 0
-        ? book.spice.reduce((max, s) => (s.spiceLevel > max.spiceLevel ? s : max), book.spice[0])
-        : null;
 
       return {
         id: book.id,
@@ -45,42 +116,20 @@ export async function GET(request: NextRequest) {
         coverUrl: book.coverUrl,
         seriesName: book.seriesName,
         seriesPosition: book.seriesPosition,
-        averageRating: averageRating ? parseFloat(averageRating.toFixed(2)) : null,
         goodreadsRating,
-        spiceLevel: topSpice?.spiceLevel ?? null,
-        spiceSource: topSpice?.source ?? null,
+        ratingCount:
+          book.ratings.find((r) => r.source === "goodreads")?.ratingCount ??
+          null,
+        spiceLevel: book.compositeSpice?.score ?? null,
         topTropes: book.tropes.slice(0, 3).map((t) => t.name),
         subgenre: book.subgenre,
       };
-    });
-
-    // Deduplicate by normalized title+author (safety net)
-    const seenTitles = new Set<string>();
-    const uniqueResults = results.filter((r) => {
+    })
+    .filter((r) => {
+      // Deduplicate by normalized title+author
       const key = `${r.title.toLowerCase().replace(/[^\w\s]/g, "").trim()}::${r.author.toLowerCase().trim()}`;
       if (seenTitles.has(key)) return false;
       seenTitles.add(key);
       return true;
     });
-
-    // Determine the source for debugging
-    const source = books.length > 0 && books[0].metadataSource === "goodreads"
-      ? "goodreads"
-      : books.length > 0
-        ? "cache"
-        : "none";
-
-    return NextResponse.json({
-      query,
-      source,
-      total: uniqueResults.length,
-      books: uniqueResults,
-    });
-  } catch (err) {
-    console.error("Book search failed:", err);
-    return NextResponse.json(
-      { error: "Search failed" },
-      { status: 500 }
-    );
-  }
 }
