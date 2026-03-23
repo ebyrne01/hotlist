@@ -259,6 +259,11 @@ export async function saveGoodreadsBookToCache(bookData: BookData): Promise<Book
     return null;
   }
 
+  if (isJunkTitle(bookData.title)) {
+    console.warn("[cache] Rejecting junk title:", bookData.title);
+    return null;
+  }
+
   const supabase = getAdminClient();
 
   // Check for existing book with same title+author (prevents edition duplicates)

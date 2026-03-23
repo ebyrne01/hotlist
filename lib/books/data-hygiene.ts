@@ -28,8 +28,8 @@ const JUNK_PATTERNS: Array<{ label: string; sql: string }> = [
     sql: `title ~ '^\\[.*\\]\\s*\\[By'`,
   },
   {
-    label: "unknown edition AudioCD/Paperback/Hardcover artifacts",
-    sql: `title ~ '\\(unknown Edition\\)' OR title ~ '\\[AudioCD' OR title ~ '\\[Paperback\\]' OR title ~ '\\[Hardcover\\]'`,
+    label: "unknown edition AudioCD/Paperback/Hardcover/Leather Bound artifacts",
+    sql: `title ~ '\\(unknown Edition\\)' OR title ~ '\\[AudioCD' OR title ~ '\\[Paperback\\]' OR title ~ '\\[Hardcover\\]' OR title ~ '\\[Leather Bound\\]'`,
   },
   {
     label: "summary/study guide parasites",
