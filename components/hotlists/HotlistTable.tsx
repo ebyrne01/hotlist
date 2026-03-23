@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
+import { ExternalLink } from "lucide-react";
 import BookCover from "@/components/ui/BookCover";
 import { PepperRow } from "@/components/ui/PepperIcon";
 import type { HotlistBookDetail, Rating, SpiceRating } from "@/lib/types";
@@ -277,6 +278,9 @@ export default function HotlistTable({
                             {hb.book.compositeSpice?.conflictFlag && (
                               <SpiceVariesTooltip spiceSignals={hb.book.spice} />
                             )}
+                            {isRioSource && (
+                              <span className="text-[10px] font-mono text-muted/70 ml-1">romance.io <ExternalLink size={8} className="inline" /></span>
+                            )}
                           </span>
                         );
                         return isRioSource ? (
@@ -449,6 +453,9 @@ export default function HotlistTable({
                             )}
                             {spice <= 2 && hb.book.compositeSpice && (
                               <span className="block text-[10px] font-mono text-muted/60">Low spice</span>
+                            )}
+                            {isRioSource && (
+                              <span className="block text-[10px] font-mono text-muted/70 mt-0.5">romance.io <ExternalLink size={8} className="inline" /></span>
                             )}
                           </span>
                         );
