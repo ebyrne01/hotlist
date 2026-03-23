@@ -11,7 +11,7 @@ import { hydrateBookDetail } from "@/lib/books/cache";
 import { getBookDetail } from "@/lib/books";
 import { extractGoodreadsIdFromSlug } from "@/lib/books/goodreads-search";
 import { isJunkTitle } from "@/lib/books/romance-filter";
-import { deduplicateBooks } from "@/lib/books/utils";
+import { deduplicateBooks, isCompilationTitle } from "@/lib/books/utils";
 import type { BookDetail } from "@/lib/types";
 import { Video } from "lucide-react";
 import BookDetailClient from "./BookDetailClient";
@@ -266,18 +266,51 @@ export default async function BookPage({ params }: PageProps) {
   if (book.seriesName) {
     const { data: sBooks } = await supabase
       .from("books")
-      .select("id, title, slug, series_position")
+      .select("id, title, slug, series_position, goodreads_id, cover_url")
       .eq("series_name", book.seriesName)
+      .not("series_position", "is", null)
       .order("series_position", { ascending: true, nullsFirst: false })
-      .limit(20);
+      .limit(50);
 
     if (sBooks) {
-      seriesBooks = sBooks.map((sb: Record<string, unknown>) => ({
-        id: sb.id as string,
-        title: sb.title as string,
-        slug: sb.slug as string,
-        seriesPosition: sb.series_position as number | null,
-      }));
+      // Filter out compilations, box sets, and junk titles
+      const cleaned = sBooks
+        .filter((sb) => {
+          const title = sb.title as string;
+          if (isCompilationTitle(title)) return false;
+          if (isJunkTitle(title)) return false;
+          // Titles containing "/" or "&" with multiple book names are bundles
+          if (/\s\/\s/.test(title) && title.length > 60) return false;
+          return true;
+        });
+
+      // Deduplicate by series_position — keep the best edition per position
+      const byPosition = new Map<number, typeof cleaned[0]>();
+      for (const sb of cleaned) {
+        const pos = sb.series_position as number;
+        const existing = byPosition.get(pos);
+        if (!existing) {
+          byPosition.set(pos, sb);
+        } else {
+          // Prefer: has Goodreads ID > has cover > keep existing
+          const newHasGr = !!sb.goodreads_id;
+          const existHasGr = !!existing.goodreads_id;
+          if (newHasGr && !existHasGr) {
+            byPosition.set(pos, sb);
+          } else if (newHasGr === existHasGr && sb.cover_url && !existing.cover_url) {
+            byPosition.set(pos, sb);
+          }
+        }
+      }
+
+      seriesBooks = Array.from(byPosition.values())
+        .sort((a, b) => (a.series_position as number) - (b.series_position as number))
+        .map((sb) => ({
+          id: sb.id as string,
+          title: sb.title as string,
+          slug: sb.slug as string,
+          seriesPosition: sb.series_position as number | null,
+        }));
     }
   }
 
