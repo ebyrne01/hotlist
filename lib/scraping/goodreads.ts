@@ -37,53 +37,54 @@ export async function scrapeGoodreadsRating(
     const html = await res.text();
     const $ = cheerio.load(html);
 
-    // Find the first search result row
-    const firstResult = $("tr[itemtype='http://schema.org/Book']").first();
-    if (firstResult.length === 0) {
-      // Try alternate selector for newer Goodreads layout
-      const altResult = $(".bookTitle").first();
-      if (altResult.length === 0) {
-        console.warn(`No Goodreads results found for "${bookTitle}"`);
-        return null;
-      }
+    // Scan ALL search results (up to 10) and pick the canonical edition —
+    // the one with the highest ratingCount. This prevents locking onto
+    // obscure editions (audiobook, Kindle, foreign) with 1-50 ratings.
+    interface Candidate {
+      rating: number;
+      ratingCount: number;
+      goodreadsId: string;
     }
 
-    // Extract rating from the minirating span
-    const miniratingText =
-      firstResult.find(".minirating").text() ||
-      $(".minirating").first().text();
+    let best: Candidate | null = null;
 
-    if (!miniratingText) return null;
+    $("tr[itemtype='http://schema.org/Book']").each((i, row) => {
+      if (i >= 10) return false;
 
-    // Pattern: "4.23 avg rating — 1,234,567 ratings"
-    const ratingMatch = miniratingText.match(/([\d.]+)\s*avg\s*rating/);
-    const countMatch = miniratingText.match(/([\d,]+)\s*rating/);
+      const $row = $(row);
+      const miniratingText = $row.find(".minirating").text();
+      if (!miniratingText) return;
 
-    if (!ratingMatch) return null;
+      const ratingMatch = miniratingText.match(/([\d.]+)\s*avg\s*rating/);
+      const countMatch = miniratingText.match(/([\d,]+)\s*rating/);
+      if (!ratingMatch) return;
 
-    const rating = parseFloat(ratingMatch[1]);
-    const ratingCount = countMatch
-      ? parseInt(countMatch[1].replace(/,/g, ""), 10)
-      : 0;
+      const rating = parseFloat(ratingMatch[1]);
+      const ratingCount = countMatch
+        ? parseInt(countMatch[1].replace(/,/g, ""), 10)
+        : 0;
 
-    // Reject edition-level ratings — work-level entries have 50+ ratings.
-    // A low count means we hit a specific edition, not the canonical work.
-    if (ratingCount < 50) {
-      console.warn(`[goodreads] Rejecting edition-level rating for "${bookTitle}": ${rating} with only ${ratingCount} ratings`);
+      if (isNaN(rating) || !rating) return;
+
+      // Skip edition-level ratings (< 50 ratings = not the canonical work)
+      if (ratingCount < 50) return;
+
+      const bookLink = $row.find("a.bookTitle").attr("href") ?? "";
+      const idMatch = bookLink.match(/\/show\/(\d+)/);
+      if (!idMatch) return;
+
+      // Pick the edition with the most ratings (canonical edition)
+      if (!best || ratingCount > best.ratingCount) {
+        best = { rating, ratingCount, goodreadsId: idMatch[1] };
+      }
+    });
+
+    if (!best) {
+      console.warn(`[goodreads] No canonical edition found for "${bookTitle}" (all results had < 50 ratings)`);
       return null;
     }
 
-    // Extract Goodreads ID from the book link
-    const bookLink =
-      firstResult.find("a.bookTitle").attr("href") ||
-      $("a.bookTitle").first().attr("href") ||
-      "";
-    const idMatch = bookLink.match(/\/show\/(\d+)/);
-    const goodreadsId = idMatch ? idMatch[1] : "";
-
-    if (!rating || isNaN(rating)) return null;
-
-    return { rating, ratingCount, goodreadsId };
+    return best;
   } catch (err) {
     console.warn(`Goodreads scraping failed for "${bookTitle}":`, err);
     return null;

@@ -340,6 +340,41 @@ export async function getGoodreadsBookById(
   };
 }
 
+// ── Edition selection ─────────────────────────────────
+
+/**
+ * From a set of search results, pick the canonical edition — the one with the
+ * highest ratingCount among title/author matches. This avoids locking onto
+ * obscure editions (audiobook, Kindle, foreign language) that have 1-50 ratings
+ * instead of the work-level entry with millions.
+ */
+function pickCanonicalEdition(
+  results: GoodreadsSearchResult[],
+  title: string,
+  author: string,
+  titleThreshold: number
+): string | null {
+  let bestId: string | null = null;
+  let bestCount = -1;
+
+  for (const result of results) {
+    const titleSim = wordOverlap(title, result.title);
+    const authorMatch = normalize(author)
+      .split(" ")
+      .some((word) => normalize(result.author).includes(word));
+
+    if (titleSim >= titleThreshold && authorMatch) {
+      const count = result.ratingCount ?? 0;
+      if (count > bestCount) {
+        bestCount = count;
+        bestId = result.goodreadsId;
+      }
+    }
+  }
+
+  return bestId;
+}
+
 // ── Resolution ────────────────────────────────────────
 
 /**
@@ -358,31 +393,13 @@ export async function resolveToGoodreadsId(
 
   // Attempt 1: search with full title + author
   const results = await searchGoodreads(`${title} ${author}`);
-
-  for (const result of results.slice(0, 3)) {
-    const titleSim = wordOverlap(title, result.title);
-    const authorMatch = normalize(author)
-      .split(" ")
-      .some((word) => normalize(result.author).includes(word));
-
-    if (titleSim >= titleThreshold && authorMatch) {
-      return result.goodreadsId;
-    }
-  }
+  const best1 = pickCanonicalEdition(results.slice(0, 5), title, author, titleThreshold);
+  if (best1) return best1;
 
   // Attempt 2: search with just the title
   const titleResults = await searchGoodreads(title);
-
-  for (const result of titleResults.slice(0, 3)) {
-    const titleSim = wordOverlap(title, result.title);
-    const authorMatch = normalize(author)
-      .split(" ")
-      .some((word) => normalize(result.author).includes(word));
-
-    if (titleSim >= titleThreshold && authorMatch) {
-      return result.goodreadsId;
-    }
-  }
+  const best2 = pickCanonicalEdition(titleResults.slice(0, 5), title, author, titleThreshold);
+  if (best2) return best2;
 
   console.warn(
     `[goodreads-search] Could not resolve "${title}" by "${author}" to a Goodreads ID`
