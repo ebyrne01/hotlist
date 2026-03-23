@@ -22,7 +22,7 @@ import { classifyRomanceIoTags } from "@/lib/scraping/romance-io-tags";
 import { enrichBookMetadata } from "@/lib/books/metadata-enrichment";
 import { generateSynopsis } from "@/lib/books/ai-synopsis";
 import { getGoodreadsBookById, resolveToGoodreadsId, generateBookSlug } from "@/lib/books/goodreads-search";
-import { saveGoodreadsBookToCache, cleanCoverUrl } from "@/lib/books/cache";
+import { saveGoodreadsBookToCache, cleanCoverUrl, stripSeriesSuffix } from "@/lib/books/cache";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { computeGenreBucketing } from "@/lib/spice/genre-bucketing";
 import { inferAndUpsertSpice } from "@/lib/spice/llm-inference";
@@ -193,18 +193,15 @@ async function processJob(job: QueuedJob): Promise<void> {
             // Update the EXISTING provisional book row instead of creating a new one.
             // saveGoodreadsBookToCache upserts on goodreads_id, which would orphan
             // the provisional row (it has goodreads_id: null). So we update by book_id.
-            const slug = generateBookSlug(detail.title, detail.goodreadsId);
-            await supabase
-              .from("books")
-              .update({
-                title: detail.title,
+            const cleanTitle = stripSeriesSuffix(detail.title);
+            const slug = generateBookSlug(cleanTitle, detail.goodreadsId);
+            const updateFields: Record<string, unknown> = {
+                title: cleanTitle,
                 author: detail.author,
                 goodreads_id: detail.goodreadsId,
                 goodreads_url: detail.goodreadsUrl ?? null,
                 cover_url: cleanCoverUrl(detail.coverUrl),
                 description: detail.description ?? null,
-                series_name: detail.seriesName ?? null,
-                series_position: detail.seriesPosition ?? null,
                 published_year: detail.publishedYear ?? null,
                 page_count: detail.pageCount ?? null,
                 genres: detail.genres ?? [],
@@ -213,7 +210,13 @@ async function processJob(job: QueuedJob): Promise<void> {
                 enrichment_status: "partial",
                 data_refreshed_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
-              })
+            };
+            // Only overwrite series fields when scraper actually found data
+            if (detail.seriesName) updateFields.series_name = detail.seriesName;
+            if (detail.seriesPosition) updateFields.series_position = detail.seriesPosition;
+            await supabase
+              .from("books")
+              .update(updateFields)
               .eq("id", book_id);
             // Detect audiobook from new cover
             await detectAndSaveAudiobookStatus(book_id, detail.coverUrl ?? null);

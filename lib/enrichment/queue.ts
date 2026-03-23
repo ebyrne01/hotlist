@@ -208,11 +208,14 @@ export async function updateBookEnrichmentStatus(bookId: string): Promise<void> 
   if (!jobs || jobs.length === 0) return;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const allComplete = jobs.every((j: any) => j.status === "completed");
+  // A job is "done" if it completed or permanently failed (exhausted retries).
+  // Failed jobs should not block a book from reaching "complete" status.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const allDone = jobs.every((j: any) => j.status === "completed" || j.status === "failed");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const someComplete = jobs.some((j: any) => j.status === "completed");
 
-  const status = allComplete ? "complete" : someComplete ? "partial" : "pending";
+  const status = allDone && someComplete ? "complete" : someComplete ? "partial" : "pending";
 
   await supabase
     .from("books")

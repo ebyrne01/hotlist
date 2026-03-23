@@ -13,7 +13,7 @@ export function cleanCoverUrl(url: string | null | undefined): string | null {
 }
 
 /** Strip series suffixes from titles, e.g. "Heir of Fire (Throne of Glass, #3)" → "Heir of Fire" */
-function stripSeriesSuffix(title: string): string {
+export function stripSeriesSuffix(title: string): string {
   return title
     .replace(/\s*\([^)]*#\d+[^)]*\)\s*$/i, "")  // "(Series Name, #3)"
     .replace(/\s*\([^)]*(?:book|novel|volume)\s*\d+[^)]*\)\s*$/i, "")  // "(Book 3)"
@@ -291,7 +291,7 @@ export async function saveGoodreadsBookToCache(bookData: BookData): Promise<Book
   const slug = generateBookSlug(bookData.title, bookData.goodreadsId);
 
   const row = {
-    title: cleanText(bookData.title),
+    title: stripSeriesSuffix(cleanText(bookData.title)),
     author: cleanText(bookData.author),
     isbn: bookData.isbn ?? null,
     isbn13: bookData.isbn13 ?? null,
