@@ -75,11 +75,6 @@ export default function QualityDashboard() {
   const [scanRunning, setScanRunning] = useState(false);
   const limit = 50;
 
-  const authHeader = {
-    Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
-    "Content-Type": "application/json",
-  };
-
   // Use service role key from a prompt — in production this would use session auth
   const getAuthHeaders = useCallback(() => {
     const key = (document.getElementById("admin-key") as HTMLInputElement)?.value || "";
@@ -117,7 +112,7 @@ export default function QualityDashboard() {
   const fetchStats = useCallback(async () => {
     try {
       const headers = getAuthHeaders();
-      const [openRes, fixableRes, confirmedRes, dismissedRes] = await Promise.all([
+      const [openRes, , confirmedRes, dismissedRes] = await Promise.all([
         fetch("/api/admin/quality/flags?status=open&limit=1", { headers }),
         fetch("/api/admin/quality/flags?status=open&limit=1", { headers }),
         fetch("/api/admin/quality/flags?status=confirmed&limit=1", { headers }),
