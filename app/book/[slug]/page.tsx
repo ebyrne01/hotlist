@@ -22,6 +22,7 @@ import BookTokMentions from "@/components/books/BookTokMentions";
 import CreateShareCardButton from "@/components/books/CreateShareCardButton";
 import ExpandableText from "@/components/ui/ExpandableText";
 import BooktrackSection from "@/components/books/BooktrackSection";
+import AdminBookFlag from "@/components/books/AdminBookFlag";
 
 // ── Helpers ──────────────────────────────────────────
 
@@ -445,15 +446,18 @@ export default async function BookPage({ params }: PageProps) {
                 )}
               </p>
               {/* Compact metadata line */}
-              <p className="mt-1 text-xs font-mono text-muted/70">
-                {[
-                  book.publishedYear,
-                  book.pageCount ? `${book.pageCount} pages` : null,
-                  book.publisher,
-                ]
-                  .filter(Boolean)
-                  .join(" \u00B7 ")}
-              </p>
+              <div className="mt-1 flex items-center gap-2">
+                <p className="text-xs font-mono text-muted/70">
+                  {[
+                    book.publishedYear,
+                    book.pageCount ? `${book.pageCount} pages` : null,
+                    book.publisher,
+                  ]
+                    .filter(Boolean)
+                    .join(" \u00B7 ")}
+                </p>
+                <AdminBookFlag bookId={book.id} bookTitle={book.title} />
+              </div>
             </div>
 
             {/* Trope pills */}
