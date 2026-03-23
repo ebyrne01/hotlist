@@ -22,7 +22,7 @@ import { classifyRomanceIoTags } from "@/lib/scraping/romance-io-tags";
 import { enrichBookMetadata } from "@/lib/books/metadata-enrichment";
 import { generateSynopsis } from "@/lib/books/ai-synopsis";
 import { getGoodreadsBookById, resolveToGoodreadsId, generateBookSlug } from "@/lib/books/goodreads-search";
-import { saveGoodreadsBookToCache } from "@/lib/books/cache";
+import { saveGoodreadsBookToCache, cleanCoverUrl } from "@/lib/books/cache";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { computeGenreBucketing } from "@/lib/spice/genre-bucketing";
 import { inferAndUpsertSpice } from "@/lib/spice/llm-inference";
@@ -201,7 +201,7 @@ async function processJob(job: QueuedJob): Promise<void> {
                 author: detail.author,
                 goodreads_id: detail.goodreadsId,
                 goodreads_url: detail.goodreadsUrl ?? null,
-                cover_url: detail.coverUrl ?? null,
+                cover_url: cleanCoverUrl(detail.coverUrl),
                 description: detail.description ?? null,
                 series_name: detail.seriesName ?? null,
                 series_position: detail.seriesPosition ?? null,

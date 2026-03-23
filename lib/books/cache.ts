@@ -6,10 +6,18 @@ import { isJunkTitle } from "./romance-filter";
 import { deduplicateBooks, normalizeTitle } from "./utils";
 
 /** Returns null if the URL is a known placeholder image */
-function cleanCoverUrl(url: string | null | undefined): string | null {
+export function cleanCoverUrl(url: string | null | undefined): string | null {
   if (!url) return null;
-  if (url.includes("no-cover") || url.includes("nophoto")) return null;
+  if (url.includes("no-cover") || url.includes("nophoto") || url.includes("placeholder")) return null;
   return url;
+}
+
+/** Strip series suffixes from titles, e.g. "Heir of Fire (Throne of Glass, #3)" → "Heir of Fire" */
+function stripSeriesSuffix(title: string): string {
+  return title
+    .replace(/\s*\([^)]*#\d+[^)]*\)\s*$/i, "")  // "(Series Name, #3)"
+    .replace(/\s*\([^)]*(?:book|novel|volume)\s*\d+[^)]*\)\s*$/i, "")  // "(Book 3)"
+    .trim();
 }
 
 /** Strip invisible Unicode characters (zero-width spaces, BOM, etc.) from text */
@@ -379,12 +387,12 @@ export async function saveProvisionalBook(bookData: BookData): Promise<Book | nu
 
   const slug = `provisional-${bookData.googleBooksId || Date.now()}`;
   const row = {
-    title: cleanText(bookData.title),
+    title: stripSeriesSuffix(cleanText(bookData.title)),
     author: cleanText(bookData.author),
     isbn: bookData.isbn ?? null,
     isbn13: bookData.isbn13 ?? null,
     google_books_id: bookData.googleBooksId ?? null,
-    cover_url: bookData.coverUrl ?? null,
+    cover_url: cleanCoverUrl(bookData.coverUrl),
     page_count: bookData.pageCount ?? null,
     published_year: bookData.publishedYear ?? null,
     publisher: bookData.publisher ?? null,
