@@ -77,7 +77,7 @@ function wordOverlap(a: string, b: string): number {
 }
 
 /** Patterns that indicate a study guide, summary, or non-original-work listing */
-const JUNK_TITLE_PATTERNS = [
+const JUNK_SEARCH_TITLE_PATTERNS = [
   /^study guide:/i,
   /^summary\b/i,
   /\bstudy guide\b/i,
@@ -92,11 +92,23 @@ const JUNK_TITLE_PATTERNS = [
   /\bdiscussion resource\b/i,
   /\bfigurine\b/i,
   /\bbookmark\b/i,
+  /\bnovel\s+unit\b/i,
+  /\bteacher.?s?\s+guide\b/i,
+  /\blesson\s+plans?\b/i,
+  /\bcurriculum\s+guide\b/i,
+  /\bpodcast\b/i,
+  /\bsupersummary\b/i,
+  /\bbookhabits\b/i,
 ];
 
-/** Returns true if a title looks like a study guide, summary, or box set — not the actual book */
-function isJunkSearchResult(title: string): boolean {
-  return JUNK_TITLE_PATTERNS.some(p => p.test(title));
+const JUNK_SEARCH_AUTHOR_PATTERNS =
+  /^(supersummary|bookhabits|bookcaps|readtrepreneur|worth\s*books|bright\s*summaries|book\s*tigers|instaread|summary\s+station|unknown\s+author)$/i;
+
+/** Returns true if a search result looks like a study guide, summary, podcast, or non-book */
+function isJunkSearchResult(title: string, author?: string): boolean {
+  if (JUNK_SEARCH_TITLE_PATTERNS.some(p => p.test(title))) return true;
+  if (author && JUNK_SEARCH_AUTHOR_PATTERNS.test(author.trim())) return true;
+  return false;
 }
 
 // ── Search ────────────────────────────────────────────
@@ -182,7 +194,7 @@ export async function searchGoodreads(
   });
 
   // Filter out study guides, summaries, and box sets — keep only real books
-  const filtered = results.filter(r => !isJunkSearchResult(r.title));
+  const filtered = results.filter(r => !isJunkSearchResult(r.title, r.author));
 
   // If filtering removed everything, return unfiltered (better than empty)
   return filtered.length > 0 ? filtered : results;

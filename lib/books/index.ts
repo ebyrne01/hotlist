@@ -65,7 +65,7 @@ import { scheduleAuthorCrawl } from "./author-crawl";
 export async function findBook(query: string): Promise<BookDetail[]> {
   // Step 1: Search local DB (always fast)
   const cached = await searchBooksInCache(query);
-  const filteredCache = cached.filter((b) => !isJunkTitle(b.title) && !isCompilationTitle(b.title));
+  const filteredCache = cached.filter((b) => !isJunkTitle(b.title, b.author) && !isCompilationTitle(b.title));
 
   // Step 2: If good cache results, return immediately
   if (filteredCache.length >= 3) {
@@ -85,7 +85,7 @@ export async function findBook(query: string): Promise<BookDetail[]> {
   // Add Google Books provisional entries
   if (googleSettled.status === "fulfilled") {
     for (const bookData of googleSettled.value.slice(0, 5)) {
-      if (isJunkTitle(bookData.title)) continue;
+      if (isJunkTitle(bookData.title, bookData.author)) continue;
       const book = await saveProvisionalBook(bookData);
       if (book && !filteredCache.some((b) => b.id === book.id)) {
         filteredCache.push({ ...book, ratings: [], spice: [], compositeSpice: null, tropes: [] });
@@ -128,7 +128,7 @@ async function inlineGoodreadsDiscovery(query: string): Promise<BookDetail[]> {
   const saved: BookDetail[] = [];
 
   for (const result of results.slice(0, 5)) {
-    if (isJunkTitle(result.title)) continue;
+    if (isJunkTitle(result.title, result.author)) continue;
 
     // Save using search-level data (title, author, cover, goodreadsId).
     // saveGoodreadsBookToCache handles dedup via goodreads_id upsert.

@@ -193,7 +193,7 @@ export async function executeFilteredSearch(
 
   // Filter junk titles
   const cleanBooks = books.filter(
-    (b: Record<string, unknown>) => !isJunkTitle(b.title as string)
+    (b: Record<string, unknown>) => !isJunkTitle(b.title as string, b.author as string)
   );
 
   // ── Batch hydrate ──────────────────────────────────

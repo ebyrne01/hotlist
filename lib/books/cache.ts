@@ -4,6 +4,7 @@ import { getCompositeSpice, getCompositeSpiceBatch } from "@/lib/spice/compute-c
 import { generateBookSlug } from "./goodreads-search";
 import { isJunkTitle } from "./romance-filter";
 import { deduplicateBooks, normalizeTitle } from "./utils";
+import { checkAndFlagBook } from "@/lib/quality/rules-engine";
 
 /** Returns null if the URL is a known placeholder image */
 export function cleanCoverUrl(url: string | null | undefined): string | null {
@@ -229,7 +230,7 @@ export async function searchBooksInCache(query: string): Promise<BookDetail[]> {
   );
 
   // Filter junk, then deduplicate (keeps edition with most reviews)
-  const filtered = results.filter((b) => !isJunkTitle(b.title));
+  const filtered = results.filter((b) => !isJunkTitle(b.title, b.author));
   const deduped = deduplicateBooks(filtered);
   // For author searches, sort newest first with coverless books at bottom
   // For other searches, just push coverless books to bottom
@@ -259,8 +260,8 @@ export async function saveGoodreadsBookToCache(bookData: BookData): Promise<Book
     return null;
   }
 
-  if (isJunkTitle(bookData.title)) {
-    console.warn("[cache] Rejecting junk title:", bookData.title);
+  if (isJunkTitle(bookData.title, bookData.author)) {
+    console.warn("[cache] Rejecting junk book:", bookData.title, "by", bookData.author);
     return null;
   }
 
@@ -349,6 +350,11 @@ export async function saveGoodreadsBookToCache(bookData: BookData): Promise<Book
     await queueEnrichmentJobs(data.id as string, bookData.title, bookData.author);
   }
 
+  // Fire-and-forget quality check — never blocks the write path
+  checkAndFlagBook(data.id as string).catch(err =>
+    console.warn('[quality] rules engine error:', err)
+  );
+
   return mapDbBook(data);
 }
 
@@ -370,8 +376,8 @@ export async function saveBookToCache(bookData: BookData): Promise<Book | null> 
  * when the enrichment queue processes their goodreads_detail job.
  */
 export async function saveProvisionalBook(bookData: BookData): Promise<Book | null> {
-  // Reject junk titles (study guides, workbooks, etc.) from Google Books
-  if (isJunkTitle(bookData.title)) return null;
+  // Reject junk titles and parasite publishers from Google Books
+  if (isJunkTitle(bookData.title, bookData.author)) return null;
 
   const supabase = getAdminClient();
 
@@ -431,6 +437,11 @@ export async function saveProvisionalBook(bookData: BookData): Promise<Book | nu
 
   // Queue enrichment jobs for this book
   await queueEnrichmentJobs(data.id as string, bookData.title, bookData.author);
+
+  // Fire-and-forget quality check
+  checkAndFlagBook(data.id as string).catch(err =>
+    console.warn('[quality] rules engine error:', err)
+  );
 
   return mapDbBook(data);
 }
@@ -503,6 +514,11 @@ export async function hydrateBookDetail(
       description: (t.description as string) ?? null,
     });
   }
+
+  // Fire-and-forget quality check on hydration (throttled in-memory, 5min TTL)
+  checkAndFlagBook(book.id).catch(err =>
+    console.warn('[quality] hydration check error:', err)
+  );
 
   return { ...book, ratings, spice, compositeSpice, tropes };
 }

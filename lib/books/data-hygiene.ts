@@ -99,6 +99,18 @@ const JUNK_PATTERNS: Array<{ label: string; sql: string }> = [
     label: "legal/government documents",
     sql: `title ~* '\\bCourt of Appeal\\b' OR title ~* '\\bNational Labor Relations\\b' OR title ~* '\\bFlood Control\\b'`,
   },
+  {
+    label: "novel unit / teacher guide parasites",
+    sql: `title ~* '\\bNovel Unit\\b' OR title ~* '\\bTeacher.?s? Guide\\b' OR title ~* '\\bLesson Plan\\b' OR title ~* '\\bCurriculum Guide\\b' OR title ~* '\\bClassroom Guide\\b' OR title ~* '\\bEducator.?s? Guide\\b'`,
+  },
+  {
+    label: "podcast entries",
+    sql: `title ~* '^Podcast:' OR title ~* '\\bPodcast\\b'`,
+  },
+  {
+    label: "parasite publishers by author name",
+    sql: `author ~* '^(SuperSummary|BookHabits|BookCaps|Readtrepreneur|Worth Books|Bright Summaries|Book Tigers|Instaread|Summary Station)$'`,
+  },
 ];
 
 /**
