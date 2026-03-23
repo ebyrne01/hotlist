@@ -1,0 +1,11 @@
+# Prevent Claude Code from reading secret files
+.env
+.env.*
+.env.local
+.env.production
+.env.development
+.env.staging
+*.pem
+*.key
+credentials.json
+service-account.json
