@@ -55,6 +55,50 @@ const JUNK_PATTERNS: Array<{ label: string; sql: string }> = [
     label: "Wing and Claw / special edition bundles",
     sql: `title ~* '\\(Wing and Claw Collection\\)'`,
   },
+  {
+    label: "notebook / journal / diary / planner products",
+    sql: `title ~* '\\bNotebook\\s*/\\s*Journal\\b' OR title ~* '\\bNotebook\\s*/\\s*Diary\\b' OR title ~* '\\bLined Journal\\b' OR title ~* '\\bDot Grid Journal\\b'`,
+  },
+  {
+    label: "biography year format (e.g. 'Biography 2025')",
+    sql: `title ~* '\\bBiography\\s+\\d{4}\\b'`,
+  },
+  {
+    label: "101 Facts / trivia books about other books",
+    sql: `title ~* '\\d+\\s+(Amazingly\\s+)?True\\s+Facts' OR title ~* '\\bTrivia\\s+Questions\\b'`,
+  },
+  {
+    label: "textbooks (pharmacology, nursing, etc.)",
+    sql: `title ~* '\\bPharmacology\\b' OR title ~* '\\bNursing Process\\b' OR title ~* '\\bExegetical\\b'`,
+  },
+  {
+    label: "edition format artifacts in title",
+    sql: `title ~* '\\bMass Market Paperback\\b' OR title ~* '\\bUnabridged CD Audio\\b'`,
+  },
+  {
+    label: "knitting / craft / cooking tie-ins",
+    sql: `title ~* '\\bKnit Along\\b' OR title ~* '\\bKnitting Pattern\\b'`,
+  },
+  {
+    label: "'{' bracket author format scraping artifact",
+    sql: `title ~ '^\\{\\s*\\[' AND title ~* 'AUTHOR'`,
+  },
+  {
+    label: "Bookclub-in-a-Box discussion guides",
+    sql: `title ~* '\\bBookclub.in.a.Box\\b' OR title ~* '\\bBook Club in a Box\\b'`,
+  },
+  {
+    label: "Yearbook / Playbill / Directory entries",
+    sql: `title ~* '\\bYearbook\\b' OR title ~* '\\bPlaybill\\b' OR title ~* '\\bDirectory\\b'`,
+  },
+  {
+    label: "'+ FREE' bonus book bundled titles",
+    sql: `title ~* '\\+\\s*FREE\\s+'`,
+  },
+  {
+    label: "legal/government documents",
+    sql: `title ~* '\\bCourt of Appeal\\b' OR title ~* '\\bNational Labor Relations\\b' OR title ~* '\\bFlood Control\\b'`,
+  },
 ];
 
 /**
@@ -217,8 +261,11 @@ async function deleteJunkBook(
   }
 
   // Delete all FK dependencies then the book itself
+  await supabase.from("quality_flags").delete().eq("book_id", bookId);
   await supabase.from("book_tropes").delete().eq("book_id", bookId);
   await supabase.from("book_ratings").delete().eq("book_id", bookId);
+  await supabase.from("book_recommendations").delete().eq("book_id", bookId);
+  await supabase.from("book_recommendations").delete().eq("recommended_book_id", bookId);
   await supabase.from("spice_signals").delete().eq("book_id", bookId);
   await supabase.from("enrichment_queue").delete().eq("book_id", bookId);
   await supabase.from("book_spice").delete().eq("book_id", bookId);
@@ -356,6 +403,109 @@ export async function runDataHygiene(): Promise<CleanupResult> {
     await deleteJunkBook(supabase, book.id, null);
     result.deleted++;
     result.details.push(`[compilation/box set] ${book.title}`);
+  }
+
+  // Phase 4: Scanner-flagged non-romance books
+  // The Haiku quality scanner identifies books that aren't romance by reading
+  // their synopsis/description. If it flagged a book as "wrong_book", it's a
+  // non-romance entry that slipped through discovery channels. SQL patterns
+  // can't catch these (titles are structurally normal), so we trust the scanner.
+  const { data: scannerFlagged } = await supabase
+    .from("quality_flags")
+    .select("book_id, original_value")
+    .eq("source", "haiku_scanner")
+    .eq("issue_type", "wrong_book")
+    .eq("status", "open");
+
+  if (scannerFlagged) {
+    // Deduplicate book IDs (a book could have multiple flags)
+    const flaggedBookIds = Array.from(new Set(scannerFlagged.map((f: { book_id: string }) => f.book_id)));
+
+    for (const bookId of flaggedBookIds) {
+      // Skip if already deleted in earlier phases
+      const { data: bookExists } = await supabase
+        .from("books")
+        .select("id, title, author")
+        .eq("id", bookId)
+        .single();
+
+      if (!bookExists) continue;
+
+      const userData = await hasUserData(supabase, bookId);
+      if (userData.hotlists > 0 || userData.ratings > 0) {
+        result.skippedWithUserData.push(
+          `${bookExists.title} (${userData.hotlists} hotlists, ${userData.ratings} ratings) [scanner-flagged]`
+        );
+        continue;
+      }
+
+      await deleteJunkBook(supabase, bookId, null);
+      result.deleted++;
+      result.details.push(`[scanner: wrong_book] ${bookExists.title} by ${bookExists.author}`);
+    }
+  }
+
+  // Phase 5: Duplicate book detection
+  // Finds exact title+author pairs (case-insensitive) with multiple entries.
+  // Scores each copy on data richness, keeps the canonical one, deletes the rest.
+  // Migrates user data (hotlists, ratings) to the canonical copy before deletion.
+  const { data: dupeGroups } = await supabase.rpc("find_duplicate_books");
+
+  // Fallback: if the RPC doesn't exist yet, use a raw query approach
+  if (dupeGroups === null) {
+    // RPC not deployed yet — skip Phase 5
+    result.details.push("[dupe-detection] Skipped — find_duplicate_books RPC not deployed");
+  } else if (dupeGroups.length > 0) {
+    for (const group of dupeGroups) {
+      const bookIds: string[] = group.book_ids;
+      if (bookIds.length < 2) continue;
+
+      // Fetch full data for all copies in this group
+      const { data: copies } = await supabase
+        .from("books")
+        .select("id, title, author, goodreads_id, enrichment_status, cover_url, ai_synopsis")
+        .in("id", bookIds);
+
+      if (!copies || copies.length < 2) continue;
+
+      // Score each copy on data richness
+      const scored = await Promise.all(
+        copies.map(async (book) => {
+          const [{ count: ratingCount }, { count: spiceCount }, userData] = await Promise.all([
+            supabase.from("book_ratings").select("*", { count: "exact", head: true }).eq("book_id", book.id),
+            supabase.from("spice_signals").select("*", { count: "exact", head: true }).eq("book_id", book.id),
+            hasUserData(supabase, book.id),
+          ]);
+
+          let score = 0;
+          if (book.goodreads_id) score += 3;
+          if (book.enrichment_status === "complete") score += 2;
+          if (book.cover_url) score += 2;
+          if (book.ai_synopsis) score += 2;
+          score += (ratingCount ?? 0);
+          score += (spiceCount ?? 0);
+          // User data is a strong signal — keep the copy users interact with
+          if (userData.hotlists > 0) score += 5;
+          if (userData.ratings > 0) score += 5;
+
+          return { ...book, score, userData };
+        })
+      );
+
+      // Sort by score descending — first entry is the canonical copy
+      scored.sort((a, b) => b.score - a.score);
+      const canonical = scored[0];
+      const dupes = scored.slice(1);
+
+      for (const dupe of dupes) {
+        const { migrated } = await deleteJunkBook(supabase, dupe.id, canonical.id);
+        result.deleted++;
+        if (migrated) result.migrated++;
+        result.details.push(
+          `[dupe] "${dupe.title}" (GR:${dupe.goodreads_id ?? "none"}, score:${dupe.score}) → kept (GR:${canonical.goodreads_id ?? "none"}, score:${canonical.score})`
+        );
+      }
+    }
   }
 
   return result;
