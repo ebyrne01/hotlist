@@ -226,7 +226,22 @@ async function processJob(job: QueuedJob): Promise<void> {
         }
       } else if (book_goodreads_id) {
         // Already has a Goodreads ID — re-scrape for updated data
-        const detail = await getGoodreadsBookById(book_goodreads_id);
+        let detail = await getGoodreadsBookById(book_goodreads_id);
+
+        // If this edition has no cover, try to find the canonical edition.
+        // Obscure editions (new Kindle releases, etc.) often lack covers,
+        // descriptions, and have unreliable ratings.
+        if (detail && !cleanCoverUrl(detail.coverUrl) && book_title && book_author) {
+          const canonicalId = await resolveToGoodreadsId(book_title, book_author);
+          if (canonicalId && canonicalId !== book_goodreads_id) {
+            console.log(`[enrichment-worker] Upgrading "${book_title}" from edition ${book_goodreads_id} to canonical ${canonicalId}`);
+            const canonicalDetail = await getGoodreadsBookById(canonicalId);
+            if (canonicalDetail && cleanCoverUrl(canonicalDetail.coverUrl)) {
+              detail = canonicalDetail;
+            }
+          }
+        }
+
         if (detail) {
           await saveGoodreadsBookToCache({
             title: detail.title,
