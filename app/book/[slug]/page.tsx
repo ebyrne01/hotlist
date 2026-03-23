@@ -523,12 +523,14 @@ export default async function BookPage({ params }: PageProps) {
 
             {/* Action row — pushed to bottom of the hero via flex-grow spacer */}
             <div className="mt-auto pt-4 flex flex-wrap items-center gap-2">
-              {/* Add to Hotlist — primary CTA */}
-              <BookDetailClient
-                section="add-to-hotlist"
-                bookId={book.id}
-                bookTitle={book.title}
-              />
+              {/* Add to Hotlist — primary CTA (hidden on mobile where sticky footer handles it) */}
+              <div className="hidden sm:block">
+                <BookDetailClient
+                  section="add-to-hotlist"
+                  bookId={book.id}
+                  bookTitle={book.title}
+                />
+              </div>
 
               {/* Kindle — secondary CTA */}
               <a
@@ -546,7 +548,7 @@ export default async function BookPage({ params }: PageProps) {
                   href={amazonDirectUrl ?? amazonSearchUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center rounded-lg bg-white text-ink border border-border font-body text-xs px-3 min-h-[36px] hover:bg-cream transition-colors"
+                  className="inline-flex items-center justify-center rounded-lg bg-white text-ink border border-border font-body text-sm px-3 min-h-[40px] hover:bg-cream transition-colors"
                 >
                   Amazon
                 </a>
@@ -554,7 +556,7 @@ export default async function BookPage({ params }: PageProps) {
                   href={bnUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center rounded-lg bg-white text-ink border border-border font-body text-xs px-3 min-h-[36px] hover:bg-cream transition-colors"
+                  className="inline-flex items-center justify-center rounded-lg bg-white text-ink border border-border font-body text-sm px-3 min-h-[40px] hover:bg-cream transition-colors"
                 >
                   B&amp;N
                 </a>
@@ -562,7 +564,7 @@ export default async function BookPage({ params }: PageProps) {
                   href={bookshopUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center rounded-lg bg-white text-ink border border-border font-body text-xs px-3 min-h-[36px] hover:bg-cream transition-colors"
+                  className="inline-flex items-center justify-center rounded-lg bg-white text-ink border border-border font-body text-sm px-3 min-h-[40px] hover:bg-cream transition-colors"
                 >
                   Bookshop
                 </a>
