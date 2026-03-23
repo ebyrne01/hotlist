@@ -1,19 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/supabase/admin";
-
-function isAuthorized(req: NextRequest): boolean {
-  const auth = req.headers.get("authorization");
-  return auth === `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`;
-}
+import { requireAdmin } from "@/lib/api/require-admin";
 
 /**
  * POST /api/admin/quality/flags/bulk-resolve
  * Bulk-resolve multiple flags at once.
  */
 export async function POST(req: NextRequest) {
-  if (!isAuthorized(req)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requireAdmin();
+  if ("error" in auth) return auth.error;
 
   const body = await req.json();
   const { flagIds, action, applyFix } = body as {

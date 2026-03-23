@@ -1,20 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { checkAndFlagBook } from "@/lib/quality/rules-engine";
-
-function isAuthorized(req: NextRequest): boolean {
-  const auth = req.headers.get("authorization");
-  return auth === `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`;
-}
+import { requireAdmin } from "@/lib/api/require-admin";
 
 /**
  * POST /api/admin/quality/scan
  * Triggers a full rules-engine scan of all books. Runs in the background.
  */
 export async function POST(req: NextRequest) {
-  if (!isAuthorized(req)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requireAdmin();
+  if ("error" in auth) return auth.error;
 
   const body = await req.json().catch(() => ({}));
   const scope = (body as { scope?: string }).scope === "unflagged" ? "unflagged" : "all";

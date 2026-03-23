@@ -39,7 +39,7 @@ export async function updateSession(request: NextRequest) {
 
   // Protected routes: if not logged in, redirect to home
   // Note: /lists/[slug] is PUBLIC (shared hotlists), only /lists exactly is protected
-  const protectedPaths = ["/dashboard", "/profile"];
+  const protectedPaths = ["/dashboard", "/profile", "/admin"];
   const pathname = request.nextUrl.pathname;
   const isProtected =
     protectedPaths.some((path) => pathname.startsWith(path)) ||

@@ -1,19 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/supabase/admin";
-
-function isAuthorized(req: NextRequest): boolean {
-  const auth = req.headers.get("authorization");
-  return auth === `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`;
-}
+import { requireAdmin } from "@/lib/api/require-admin";
 
 /**
  * GET /api/admin/quality/flags
  * Returns open quality flags with associated book data, paginated.
  */
 export async function GET(req: NextRequest) {
-  if (!isAuthorized(req)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = await requireAdmin();
+  if ("error" in auth) return auth.error;
 
   const { searchParams } = new URL(req.url);
   const status = searchParams.get("status") || "open";

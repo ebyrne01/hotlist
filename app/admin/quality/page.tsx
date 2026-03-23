@@ -90,14 +90,7 @@ export default function QualityDashboard() {
   const [scanRunning, setScanRunning] = useState(false);
   const limit = 50;
 
-  // Use service role key from a prompt — in production this would use session auth
-  const getAuthHeaders = useCallback(() => {
-    const key = (document.getElementById("admin-key") as HTMLInputElement)?.value || "";
-    return {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-    };
-  }, []);
+  const jsonHeaders = { "Content-Type": "application/json" };
 
   const fetchFlags = useCallback(async () => {
     setLoading(true);
@@ -111,7 +104,7 @@ export default function QualityDashboard() {
       if (priorityFilter) params.set("priority", priorityFilter);
 
       const res = await fetch(`/api/admin/quality/flags?${params}`, {
-        headers: getAuthHeaders(),
+        headers: jsonHeaders,
       });
       if (!res.ok) throw new Error(`${res.status}`);
       const data: FlagResponse = await res.json();
@@ -122,16 +115,15 @@ export default function QualityDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [status, page, issueTypeFilter, priorityFilter, getAuthHeaders]);
+  }, [status, page, issueTypeFilter, priorityFilter]);
 
   const fetchStats = useCallback(async () => {
     try {
-      const headers = getAuthHeaders();
       const [openRes, , confirmedRes, dismissedRes] = await Promise.all([
-        fetch("/api/admin/quality/flags?status=open&limit=1", { headers }),
-        fetch("/api/admin/quality/flags?status=open&limit=1", { headers }),
-        fetch("/api/admin/quality/flags?status=confirmed&limit=1", { headers }),
-        fetch("/api/admin/quality/flags?status=dismissed&limit=1", { headers }),
+        fetch("/api/admin/quality/flags?status=open&limit=1"),
+        fetch("/api/admin/quality/flags?status=open&limit=1"),
+        fetch("/api/admin/quality/flags?status=confirmed&limit=1"),
+        fetch("/api/admin/quality/flags?status=dismissed&limit=1"),
       ]);
 
       const openData = await openRes.json();
@@ -150,7 +142,7 @@ export default function QualityDashboard() {
     } catch {
       // Stats are best-effort
     }
-  }, [getAuthHeaders]);
+  }, []);
 
   useEffect(() => {
     fetchFlags();
@@ -162,7 +154,7 @@ export default function QualityDashboard() {
     try {
       const res = await fetch(`/api/admin/quality/flags/${flagId}/resolve`, {
         method: "POST",
-        headers: getAuthHeaders(),
+        headers: jsonHeaders,
         body: JSON.stringify({ action, applyFix }),
       });
       if (res.ok) {
@@ -186,7 +178,7 @@ export default function QualityDashboard() {
     try {
       const res = await fetch(`/api/admin/quality/flags/${flagId}/retag`, {
         method: "POST",
-        headers: getAuthHeaders(),
+        headers: jsonHeaders,
         body: JSON.stringify({ issueType: newIssueType }),
       });
       if (res.ok) {
@@ -208,7 +200,7 @@ export default function QualityDashboard() {
     try {
       const res = await fetch("/api/admin/quality/flags/bulk-resolve", {
         method: "POST",
-        headers: getAuthHeaders(),
+        headers: jsonHeaders,
         body: JSON.stringify({
           flagIds: fixableFlags.map((f) => f.id),
           action: "confirm",
@@ -229,7 +221,7 @@ export default function QualityDashboard() {
     try {
       await fetch("/api/admin/quality/scan", {
         method: "POST",
-        headers: getAuthHeaders(),
+        headers: jsonHeaders,
         body: JSON.stringify({ scope: "all" }),
       });
     } catch (err) {
@@ -247,21 +239,6 @@ export default function QualityDashboard() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 font-mono text-sm">
-      {/* Auth key input */}
-      <div className="mb-6">
-        <label className="block text-xs text-gray-500 mb-1">Service Role Key</label>
-        <input
-          id="admin-key"
-          type="password"
-          placeholder="Enter SUPABASE_SERVICE_ROLE_KEY..."
-          className="w-full max-w-md px-3 py-2 border rounded text-sm"
-          onChange={() => {
-            fetchFlags();
-            fetchStats();
-          }}
-        />
-      </div>
-
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Quality Flags</h1>

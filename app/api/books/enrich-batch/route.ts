@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
   // Auth: only in dev or with service role key
   const isDev = process.env.NODE_ENV === "development";
   const authHeader = request.headers.get("authorization");
-  const isAuthorized = authHeader === `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`;
+  const isAuthorized = authHeader === `Bearer ${process.env.CRON_SECRET}`;
 
   if (!isDev && !isAuthorized) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
