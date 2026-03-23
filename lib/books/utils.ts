@@ -96,8 +96,10 @@ const COMPILATION_PATTERNS = [
   /\bcomplete\s+series\b/i,                   // "Complete Series"
   /\bbox\s*set\b/i,                            // "Box Set", "Boxed Set"
   /\bomnibus\b/i,                              // "Omnibus"
-  /\bcollection\s*:/i,                         // "Collection:"
+  /\bcollection\s*[:\b]/i,                     // "Collection:" or "Collection"
   /\b(?:duet|trilogy|quartet)\s*:/i,           // "Duet:", "Trilogy:"
+  /\d+\s*book\s*(?:set|bundle|collection)/i,  // "2 Book Set", "8 Book Bundle"
+  /\bebook\s*bundle\b/i,                       // "eBook Bundle"
 ];
 
 /**

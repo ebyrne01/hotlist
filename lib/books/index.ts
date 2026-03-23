@@ -42,7 +42,7 @@ import {
 } from "./cache";
 import { generateSynopsis } from "./ai-synopsis";
 import { isJunkTitle } from "./romance-filter";
-import { deduplicateBooks } from "./utils";
+import { deduplicateBooks, isCompilationTitle } from "./utils";
 import { scheduleAuthorCrawl } from "./author-crawl";
 
 // ── Search ────────────────────────────────────────────
@@ -65,7 +65,7 @@ import { scheduleAuthorCrawl } from "./author-crawl";
 export async function findBook(query: string): Promise<BookDetail[]> {
   // Step 1: Search local DB (always fast)
   const cached = await searchBooksInCache(query);
-  const filteredCache = cached.filter((b) => !isJunkTitle(b.title));
+  const filteredCache = cached.filter((b) => !isJunkTitle(b.title) && !isCompilationTitle(b.title));
 
   // Step 2: If good cache results, return immediately
   if (filteredCache.length >= 3) {
