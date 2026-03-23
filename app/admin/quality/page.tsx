@@ -40,6 +40,7 @@ interface Stats {
 // ── Labels ────────────────────────────────────────────
 
 const ISSUE_LABELS: Record<string, string> = {
+  // Structural (rules engine)
   edition_artifact: "Edition in Series Name",
   publisher_collection: "Publisher Collection Series",
   numeric_only_series: "Series Name is Numeric/Generic",
@@ -47,10 +48,24 @@ const ISSUE_LABELS: Record<string, string> = {
   by_author_in_title: '"By Author" in Title',
   synopsis_too_short: "Synopsis Too Short",
   implausible_page_count: "Implausible Page Count",
-  future_publish_year: "Future Publish Year",
-  spice_genre_mismatch: "Spice/Genre Mismatch",
-  trope_mismatch: "Trope Mismatch",
-  goodreads_id_mismatch: "Wrong Goodreads Edition",
+  // Scanner
+  wrong_book: "Not Romance / Wrong Genre",
+  bad_synopsis: "Bad or Hallucinated Synopsis",
+  series_title_mismatch: "Series/Title Mismatch",
+  // Browser harness
+  book_found: "Book Not Found in Search",
+  cover_present: "Missing Cover",
+  cover_portrait: "Wrong Cover (Audiobook)",
+  enrichment_complete: "Enrichment Stalled",
+  goodreads_rating_present: "Missing GR Rating",
+  rating_accuracy: "Rating Inaccurate",
+  spice_present: "Missing Spice Data",
+  synopsis_present: "Missing Synopsis",
+  // Manual triage
+  junk_entry: "Junk / Not a Book",
+  duplicate: "Duplicate Entry",
+  foreign_edition: "Foreign Language Edition",
+  wrong_edition: "Wrong Goodreads Edition",
 };
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -164,6 +179,23 @@ export default function QualityDashboard() {
         next.delete(flagId);
         return next;
       });
+    }
+  };
+
+  const retagFlag = async (flagId: string, newIssueType: string) => {
+    try {
+      const res = await fetch(`/api/admin/quality/flags/${flagId}/retag`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ issueType: newIssueType }),
+      });
+      if (res.ok) {
+        setFlags((prev) =>
+          prev.map((f) => f.id === flagId ? { ...f, issueType: newIssueType } : f)
+        );
+      }
+    } catch (err) {
+      console.error("Retag failed:", err);
     }
   };
 
@@ -336,7 +368,23 @@ export default function QualityDashboard() {
                     </td>
                     <td className="px-3 py-2 text-gray-600">{flag.fieldName}</td>
                     <td className="px-3 py-2">
-                      {ISSUE_LABELS[flag.issueType] || flag.issueType}
+                      {status === "open" ? (
+                        <select
+                          value={flag.issueType}
+                          onChange={(e) => retagFlag(flag.id, e.target.value)}
+                          className="px-1.5 py-0.5 border rounded text-xs bg-white max-w-[160px]"
+                        >
+                          {Object.entries(ISSUE_LABELS).map(([key, label]) => (
+                            <option key={key} value={key}>{label}</option>
+                          ))}
+                          {/* Show current value even if not in ISSUE_LABELS */}
+                          {!ISSUE_LABELS[flag.issueType] && (
+                            <option value={flag.issueType}>{flag.issueType}</option>
+                          )}
+                        </select>
+                      ) : (
+                        ISSUE_LABELS[flag.issueType] || flag.issueType
+                      )}
                     </td>
                     <td className="px-3 py-2">
                       <ConfidenceBadge value={flag.confidence} />
