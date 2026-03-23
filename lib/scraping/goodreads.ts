@@ -66,6 +66,13 @@ export async function scrapeGoodreadsRating(
       ? parseInt(countMatch[1].replace(/,/g, ""), 10)
       : 0;
 
+    // Reject edition-level ratings — work-level entries have 50+ ratings.
+    // A low count means we hit a specific edition, not the canonical work.
+    if (ratingCount < 50) {
+      console.warn(`[goodreads] Rejecting edition-level rating for "${bookTitle}": ${rating} with only ${ratingCount} ratings`);
+      return null;
+    }
+
     // Extract Goodreads ID from the book link
     const bookLink =
       firstResult.find("a.bookTitle").attr("href") ||
