@@ -195,12 +195,14 @@ async function processJob(job: QueuedJob): Promise<void> {
             // the provisional row (it has goodreads_id: null). So we update by book_id.
             const cleanTitle = stripSeriesSuffix(detail.title);
             const slug = generateBookSlug(cleanTitle, detail.goodreadsId);
+            const cleanedCover = cleanCoverUrl(detail.coverUrl);
             const updateFields: Record<string, unknown> = {
                 title: cleanTitle,
                 author: detail.author,
                 goodreads_id: detail.goodreadsId,
                 goodreads_url: detail.goodreadsUrl ?? null,
-                cover_url: cleanCoverUrl(detail.coverUrl),
+                // Only overwrite cover when new edition has one (don't nuke existing cover)
+                ...(cleanedCover && { cover_url: cleanedCover }),
                 description: detail.description ?? null,
                 published_year: detail.publishedYear ?? null,
                 page_count: detail.pageCount ?? null,

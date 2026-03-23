@@ -290,13 +290,22 @@ export async function saveGoodreadsBookToCache(bookData: BookData): Promise<Book
 
   const slug = generateBookSlug(bookData.title, bookData.goodreadsId);
 
+  // Check if this book already exists — preserve cover/series when incoming data is null
+  const { data: existingByGrId } = await supabase
+    .from("books")
+    .select("cover_url, series_name, series_position")
+    .eq("goodreads_id", bookData.goodreadsId)
+    .single();
+
+  const incomingCover = cleanCoverUrl(bookData.coverUrl);
+
   const row = {
     title: stripSeriesSuffix(cleanText(bookData.title)),
     author: cleanText(bookData.author),
     isbn: bookData.isbn ?? null,
     isbn13: bookData.isbn13 ?? null,
     google_books_id: bookData.googleBooksId ?? null,
-    cover_url: cleanCoverUrl(bookData.coverUrl),
+    cover_url: incomingCover ?? existingByGrId?.cover_url ?? null,
     page_count: bookData.pageCount ?? null,
     published_year: bookData.publishedYear ?? null,
     publisher: bookData.publisher ?? null,
@@ -310,8 +319,8 @@ export async function saveGoodreadsBookToCache(bookData: BookData): Promise<Book
     subgenre: bookData.subgenre ?? null,
     metadata_source: "goodreads" as const,
     slug,
-    series_name: bookData.seriesName ?? null,
-    series_position: bookData.seriesPosition ?? null,
+    series_name: bookData.seriesName ?? existingByGrId?.series_name ?? null,
+    series_position: bookData.seriesPosition ?? existingByGrId?.series_position ?? null,
     data_refreshed_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
