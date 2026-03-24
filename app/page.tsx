@@ -16,6 +16,10 @@ import { isJunkTitle } from "@/lib/books/romance-filter";
 import { deduplicateBooks, diversifyByAuthor, isCompilationTitle, hasYAGenre } from "@/lib/books/utils";
 import { getTopBuzzBooks, getBuzzScoresForBooks } from "@/lib/books/buzz-score";
 import { TrendingUp, Sparkles, Swords, Flame } from "lucide-react";
+import ForYouRow from "@/components/home/ForYouRow";
+import DnaCtaBanner from "@/components/home/DnaCtaBanner";
+import { getDna } from "@/lib/reading-dna";
+import { rankBooks, type BookVector } from "@/lib/reading-dna/score";
 import type { BookDetail } from "@/lib/types";
 
 // Authors who appear on bestseller lists but don't match Hotlist's
@@ -458,10 +462,12 @@ async function getBookTokPreviewCovers(): Promise<string[]> {
 export default async function Home() {
   // Fetch user session (non-blocking — returns null for logged-out users)
   let userHotlists: { id: string; name: string; shareSlug: string | null; bookCount: number }[] = [];
+  let userId: string | null = null;
   try {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
+      userId = user.id;
       userHotlists = await getUserHotlists(supabase, user.id);
     }
   } catch {
@@ -482,6 +488,68 @@ export default async function Home() {
   const hotIds = new Set(hotBooks.map((b) => b.id));
   const filteredReleases = newReleases.filter((b) => !hotIds.has(b.id));
 
+  // Reading DNA: personalized "For You" row or CTA banner
+  let forYouBooks: BookDetail[] = [];
+  let hasDna = false;
+  if (userId) {
+    try {
+      const dna = await getDna(userId);
+      if (dna) {
+        hasDna = true;
+        // Score canon books against user's DNA profile
+        const adminForYou = getAdminClient();
+        const { data: vectorRows } = await adminForYou
+          .from("book_trope_vectors")
+          .select("book_id, vector")
+          .limit(200);
+
+        if (vectorRows && vectorRows.length > 0) {
+          const bookVectors: BookVector[] = vectorRows.map((v) => ({
+            bookId: v.book_id as string,
+            vector: v.vector as Record<string, number>,
+            spiceLevel: null, // filled below
+          }));
+
+          const ranked = rankBooks(
+            {
+              tropeAffinities: dna.tropeAffinities,
+              spicePreferred: dna.spicePreferred,
+              spiceTolerance: dna.spiceTolerance,
+              signalCount: dna.signalCount,
+            },
+            bookVectors,
+            20
+          );
+
+          const topIds = ranked.map((r) => r.bookId);
+          if (topIds.length > 0) {
+            const { data: dbBooks } = await adminForYou
+              .from("books")
+              .select("*")
+              .in("id", topIds)
+              .eq("is_canon", true);
+
+            if (dbBooks && dbBooks.length > 0) {
+              const hydrated = await Promise.all(
+                (dbBooks as Record<string, unknown>[]).map((b) =>
+                  hydrateBookDetail(adminForYou, b)
+                )
+              );
+              // Sort by DNA score order
+              const idOrder = new Map(topIds.map((id, i) => [id, i]));
+              forYouBooks = hydrated
+                .filter((b) => b.coverUrl && b.tropes.length > 0)
+                .sort((a, b) => (idOrder.get(a.id) ?? 99) - (idOrder.get(b.id) ?? 99))
+                .slice(0, 10);
+            }
+          }
+        }
+      }
+    } catch {
+      // DNA fetch failed — continue without personalization
+    }
+  }
+
   return (
     <>
       <HeroSection bookCount={stats.bookCount} tropeCount={tropes.length} communitySpiceCount={stats.communitySpiceCount} />
@@ -490,6 +558,12 @@ export default async function Home() {
       <UserHotlistBar hotlists={userHotlists} />
 
       <div className="max-w-6xl mx-auto px-4">
+        {/* Reading DNA: personalized row or onboarding CTA */}
+        {userId && hasDna && forYouBooks.length > 0 && (
+          <ForYouRow books={forYouBooks} />
+        )}
+        {userId && !hasDna && <DnaCtaBanner />}
+
         {/* 1. What's Hot — NYT Bestsellers (first book content, immediately after hero) */}
         {hotBooks.length > 0 && (
           <section id="whats-hot" className="py-8">

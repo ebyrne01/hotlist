@@ -80,6 +80,17 @@ export function InlineUserRating({ bookId }: { bookId: string }) {
           );
         }
 
+        // Fire-and-forget: update Reading DNA signal
+        fetch("/api/reading-dna/recompute", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            bookId,
+            signalType: "rating",
+            weight: value >= 5 ? 1.0 : value >= 4 ? 0.8 : value >= 3 ? 0.6 : 0.3,
+          }),
+        }).catch(() => {});
+
         setJustSaved(true);
         setTimeout(() => setJustSaved(false), 1500);
       } catch (err) {
