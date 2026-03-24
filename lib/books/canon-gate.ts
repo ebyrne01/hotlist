@@ -10,6 +10,65 @@
 
 import { getAdminClient } from "@/lib/supabase/admin";
 import { isRomanceByGenres, isKnownRomanceAuthor } from "./romance-filter";
+import { isCompilationTitle } from "./utils";
+
+/**
+ * Detect foreign-language editions and titles stuffed with marketing copy.
+ * These slip through genre checks because the *genre* is romance, but the
+ * book itself is a German translation or has Amazon blurb text in the title.
+ */
+function isForeignOrMarketingTitle(title: string): boolean {
+  // Non-ASCII accented characters (common in French, German, Spanish, Portuguese, Turkish titles)
+  if (/[àáâãäåèéêëìíîïòóôõöùúûüñçÀÁÂÃÄÅÈÉÊËÌÍÎÏÒÓÔÕÖÙÚÛÜÑÇ]/.test(title)) {
+    // Allow a few known English titles with accented characters (e.g., "Ménage", "Brontë")
+    // by checking if the title is mostly ASCII
+    const nonAsciiCount = (title.match(/[^\x00-\x7F]/g) || []).length;
+    if (nonAsciiCount > 2) return true;
+  }
+
+  const lower = title.toLowerCase();
+  const MARKETING_PATTERNS = [
+    "perfect for readers of",
+    "from the author of",
+    "for fans of",
+    "for all readers of",
+    "leseproben",
+    "bestsellerautorin",
+    "aus der welt",
+    "clásicos de la literatura",
+    "roman |",
+    "roman -",
+  ];
+  return MARKETING_PATTERNS.some((p) => lower.includes(p));
+}
+
+/**
+ * Detect study guides, summaries, coloring books, and other non-book products
+ * that have Goodreads entries but should never be canon.
+ */
+function isNonBookTitle(title: string): boolean {
+  const lower = title.toLowerCase();
+  const NON_BOOK_PATTERNS = [
+    "summary & analysis",
+    "summary & study guide",
+    "summary & wiki",
+    "summary |",
+    "summary of ",
+    "study guide:",
+    "study guide ",
+    "conversation starters",
+    "sparknotes",
+    "cliffsnotes",
+    "bookcaps",
+    "colouring book",
+    "coloring book",
+    "activity book",
+    "sticker book",
+    "popup book",
+    "pop-up book",
+  ];
+  return NON_BOOK_PATTERNS.some((p) => lower.includes(p));
+}
 
 export interface CanonGateResult {
   ready: boolean;
@@ -86,6 +145,22 @@ export async function evaluateCanonReadiness(bookId: string): Promise<CanonGateR
   // 3. Must have a cover
   if (!book.cover_url) {
     blockers.push("no_cover");
+  }
+
+  // 3b. Must be English-language (foreign editions have accented titles or
+  // German/French/Spanish marketing text baked into the title)
+  if (isForeignOrMarketingTitle(book.title)) {
+    blockers.push("foreign_or_marketing_title");
+  }
+
+  // 3c. Must not be a study guide, summary, coloring book, etc.
+  if (isNonBookTitle(book.title)) {
+    blockers.push("non_book_product");
+  }
+
+  // 3d. Must not be a box set, omnibus, or compilation
+  if (isCompilationTitle(book.title)) {
+    blockers.push("compilation_or_box_set");
   }
 
   // 4. Must have canonical identity (Goodreads ID)

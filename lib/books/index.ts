@@ -82,14 +82,15 @@ export async function findBook(query: string): Promise<BookDetail[]> {
     withTimeout(inlineGoodreadsDiscovery(query), 5000),
   ]);
 
-  // Add Google Books provisional entries
+  // Save Google Books provisional entries to DB for background enrichment,
+  // but do NOT add them to search results. Provisional books lack Goodreads
+  // IDs, ratings, and quality signals — showing them pollutes results with
+  // junk (academic texts, study guides, foreign editions). They'll be
+  // promoted to canon via the canon gate once enrichment completes.
   if (googleSettled.status === "fulfilled") {
     for (const bookData of googleSettled.value.slice(0, 5)) {
       if (isJunkTitle(bookData.title, bookData.author)) continue;
-      const book = await saveProvisionalBook(bookData);
-      if (book && !filteredCache.some((b) => b.id === book.id)) {
-        filteredCache.push({ ...book, ratings: [], spice: [], compositeSpice: null, tropes: [] });
-      }
+      await saveProvisionalBook(bookData);
     }
   }
 
