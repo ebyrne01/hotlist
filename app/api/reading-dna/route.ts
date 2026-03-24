@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     .in("book_id", bookSelections);
 
   // If no vectors exist yet, build them on the fly from book_tropes
-  let vectorMap = new Map<string, Record<string, number>>();
+  const vectorMap = new Map<string, Record<string, number>>();
   if (vectorRows && vectorRows.length > 0) {
     for (const row of vectorRows) {
       vectorMap.set(row.book_id, row.vector as Record<string, number>);
