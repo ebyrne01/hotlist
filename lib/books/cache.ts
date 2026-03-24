@@ -91,14 +91,15 @@ export async function searchBooksInCache(query: string): Promise<BookDetail[]> {
   // Build word-based queries: each word must appear in the field
   // This handles "danielle jensen" matching "Danielle L. Jensen"
   // and "bridge kingdom" matching "The Bridge Kingdom"
+  // Only search canon books — non-canon books are not on public surfaces
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let titleWordQuery = supabase.from("books").select("*") as any;
+  let titleWordQuery = supabase.from("books").select("*").eq("is_canon", true) as any;
   for (const word of words) {
     titleWordQuery = titleWordQuery.ilike("title", `%${word}%`);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let authorWordQuery = supabase.from("books").select("*") as any;
+  let authorWordQuery = supabase.from("books").select("*").eq("is_canon", true) as any;
   for (const word of words) {
     authorWordQuery = authorWordQuery.ilike("author", `%${word}%`);
   }
@@ -109,6 +110,7 @@ export async function searchBooksInCache(query: string): Promise<BookDetail[]> {
     supabase
       .from("books")
       .select("*")
+      .eq("is_canon", true)
       .textSearch("title", tsQuery, { config: "english" })
       .limit(15),
     titleWordQuery.limit(15),
