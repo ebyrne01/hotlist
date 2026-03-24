@@ -22,7 +22,7 @@ import { classifyRomanceIoTags } from "@/lib/scraping/romance-io-tags";
 import { enrichBookMetadata } from "@/lib/books/metadata-enrichment";
 import { generateSynopsis } from "@/lib/books/ai-synopsis";
 import { getGoodreadsBookById, resolveToGoodreadsId, generateBookSlug } from "@/lib/books/goodreads-search";
-import { saveGoodreadsBookToCache, cleanCoverUrl, stripSeriesSuffix } from "@/lib/books/cache";
+import { saveGoodreadsBookToCache, cleanCoverUrl, stripSeriesSuffix, resolveExistingBook } from "@/lib/books/cache";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { computeGenreBucketing } from "@/lib/spice/genre-bucketing";
 import { inferAndUpsertSpice } from "@/lib/spice/llm-inference";
@@ -36,6 +36,53 @@ import { generateRecommendations } from "@/lib/books/ai-recommendations";
 import { detectAndSaveAudiobookStatus } from "@/lib/books/audiobook-detect";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+
+/**
+ * Merge a provisional book into an existing canonical book.
+ * Transfers FKs (hotlist_books, user_ratings, reading_status) from the
+ * provisional row to the canonical row, then deletes the provisional.
+ * Returns true if merge happened.
+ */
+async function mergeProvisionalIntoExisting(
+  supabase: SupabaseClient,
+  provisionalId: string,
+  canonicalId: string
+): Promise<boolean> {
+  if (provisionalId === canonicalId) return false;
+
+  console.log(`[enrichment-worker] Merging provisional ${provisionalId} into canonical ${canonicalId}`);
+
+  // Transfer FKs — use ON CONFLICT DO NOTHING to skip if already exists
+  await supabase.rpc("merge_book_references", {
+    source_id: provisionalId,
+    target_id: canonicalId,
+  }).then(({ error }) => {
+    // If the RPC doesn't exist yet, fall back to manual updates
+    if (error) {
+      console.warn("[enrichment-worker] merge_book_references RPC not found, using fallback");
+      return Promise.all([
+        supabase.from("hotlist_books").update({ book_id: canonicalId }).eq("book_id", provisionalId),
+        supabase.from("user_ratings").update({ book_id: canonicalId }).eq("book_id", provisionalId),
+        supabase.from("reading_status").update({ book_id: canonicalId }).eq("book_id", provisionalId),
+        supabase.from("enrichment_queue").update({ book_id: canonicalId }).eq("book_id", provisionalId),
+      ]);
+    }
+  });
+
+  // Delete the provisional row
+  const { error: deleteError } = await supabase
+    .from("books")
+    .delete()
+    .eq("id", provisionalId);
+
+  if (deleteError) {
+    console.warn(`[enrichment-worker] Failed to delete provisional ${provisionalId}:`, deleteError.message);
+    return false;
+  }
+
+  console.log(`[enrichment-worker] Merged provisional ${provisionalId} → canonical ${canonicalId}`);
+  return true;
+}
 
 const JOB_DELAY_MS = 300; // Delay between jobs to respect rate limits
 const CONCURRENCY = 3; // Max parallel jobs within a tier
@@ -203,6 +250,14 @@ async function processJob(job: QueuedJob): Promise<"data" | "no-data"> {
       if (!book_goodreads_id && book_title && book_author) {
         const grId = await resolveToGoodreadsId(book_title, book_author);
         if (grId) {
+          // Check if another book already has this Goodreads ID (merge-on-resolve)
+          const existingId = await resolveExistingBook({ goodreadsId: grId, title: book_title, author: book_author });
+          if (existingId && existingId !== book_id) {
+            // Another row already owns this Goodreads ID — merge provisional into it
+            await mergeProvisionalIntoExisting(supabase, book_id, existingId);
+            break; // Provisional is deleted, nothing more to do
+          }
+
           const detail = await getGoodreadsBookById(grId);
           if (detail) {
             // Update the EXISTING provisional book row instead of creating a new one.

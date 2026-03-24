@@ -28,6 +28,89 @@ function cleanText(text: string): string {
 
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
+/**
+ * Unified dedup resolver — checks whether a book already exists in the DB.
+ * All write paths should call this before inserting to prevent duplicates.
+ *
+ * Resolution order:
+ *   1. goodreads_id (exact match — canonical identity)
+ *   2. isbn / isbn13 (exact match)
+ *   3. google_books_id (exact match)
+ *   4. Normalized title + author last name (fuzzy match)
+ *
+ * Returns the existing book's ID if found, null if genuinely new.
+ */
+export async function resolveExistingBook(params: {
+  goodreadsId?: string | null;
+  isbn?: string | null;
+  isbn13?: string | null;
+  googleBooksId?: string | null;
+  title: string;
+  author: string;
+}): Promise<string | null> {
+  const supabase = getAdminClient();
+
+  // 1. Goodreads ID — strongest identity signal
+  if (params.goodreadsId) {
+    const { data } = await supabase
+      .from("books")
+      .select("id")
+      .eq("goodreads_id", params.goodreadsId)
+      .single();
+    if (data) return data.id as string;
+  }
+
+  // 2. ISBN / ISBN-13
+  if (params.isbn) {
+    const { data } = await supabase
+      .from("books")
+      .select("id")
+      .eq("isbn", params.isbn)
+      .single();
+    if (data) return data.id as string;
+  }
+  if (params.isbn13) {
+    const { data } = await supabase
+      .from("books")
+      .select("id")
+      .eq("isbn13", params.isbn13)
+      .single();
+    if (data) return data.id as string;
+  }
+
+  // 3. Google Books ID
+  if (params.googleBooksId) {
+    const { data } = await supabase
+      .from("books")
+      .select("id")
+      .eq("google_books_id", params.googleBooksId)
+      .single();
+    if (data) return data.id as string;
+  }
+
+  // 4. Normalized title + author last name
+  const norm = normalizeTitle(params.title);
+  if (!norm) return null;
+  const authorLastName = params.author.split(" ").pop()?.toLowerCase() ?? "";
+  if (!authorLastName) return null;
+
+  const { data: candidates } = await supabase
+    .from("books")
+    .select("id, title")
+    .ilike("author", `%${authorLastName}%`)
+    .limit(20);
+
+  if (candidates) {
+    for (const c of candidates) {
+      if (normalizeTitle((c.title as string) || "") === norm) {
+        return c.id as string;
+      }
+    }
+  }
+
+  return null;
+}
+
 // ── Read from cache ──────────────────────────────────
 
 export async function getBookFromCache(identifier: string): Promise<BookDetail | null> {
