@@ -272,6 +272,7 @@ export default async function BookPage({ params }: PageProps) {
       .from("books")
       .select("id, title, slug, series_position, goodreads_id, cover_url")
       .eq("series_name", book.seriesName)
+      .eq("is_canon", true)
       .not("series_position", "is", null)
       .order("series_position", { ascending: true, nullsFirst: false })
       .limit(50);
