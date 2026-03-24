@@ -102,6 +102,7 @@ export default async function TropePage({ params }: TropePageProps) {
         .from("books")
         .select("*")
         .in("id", bookIds)
+        .eq("is_canon", true)
         .order("updated_at", { ascending: false });
 
       if (dbBooks && dbBooks.length > 0) {

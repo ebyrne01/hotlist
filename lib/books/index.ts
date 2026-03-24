@@ -306,6 +306,7 @@ export async function getBooksByTrope(
     .from("books")
     .select("*")
     .in("id", bookIds)
+    .eq("is_canon", true)
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1);
 

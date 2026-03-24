@@ -83,6 +83,7 @@ async function getRelatedBooks(
       .from("books")
       .select("*")
       .in("id", recIds)
+      .eq("is_canon", true)
       .not("cover_url", "is", null);
 
     if (recBooks && recBooks.length > 0) {
@@ -113,6 +114,7 @@ async function getRelatedBooks(
       .select("*")
       .eq("author", book.author)
       .neq("id", book.id)
+      .eq("is_canon", true)
       .not("cover_url", "is", null)
       .order("created_at", { ascending: false })
       .limit(limit * 3);
@@ -155,6 +157,7 @@ async function getRelatedBooks(
     .from("books")
     .select("*")
     .in("id", sortedIds)
+    .eq("is_canon", true)
     .not("cover_url", "is", null);
 
   if (!relatedDbBooks || relatedDbBooks.length === 0) return [];

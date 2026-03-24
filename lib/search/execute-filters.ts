@@ -244,6 +244,7 @@ export async function executeFilteredSearch(
   let query = supabase
     .from("books")
     .select("*")
+    .eq("is_canon", true)
     .eq("enrichment_status", "complete")
     .not("cover_url", "is", null);
 

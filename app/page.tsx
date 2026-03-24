@@ -133,6 +133,7 @@ async function getWhatsHot(): Promise<BookDetail[]> {
           .from("books")
           .select("*")
           .in("id", backfillIds)
+          .eq("is_canon", true)
           .not("cover_url", "is", null);
 
         if (backfillRows) {
@@ -160,6 +161,7 @@ async function getWhatsHot(): Promise<BookDetail[]> {
       .from("books")
       .select("*")
       .in("id", buzzCandidateIds.slice(0, 20))
+      .eq("is_canon", true)
       .not("cover_url", "is", null);
 
     if (buzzBooks) {
@@ -196,6 +198,7 @@ async function getWhatsHot(): Promise<BookDetail[]> {
           .from("books")
           .select("*")
           .in("id", uniqueIds)
+          .eq("is_canon", true)
           .not("cover_url", "is", null);
 
         if (backfillBooks) {
@@ -244,6 +247,7 @@ async function getWhatsHot(): Promise<BookDetail[]> {
     .from("books")
     .select("*")
     .in("id", fallbackIds)
+    .eq("is_canon", true)
     .not("cover_url", "is", null);
 
   if (!fallbackBooks || fallbackBooks.length === 0) return [];
@@ -285,6 +289,7 @@ async function getSpiciest(): Promise<BookDetail[]> {
     .from("books")
     .select("*")
     .in("id", bookIds)
+    .eq("is_canon", true)
     .not("cover_url", "is", null);
 
   if (!books || books.length === 0) return [];
@@ -348,6 +353,7 @@ async function getRomantasyPicks(): Promise<BookDetail[]> {
   const { data: books } = await supabase
     .from("books")
     .select("*")
+    .eq("is_canon", true)
     .not("cover_url", "is", null)
     .or(
       "genres.cs.{romantasy},genres.cs.{fantasy romance},genres.cs.{romantic fantasy},genres.cs.{fae},genres.cs.{faerie}"
@@ -360,6 +366,7 @@ async function getRomantasyPicks(): Promise<BookDetail[]> {
     const { data: fallback } = await supabase
       .from("books")
       .select("*")
+      .eq("is_canon", true)
       .not("cover_url", "is", null)
       .or("description.ilike.%romantasy%,description.ilike.%fae court%,description.ilike.%fantasy romance%")
       .order("updated_at", { ascending: false })

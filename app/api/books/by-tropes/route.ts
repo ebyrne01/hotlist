@@ -80,6 +80,7 @@ export async function GET(request: NextRequest) {
     .from("books")
     .select("*")
     .in("id", matchingBookIds.slice(0, 50))
+    .eq("is_canon", true)
     .order("updated_at", { ascending: false });
 
   if (!dbBooks || dbBooks.length === 0) {
