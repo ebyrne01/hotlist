@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { runDataHygiene } from "@/lib/books/data-hygiene";
+import { runAutoFixer } from "@/lib/quality/auto-fixer";
+import { processGrabFeedback } from "@/lib/quality/feedback-pipeline";
+import { computeAndStoreScorecard } from "@/lib/quality/scorecard";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -11,20 +14,39 @@ export async function GET(request: Request) {
   }
 
   try {
-    const result = await runDataHygiene();
+    // Phase 1-5: Data hygiene (junk removal, dedup)
+    const hygiene = await runDataHygiene();
     console.log(
-      `[data-hygiene] Cleaned ${result.deleted} junk entries, migrated ${result.migrated} user refs, skipped ${result.skippedWithUserData.length}`
+      `[data-hygiene] Cleaned ${hygiene.deleted} junk entries, migrated ${hygiene.migrated} user refs, skipped ${hygiene.skippedWithUserData.length}`
     );
-    if (result.details.length > 0) {
-      console.log(`[data-hygiene] Details:`, result.details.join("; "));
+    if (hygiene.details.length > 0) {
+      console.log(`[data-hygiene] Details:`, hygiene.details.join("; "));
     }
-    if (result.skippedWithUserData.length > 0) {
+    if (hygiene.skippedWithUserData.length > 0) {
       console.log(
         `[data-hygiene] Skipped (has user data):`,
-        result.skippedWithUserData.join("; ")
+        hygiene.skippedWithUserData.join("; ")
       );
     }
-    return NextResponse.json(result);
+
+    // Phase 6: Auto-fix high-confidence quality flags
+    const autofix = await runAutoFixer();
+    console.log(`[data-hygiene] Auto-fixer: ${autofix.fixed} fixed, ${autofix.skipped} skipped, ${autofix.errors} errors`);
+
+    // Phase 7: Process user feedback → quality flags
+    const feedback = await processGrabFeedback();
+    console.log(`[data-hygiene] Feedback pipeline: ${feedback.processed} processed, ${feedback.flagsCreated} flags created, ${feedback.escalatedToP0} escalated`);
+
+    // Phase 8: Quality scorecard (monthly trend tracking)
+    const scorecard = await computeAndStoreScorecard();
+    console.log(`[data-hygiene] Scorecard: ${scorecard.canonCount} canon books, ${scorecard.flags.openTotal} open flags`);
+
+    return NextResponse.json({
+      hygiene,
+      autofix,
+      feedback,
+      scorecard,
+    });
   } catch (error) {
     console.error("[cron/data-hygiene] Fatal error:", error);
     return NextResponse.json(
