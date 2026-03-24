@@ -27,10 +27,18 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
   const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
-  // Track which books are still being enriched
+  // Track which books are still missing visible data (ratings or spice).
+  // We check for actual missing data rather than enrichmentStatus, because
+  // bonus jobs (Spotify, booktrack) can leave status at "partial" even
+  // when all user-visible data is present.
   const enrichingBookIds = new Set(
     books
-      .filter((b) => b.book.enrichmentStatus !== "complete" && b.book.enrichmentStatus !== null)
+      .filter((b) => {
+        if (b.book.enrichmentStatus === "complete" || b.book.enrichmentStatus === null) return false;
+        const hasRatings = b.book.ratings.length > 0;
+        const hasSpice = b.book.compositeSpice !== null || b.book.spice.length > 0;
+        return !hasRatings || !hasSpice;
+      })
       .map((b) => b.bookId)
   );
   const hasEnrichingBooks = enrichingBookIds.size > 0;
