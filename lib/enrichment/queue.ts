@@ -162,14 +162,19 @@ export async function markJobRunning(jobId: string): Promise<void> {
 
 /**
  * Mark a job as completed.
+ * @param outcome - 'data' if the job produced results, 'no_data' if the source had nothing
  */
-export async function markJobCompleted(jobId: string): Promise<void> {
+export async function markJobCompleted(
+  jobId: string,
+  outcome: "data" | "no_data" = "data"
+): Promise<void> {
   const supabase = getAdminClient();
   await supabase
     .from("enrichment_queue")
     .update({
       status: "completed",
       completed_at: new Date().toISOString(),
+      outcome,
     })
     .eq("id", jobId);
 }
@@ -195,6 +200,7 @@ export async function markJobFailed(
     .update({
       status: "failed",
       error_message: errorMessage,
+      outcome: "error",
       next_retry_at: new Date(Date.now() + backoffMs).toISOString(),
     })
     .eq("id", jobId);
@@ -256,6 +262,15 @@ export async function updateBookEnrichmentStatus(bookId: string): Promise<void> 
       });
     }).catch(() => {
       // Scanner module not available — ignore
+    });
+
+    // Evaluate canon readiness — auto-promote if the book meets all requirements
+    import("@/lib/books/canon-gate").then(({ tryPromoteToCanon }) => {
+      tryPromoteToCanon(bookId).catch(err =>
+        console.warn("[canon-gate] Post-enrichment evaluation failed:", err)
+      );
+    }).catch(() => {
+      // Canon gate module not available — ignore
     });
   }
 }

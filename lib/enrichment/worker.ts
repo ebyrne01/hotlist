@@ -149,7 +149,7 @@ export async function processEnrichmentQueue(
               // External source returned nothing — retry with backoff
               // On final attempt, complete it to avoid infinite loops
               if (job.attempts >= job.max_attempts) {
-                await markJobCompleted(job.id);
+                await markJobCompleted(job.id, "no_data");
                 console.log(`[enrichment-worker] ${job.job_type} for "${job.book_title}" — no data after ${job.attempts} attempts, marking complete`);
               } else {
                 await markJobFailed(job.id, "no-data: external source returned no results", job.attempts);
@@ -158,7 +158,7 @@ export async function processEnrichmentQueue(
               await updateBookEnrichmentStatus(job.book_id);
               return { success: false } as const;
             }
-            await markJobCompleted(job.id);
+            await markJobCompleted(job.id, "data");
             await updateBookEnrichmentStatus(job.book_id);
             return { success: true } as const;
           } catch (err) {

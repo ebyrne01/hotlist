@@ -63,18 +63,28 @@ export default function AdminBookFlag({ bookId, bookTitle }: AdminBookFlagProps)
   async function handleSubmit() {
     setState("submitting");
     try {
-      const supabase = createClient();
-      await supabase.from("quality_flags").insert({
-        book_id: bookId,
-        field_name: issueType === "other" ? "general" : issueType,
-        issue_type: issueType === "other" ? "manual_flag" : issueType,
-        source: "admin_manual",
-        confidence: 1.0,
-        original_value: notes.trim() || null,
-        priority: "P1",
-        auto_fixable: false,
-        status: "open",
+      const res = await fetch("/api/admin/quality/flags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookId, issueType, notes: notes.trim() || undefined }),
       });
+
+      if (!res.ok) {
+        // Fallback to direct insert if API fails
+        const supabase = createClient();
+        await supabase.from("quality_flags").insert({
+          book_id: bookId,
+          field_name: issueType === "other" ? "general" : issueType,
+          issue_type: issueType === "other" ? "manual_flag" : issueType,
+          source: "admin_manual",
+          confidence: 1.0,
+          original_value: notes.trim() || null,
+          priority: "P1",
+          auto_fixable: false,
+          status: "open",
+        });
+      }
+
       setState("done");
     } catch {
       setState("done");
