@@ -596,6 +596,15 @@ export async function scanBook(
     if (finding.autoFixable && finding.confidence >= 0.92) {
       await applyAutoFix(bookId, finding);
     }
+
+    // Auto-demote from canon when scanner finds wrong_book or goodreads_wrong_book
+    if (
+      (finding.issueType === "wrong_book" || finding.issueType === "goodreads_wrong_book") &&
+      finding.confidence >= 0.9
+    ) {
+      const { demoteFromCanon } = await import("@/lib/books/canon-gate");
+      await demoteFromCanon(bookId, `haiku_scanner: ${finding.issueType} (confidence: ${finding.confidence})`);
+    }
   }
 
   return { checked: 4, flagged: findings.length };
