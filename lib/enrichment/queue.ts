@@ -211,7 +211,7 @@ export async function markJobFailed(
  * These are nice-to-have enrichments — if they fail or are pending,
  * the book should still be marked "complete" once core jobs finish.
  */
-const BONUS_JOB_TYPES: JobType[] = ["spotify_playlists", "booktrack_prompt"];
+const BONUS_JOB_TYPES: JobType[] = ["spotify_playlists", "booktrack_prompt", "ai_synopsis", "ai_recommendations"];
 
 /**
  * Update a book's enrichment_status based on its completed jobs.
