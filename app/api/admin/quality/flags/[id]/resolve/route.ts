@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { checkGraduationThreshold } from "@/lib/quality/rules-engine";
+import { tryPromoteToCanon } from "@/lib/books/canon-gate";
 import { requireAdmin } from "@/lib/api/require-admin";
 
 /**
@@ -91,6 +92,16 @@ export async function POST(
           resolved_by: "admin",
         })
         .eq("id", flagId);
+    }
+  }
+
+  // When dismissing a wrong_book/junk_entry flag, re-evaluate for canon promotion
+  // (the book was demoted when flagged — dismissal means admin disagrees)
+  const DEMOTING_ISSUE_TYPES = ["wrong_book", "junk_entry", "goodreads_wrong_book", "foreign_edition"];
+  if (action === "dismiss" && DEMOTING_ISSUE_TYPES.includes(flag.issue_type)) {
+    const promoted = await tryPromoteToCanon(flag.book_id);
+    if (promoted) {
+      console.log(`[quality] Re-promoted book ${flag.book_id} after dismissing ${flag.issue_type} flag`);
     }
   }
 
