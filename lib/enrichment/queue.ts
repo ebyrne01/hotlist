@@ -39,6 +39,7 @@ export interface QueuedJob {
   book_id: string;
   job_type: JobType;
   attempts: number;
+  max_attempts: number;
   book_title?: string;
   book_author?: string;
   book_isbn?: string;
@@ -65,11 +66,15 @@ export async function queueEnrichmentJobs(
     "booktrack_prompt", "spotify_playlists", "ai_recommendations",
   ];
 
+  // Serper-dependent jobs get more retries — transient Google index misses are common
+  const SERPER_JOBS = new Set<JobType>(["romance_io_spice", "amazon_rating", "goodreads_rating"]);
+
   const rows = jobs.map((jobType) => ({
     book_id: bookId,
     job_type: jobType,
     status: "pending",
     attempts: 0,
+    max_attempts: SERPER_JOBS.has(jobType) ? 5 : 3,
     next_retry_at: new Date().toISOString(),
   }));
 
@@ -127,6 +132,7 @@ export async function claimJobs(
     book_id: row.book_id,
     job_type: row.job_type as JobType,
     attempts: row.attempts,
+    max_attempts: row.max_attempts ?? 3,
     book_title: row.book_title,
     book_author: row.book_author,
     book_isbn: row.book_isbn,
@@ -195,25 +201,39 @@ export async function markJobFailed(
 }
 
 /**
+ * Bonus job types that should NOT block enrichment status.
+ * These are nice-to-have enrichments — if they fail or are pending,
+ * the book should still be marked "complete" once core jobs finish.
+ */
+const BONUS_JOB_TYPES: JobType[] = ["spotify_playlists", "booktrack_prompt"];
+
+/**
  * Update a book's enrichment_status based on its completed jobs.
+ * Excludes bonus job types (Spotify, booktrack) from the status calculation
+ * so they don't block books from reaching "complete".
  */
 export async function updateBookEnrichmentStatus(bookId: string): Promise<void> {
   const supabase = getAdminClient();
 
   const { data: jobs } = await supabase
     .from("enrichment_queue")
-    .select("status")
+    .select("status, job_type")
     .eq("book_id", bookId);
 
   if (!jobs || jobs.length === 0) return;
 
+  // Only consider core jobs for status calculation
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const coreJobs = jobs.filter((j: any) => !BONUS_JOB_TYPES.includes(j.job_type));
+
+  if (coreJobs.length === 0) return;
+
   // A job is "done" if it completed or permanently failed (exhausted retries).
   // Failed jobs should not block a book from reaching "complete" status.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const allDone = jobs.every((j: any) => j.status === "completed" || j.status === "failed");
+  const allDone = coreJobs.every((j: any) => j.status === "completed" || j.status === "failed");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const someComplete = jobs.some((j: any) => j.status === "completed");
+  const someComplete = coreJobs.some((j: any) => j.status === "completed");
 
   const status = allDone && someComplete ? "complete" : someComplete ? "partial" : "pending";
 
@@ -221,4 +241,21 @@ export async function updateBookEnrichmentStatus(bookId: string): Promise<void> 
     .from("books")
     .update({ enrichment_status: status })
     .eq("id", bookId);
+
+  // Fire Haiku quality scan when a book reaches "complete" — never blocks enrichment
+  if (status === "complete") {
+    import("@/lib/quality/haiku-scanner").then(({ scanBook, isUnderDailyLimit }) => {
+      isUnderDailyLimit().then(underLimit => {
+        if (!underLimit) return;
+        import("@anthropic-ai/sdk").then(({ default: Anthropic }) => {
+          const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+          scanBook(client, bookId).catch(err =>
+            console.warn("[haiku-scanner] Post-enrichment scan failed:", err)
+          );
+        });
+      });
+    }).catch(() => {
+      // Scanner module not available — ignore
+    });
+  }
 }

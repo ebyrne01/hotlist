@@ -42,6 +42,33 @@ function stripMarkdown(text: string): string {
     .trim();
 }
 
+/**
+ * Detect when Haiku refuses to write a synopsis and apologizes instead.
+ * These get published as the synopsis if not caught.
+ */
+function isApologySynopsis(text: string): boolean {
+  const lower = text.toLowerCase();
+  const REFUSAL_PATTERNS = [
+    "falls outside my",
+    "outside my wheelhouse",
+    "not a romance novel",
+    "isn't a romance novel",
+    "isn't a romance book",
+    "not a romance book",
+    "i should let you know",
+    "i need to let you know",
+    "i should clarify",
+    "i need to be honest",
+    "this is a non-fiction",
+    "this is a nonfiction",
+    "this isn't a romance",
+    "not a novel",
+    "my specialty is writing synopses for romance",
+    "my specialty is writing warm",
+  ];
+  return REFUSAL_PATTERNS.some((p) => lower.includes(p));
+}
+
 export async function generateSynopsis(book: {
   id: string;
   title: string;
@@ -97,11 +124,16 @@ export async function generateSynopsis(book: {
 
     const text = raw ? stripMarkdown(raw) : null;
 
-    if (text) {
+    if (text && !isApologySynopsis(text)) {
       await saveSynopsis(book.id, text);
+      return text;
     }
 
-    return text;
+    if (text) {
+      console.warn(`[ai-synopsis] Rejected apology synopsis for "${book.title}": "${text.slice(0, 80)}..."`);
+    }
+
+    return null;
   } catch (err) {
     console.error("AI synopsis generation failed:", err);
     return null;

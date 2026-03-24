@@ -144,7 +144,20 @@ export async function processEnrichmentQueue(
       const results = await Promise.allSettled(
         jobs.map(async (job) => {
           try {
-            await processJob(job);
+            const result = await processJob(job);
+            if (result === "no-data") {
+              // External source returned nothing — retry with backoff
+              // On final attempt, complete it to avoid infinite loops
+              if (job.attempts >= job.max_attempts) {
+                await markJobCompleted(job.id);
+                console.log(`[enrichment-worker] ${job.job_type} for "${job.book_title}" — no data after ${job.attempts} attempts, marking complete`);
+              } else {
+                await markJobFailed(job.id, "no-data: external source returned no results", job.attempts);
+                console.log(`[enrichment-worker] ${job.job_type} for "${job.book_title}" — no data, will retry (attempt ${job.attempts}/${job.max_attempts})`);
+              }
+              await updateBookEnrichmentStatus(job.book_id);
+              return { success: false } as const;
+            }
             await markJobCompleted(job.id);
             await updateBookEnrichmentStatus(job.book_id);
             return { success: true } as const;
@@ -175,8 +188,10 @@ export async function processEnrichmentQueue(
 
 /**
  * Process a single enrichment job.
+ * Returns "data" if the job produced results, "no-data" if the external
+ * source returned nothing (transient miss — should be retried).
  */
-async function processJob(job: QueuedJob): Promise<void> {
+async function processJob(job: QueuedJob): Promise<"data" | "no-data"> {
   const supabase = getAdminClient();
   const { book_id, job_type, book_title, book_author, book_isbn, book_goodreads_id } = job;
 
@@ -220,6 +235,17 @@ async function processJob(job: QueuedJob): Promise<void> {
               .from("books")
               .update(updateFields)
               .eq("id", book_id);
+            // Store scraped title+author as evidence for quality mismatch detection
+            await supabase
+              .from("enrichment_queue")
+              .update({
+                evidence: {
+                  scraped_title: detail.title,
+                  scraped_author: detail.author,
+                  scraped_at: new Date().toISOString(),
+                },
+              })
+              .eq("id", job.id);
             // Detect audiobook from new cover
             await detectAndSaveAudiobookStatus(book_id, detail.coverUrl ?? null);
           }
@@ -256,6 +282,17 @@ async function processJob(job: QueuedJob): Promise<void> {
             pageCount: detail.pageCount,
             genres: detail.genres,
           });
+          // Store scraped title+author as evidence for quality mismatch detection
+          await supabase
+            .from("enrichment_queue")
+            .update({
+              evidence: {
+                scraped_title: detail.title,
+                scraped_author: detail.author,
+                scraped_at: new Date().toISOString(),
+              },
+            })
+            .eq("id", job.id);
           // Detect audiobook from cover
           await detectAndSaveAudiobookStatus(book_id, detail.coverUrl ?? null);
         }
@@ -268,41 +305,39 @@ async function processJob(job: QueuedJob): Promise<void> {
     case "goodreads_rating": {
       if (!book_title || !book_author) break;
       const grData = await scrapeGoodreadsRating(book_title, book_author);
-      if (grData) {
-        await supabase.from("book_ratings").upsert(
-          {
-            book_id,
-            source: "goodreads",
-            rating: grData.rating,
-            rating_count: grData.ratingCount,
-            scraped_at: new Date().toISOString(),
-          },
-          { onConflict: "book_id,source" }
-        );
-      }
+      if (!grData) return "no-data";
+      await supabase.from("book_ratings").upsert(
+        {
+          book_id,
+          source: "goodreads",
+          rating: grData.rating,
+          rating_count: grData.ratingCount,
+          scraped_at: new Date().toISOString(),
+        },
+        { onConflict: "book_id,source" }
+      );
       break;
     }
 
     case "amazon_rating": {
       if (!book_title || !book_author) break;
       const amazonData = await getAmazonRatingViaSerper(book_title, book_author, book_isbn);
-      if (amazonData) {
-        // Save ASIN even when rating extraction fails — ASINs power affiliate buy links
-        if (amazonData.asin) {
-          await supabase.from("books").update({ amazon_asin: amazonData.asin }).eq("id", book_id);
-        }
-        if (amazonData.rating > 0) {
-          await supabase.from("book_ratings").upsert(
-            {
-              book_id,
-              source: "amazon",
-              rating: amazonData.rating,
-              rating_count: amazonData.ratingCount,
-              scraped_at: new Date().toISOString(),
-            },
-            { onConflict: "book_id,source" }
-          );
-        }
+      if (!amazonData) return "no-data";
+      // Save ASIN even when rating extraction fails — ASINs power affiliate buy links
+      if (amazonData.asin) {
+        await supabase.from("books").update({ amazon_asin: amazonData.asin }).eq("id", book_id);
+      }
+      if (amazonData.rating > 0) {
+        await supabase.from("book_ratings").upsert(
+          {
+            book_id,
+            source: "amazon",
+            rating: amazonData.rating,
+            rating_count: amazonData.ratingCount,
+            scraped_at: new Date().toISOString(),
+          },
+          { onConflict: "book_id,source" }
+        );
       }
       break;
     }
@@ -310,75 +345,79 @@ async function processJob(job: QueuedJob): Promise<void> {
     case "romance_io_spice": {
       if (!book_title || !book_author) break;
       const spiceData = await getRomanceIoSpice(book_title, book_author);
-      if (spiceData && (spiceData.confidence === "high" || spiceData.confidence === "medium")) {
-        const signalConfidence = spiceData.confidence === "high" ? 0.85 : 0.7;
-        // Store in legacy book_spice table
-        await supabase.from("book_spice").upsert(
+      if (!spiceData || (spiceData.confidence !== "high" && spiceData.confidence !== "medium")) {
+        // Serper returned nothing or low-confidence match — run genre bucketing
+        // as fallback, then signal no-data so the job retries
+        await upsertGenreBucketing(supabase, book_id);
+        return "no-data";
+      }
+      const signalConfidence = spiceData.confidence === "high" ? 0.85 : 0.7;
+      // Store in legacy book_spice table
+      await supabase.from("book_spice").upsert(
+        {
+          book_id,
+          source: "romance_io",
+          spice_level: spiceData.spiceLevel,
+          confidence: spiceData.confidence,
+          scraped_at: new Date().toISOString(),
+        },
+        { onConflict: "book_id,source" }
+      );
+      // Store in new spice_signals table
+      await supabase.from("spice_signals").upsert(
+        {
+          book_id,
+          source: "romance_io",
+          spice_value: spiceData.spiceLevel,
+          confidence: signalConfidence,
+          evidence: {
+            heat_label: spiceData.heatLabel,
+            match_confidence: spiceData.confidence,
+            scraped_at: new Date().toISOString(),
+          },
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "book_id,source" }
+      );
+      // Store the star rating if the scraper found one
+      if (spiceData.romanceIoRating && spiceData.romanceIoRating > 0) {
+        await supabase.from("book_ratings").upsert(
           {
             book_id,
             source: "romance_io",
-            spice_level: spiceData.spiceLevel,
-            confidence: spiceData.confidence,
+            rating: spiceData.romanceIoRating,
+            rating_count: null,
             scraped_at: new Date().toISOString(),
           },
           { onConflict: "book_id,source" }
         );
-        // Store in new spice_signals table
-        await supabase.from("spice_signals").upsert(
-          {
-            book_id,
-            source: "romance_io",
-            spice_value: spiceData.spiceLevel,
-            confidence: signalConfidence,
-            evidence: {
-              heat_label: spiceData.heatLabel,
-              match_confidence: spiceData.confidence,
-              scraped_at: new Date().toISOString(),
-            },
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "book_id,source" }
-        );
-        // Store the star rating if the scraper found one
-        if (spiceData.romanceIoRating && spiceData.romanceIoRating > 0) {
-          await supabase.from("book_ratings").upsert(
-            {
+      }
+      await supabase.from("books").update({
+        romance_io_slug: spiceData.romanceIoSlug,
+        romance_io_heat_label: spiceData.heatLabel,
+      }).eq("id", book_id);
+
+      // Store romance.io tags as tropes (if any)
+      if (spiceData.rawTags && spiceData.rawTags.length > 0) {
+        const classified = classifyRomanceIoTags(spiceData.rawTags);
+        if (classified.tropes.length > 0) {
+          // Look up canonical trope IDs
+          const { data: tropeRows } = await supabase
+            .from("tropes")
+            .select("id, slug")
+            .in("slug", classified.tropes.map((t) => t.canonicalSlug));
+
+          if (tropeRows && tropeRows.length > 0) {
+            const tropeInserts = tropeRows.map((tr) => ({
               book_id,
+              trope_id: tr.id,
               source: "romance_io",
-              rating: spiceData.romanceIoRating,
-              rating_count: null,
-              scraped_at: new Date().toISOString(),
-            },
-            { onConflict: "book_id,source" }
-          );
-        }
-        await supabase.from("books").update({
-          romance_io_slug: spiceData.romanceIoSlug,
-          romance_io_heat_label: spiceData.heatLabel,
-        }).eq("id", book_id);
+            }));
 
-        // Store romance.io tags as tropes (if any)
-        if (spiceData.rawTags && spiceData.rawTags.length > 0) {
-          const classified = classifyRomanceIoTags(spiceData.rawTags);
-          if (classified.tropes.length > 0) {
-            // Look up canonical trope IDs
-            const { data: tropeRows } = await supabase
-              .from("tropes")
-              .select("id, slug")
-              .in("slug", classified.tropes.map((t) => t.canonicalSlug));
-
-            if (tropeRows && tropeRows.length > 0) {
-              const tropeInserts = tropeRows.map((tr) => ({
-                book_id,
-                trope_id: tr.id,
-                source: "romance_io",
-              }));
-
-              // Upsert to avoid duplicates
-              await supabase
-                .from("book_tropes")
-                .upsert(tropeInserts, { onConflict: "book_id,trope_id" });
-            }
+            // Upsert to avoid duplicates
+            await supabase
+              .from("book_tropes")
+              .upsert(tropeInserts, { onConflict: "book_id,trope_id" });
           }
         }
       }
@@ -633,4 +672,6 @@ async function processJob(job: QueuedJob): Promise<void> {
     default:
       console.warn(`[enrichment-worker] Unknown job type: ${job_type}`);
   }
+
+  return "data";
 }

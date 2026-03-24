@@ -14,7 +14,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { getAdminClient } from "@/lib/supabase/admin";
 
 const MODEL = "claude-haiku-4-5-20251001";
-const DEFAULT_DAILY_LIMIT = 500;
+const DEFAULT_DAILY_LIMIT = 5000;
 
 async function getDailyUsage(): Promise<number> {
   const supabase = getAdminClient();
