@@ -133,14 +133,6 @@ export default function HotlistTable({
   const hasAnyAmazon = books.some((hb) => getRating(hb.book.ratings, "amazon") !== null);
   const hasAnyRomanceIo = books.some((hb) => getRating(hb.book.ratings, "romance_io") !== null);
 
-  // Compute trope frequency for shared-trope highlighting
-  const tropeFrequency = new Map<string, number>();
-  for (const hb of books) {
-    for (const trope of hb.book.tropes) {
-      tropeFrequency.set(trope.name, (tropeFrequency.get(trope.name) ?? 0) + 1);
-    }
-  }
-
   if (books.length === 0) {
     return (
       <div className="text-center py-12 border border-dashed border-border rounded-lg">
@@ -324,7 +316,7 @@ export default function HotlistTable({
         <table className="w-full min-w-[700px] text-sm">
           <thead>
             <tr className="border-b border-border">
-              <th className="text-left px-3 py-2 font-mono text-xs text-muted uppercase tracking-wide">
+              <th className="text-left px-3 py-2 font-mono text-xs text-muted uppercase tracking-wide min-w-[260px]">
                 Book
               </th>
               <SortHeader label="Goodreads" sortKey="goodreads" currentKey={sortKey} dir={sortDir} onClick={handleSort} />
@@ -337,9 +329,6 @@ export default function HotlistTable({
               <SortHeader label="Spice" sortKey="spice" currentKey={sortKey} dir={sortDir} onClick={handleSort} />
               <th className="text-center px-3 py-2 font-mono text-xs text-muted uppercase tracking-wide">
                 My Rating
-              </th>
-              <th className="text-left px-3 py-2 font-mono text-xs text-muted uppercase tracking-wide">
-                Tropes
               </th>
               <th className="text-center px-3 py-2 font-mono text-xs text-muted uppercase tracking-wide">
                 Status
@@ -369,10 +358,10 @@ export default function HotlistTable({
                     <Link href={`/book/${slug}`} className="flex items-center gap-3 group">
                       <BookCover title={hb.book.title} coverUrl={hb.book.coverUrl} size="table" isAudiobook={hb.book.isAudiobook} />
                       <div className="min-w-0">
-                        <p className="font-display font-bold text-ink text-sm leading-tight group-hover:text-fire transition-colors line-clamp-2">
+                        <p className="font-display font-bold text-ink text-sm leading-tight group-hover:text-fire transition-colors">
                           {hb.book.title}
                         </p>
-                        <p className="text-xs font-body text-muted line-clamp-1">
+                        <p className="text-xs font-body text-muted">
                           {hb.book.author}
                         </p>
                       </div>
@@ -487,32 +476,6 @@ export default function HotlistTable({
                       isOwner={isOwner}
                       onRate={onRateBook}
                     />
-                  </td>
-                  <td className="px-3 py-3">
-                    <div className="flex gap-1 flex-wrap max-w-[180px]">
-                      {hb.book.tropes.slice(0, 3).map((t) => {
-                        const isShared = (tropeFrequency.get(t.name) ?? 0) >= 2;
-                        return (
-                          <Link key={t.id} href={`/tropes/${t.slug}`}>
-                            <span
-                              className={`text-[10px] font-mono px-1.5 py-0.5 rounded cursor-pointer transition-colors ${
-                                isShared
-                                  ? "bg-fire/10 text-fire/80 border border-fire/20 hover:bg-fire/15"
-                                  : "bg-cream text-muted border border-border hover:border-muted/40"
-                              }`}
-                            >
-                              {t.name}
-                            </span>
-                          </Link>
-                        );
-                      })}
-                      {hb.book.tropes.length > 3 && (
-                        <span className="text-xs font-mono text-muted/60">+{hb.book.tropes.length - 3}</span>
-                      )}
-                      {hb.book.tropes.length === 0 && (
-                        <span className="text-muted/70 font-mono text-xs">{"\u2014"}</span>
-                      )}
-                    </div>
                   </td>
                   <td className="px-3 py-3 text-center">
                     <ReadStatusToggle
