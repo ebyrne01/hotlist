@@ -150,6 +150,8 @@ All tables in the public schema:
 /app/api/cron/                — Vercel cron endpoints (see Cron Jobs below)
 /app/api/books/               — Book operations (search, enrich, refresh-spice)
 /app/api/grab/                — BookTok video grab (streaming)
+/app/api/admin/quality/       — Quality flag CRUD, scorecard, health, scan APIs
+/app/admin/quality/           — Admin quality dashboard (triage + monitoring widgets)
 /app/book/[slug]/             — Book detail page + SpiceSection
 /app/booktok/                 — BookTok UI
 /app/discover/                — Creator discovery index (trending + all creators)
@@ -469,6 +471,32 @@ Before any Serper call in `romance-io-search.ts`, the cache is checked (`/lib/sc
 - `/lib/books/canon-gate.ts` — canon promotion/demotion logic
 - `scripts/audit-harness.ts` — Playwright browser audit (manual + GitHub Actions)
 - `scripts/search-eval.ts` — full 3-tier search eval (manual, includes Sonnet Tier 3)
+
+#### Admin quality dashboard
+
+`/admin/quality/` — Admin-only page for quality triage and monitoring. Requires `is_admin` on profiles.
+
+**Widgets (top of page):**
+- **Stats cards** — Open flags, auto-fixable count, confirmed count, dismissed count
+- **Quality Scorecard** — 8 coverage bars (covers, synopsis, GR rating, AMZ rating, romance.io spice, tropes, Amazon ASIN, AI recs) with %, enrichment status breakdown, flag counts by priority. Data from `/api/admin/quality/scorecard`.
+- **Enrichment Source Health** — Per-source success/no-data/failure rates over last 24h with red warnings below 30%. Data from `/api/admin/quality/health`.
+- **Recent Auto-Fixes** — Last 10 auto-fixed flags showing book, issue type, original→fixed values. Data from flags API filtered by `status=auto_fixed`.
+
+**Flag triage table:**
+- Filterable by status, priority, issue type. Paginated (50/page).
+- Inline actions: Fix (apply suggested value), Confirm, Dismiss, Retag (reclassify issue type).
+- Bulk "Auto-fix All" for high-confidence fixable flags on current page.
+- "Run Full Scan" triggers rules engine on all books.
+
+**API routes:**
+- `GET /api/admin/quality/flags` — paginated flag list with book details
+- `POST /api/admin/quality/flags` — create manual flag (auto-demotes on wrong_book/junk_entry, re-queues on bad_synopsis/rating_accuracy)
+- `POST /api/admin/quality/flags/[id]/resolve` — confirm/dismiss with optional fix apply
+- `POST /api/admin/quality/flags/[id]/retag` — reclassify issue type
+- `POST /api/admin/quality/flags/bulk-resolve` — batch resolve
+- `GET /api/admin/quality/scorecard` — on-demand quality metrics
+- `GET /api/admin/quality/health` — enrichment source health (24h)
+- `POST /api/admin/quality/scan` — trigger full rules engine scan
 
 ### Amazon enrichment (bulk, ad-hoc)
 
