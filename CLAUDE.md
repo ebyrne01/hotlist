@@ -491,7 +491,7 @@ Before any Serper call in `romance-io-search.ts`, the cache is checked (`/lib/sc
 **API routes:**
 - `GET /api/admin/quality/flags` — paginated flag list with book details
 - `POST /api/admin/quality/flags` — create manual flag (auto-demotes on wrong_book/junk_entry, re-queues on bad_synopsis/rating_accuracy)
-- `POST /api/admin/quality/flags/[id]/resolve` — confirm/dismiss with optional fix apply
+- `POST /api/admin/quality/flags/[id]/resolve` — confirm/dismiss with optional fix apply. Supports `newGoodreadsId` param for wrong_book/wrong_edition/foreign_edition flags — remaps the book to the correct GR ID, clears stale GR data, deletes old GR rating, re-queues goodreads_detail + goodreads_rating enrichment. Dupe-checks before remapping.
 - `POST /api/admin/quality/flags/[id]/retag` — reclassify issue type
 - `POST /api/admin/quality/flags/bulk-resolve` — batch resolve
 - `GET /api/admin/quality/scorecard` — on-demand quality metrics
