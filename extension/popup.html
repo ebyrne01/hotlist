@@ -9,7 +9,7 @@
   <div class="popup">
     <div class="header">
       <span class="wordmark">Hotlist</span>
-      <span class="fire">🔥</span>
+      <span class="fire" role="img" aria-label="Hotlist logo">🔥</span>
     </div>
 
     <!-- State: Video page detected -->
@@ -19,8 +19,8 @@
     </div>
 
     <!-- State: Processing video -->
-    <div id="state-processing" class="state hidden">
-      <div class="progress-bar">
+    <div id="state-processing" class="state hidden" role="status" aria-live="polite">
+      <div class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Video processing progress">
         <div class="progress-fill" id="progressFill"></div>
       </div>
       <p class="status-text" id="statusText">Starting...</p>
@@ -28,7 +28,7 @@
 
     <!-- State: Results -->
     <div id="state-results" class="state hidden">
-      <div id="bookList" class="book-list"></div>
+      <div id="bookList" class="book-list" role="list" aria-label="Books found in video"></div>
       <a id="openHotlistBtn" href="#" class="btn-primary" target="_blank">Open on Hotlist →</a>
     </div>
 

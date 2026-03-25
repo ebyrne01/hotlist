@@ -219,7 +219,7 @@ export default function SpiceSection({
   return (
     <div>
       {/* Header with tooltip */}
-      <h2 className="text-xs font-mono text-muted uppercase tracking-wide mb-2 flex items-center gap-1.5">
+      <h2 className="text-xs font-mono text-muted-a11y uppercase tracking-wide mb-2 flex items-center gap-1.5">
         Spice Level
         <span className="relative group/tip cursor-help">
           <svg
@@ -229,7 +229,7 @@ export default function SpiceSection({
             fill="none"
             stroke="currentColor"
             strokeWidth="1.5"
-            className="text-muted/70"
+            className="text-muted-a11y"
           >
             <circle cx="8" cy="8" r="7" />
             <path d="M8 11V8M8 5.5V5" strokeLinecap="round" />
@@ -244,7 +244,7 @@ export default function SpiceSection({
       <div className="flex items-center gap-2">
         <PepperRow level={primaryLevel} size={18} estimated={isEstimated} />
         {hasRomanceIo && romanceIoHeatLabel && (
-          <span className="text-xs font-body text-muted/80 italic">
+          <span className="text-xs font-body text-muted-a11y italic">
             {romanceIoHeatLabel}
           </span>
         )}
@@ -269,19 +269,19 @@ export default function SpiceSection({
           <ExternalLink size={10} />
         </a>
       ) : hasCommunity ? (
-        <p className="mt-1.5 text-xs font-mono text-muted/60">
+        <p className="mt-1.5 text-xs font-mono text-muted-a11y">
           Rated by {communitySpice.ratingCount} Hotlist reader
           {(communitySpice.ratingCount ?? 0) === 1 ? "" : "s"}
         </p>
       ) : inferredSpice ? (
-        <p className="mt-1.5 text-xs font-mono text-muted/60">
+        <p className="mt-1.5 text-xs font-mono text-muted-a11y">
           Estimated from Goodreads reader shelves
         </p>
       ) : null}
 
       {/* Community row when romance.io is primary and community has enough ratings */}
       {hasRomanceIo && hasCommunity && (
-        <div className="mt-2 flex items-center gap-2 text-xs font-mono text-muted/60">
+        <div className="mt-2 flex items-center gap-2 text-xs font-mono text-muted-a11y">
           <span>Hotlist readers:</span>
           <PepperRow level={communitySpice.spiceLevel} size={16} muted />
           <span className="text-xs">
@@ -293,7 +293,7 @@ export default function SpiceSection({
 
       {/* If no romance.io but we have both community and inferred, show secondary */}
       {!hasRomanceIo && communitySpice && inferredSpice && (
-        <div className="mt-2 flex items-center gap-2 text-xs font-mono text-muted/60">
+        <div className="mt-2 flex items-center gap-2 text-xs font-mono text-muted-a11y">
           <span>Goodreads estimate:</span>
           <PepperRow level={inferredSpice.spiceLevel} size={16} muted />
         </div>
@@ -365,7 +365,7 @@ function UserSpiceRow({
   if (justSaved) {
     return (
       <div className="flex items-center gap-2">
-        <span className="text-xs font-mono text-muted/60">Your take:</span>
+        <span className="text-xs font-mono text-muted-a11y">Your take:</span>
         <span className="inline-flex items-center gap-1 text-xs font-mono text-green-600">
           <Check size={12} strokeWidth={3} /> Saved
         </span>
@@ -378,7 +378,7 @@ function UserSpiceRow({
     return (
       <div>
         <div className="flex items-center gap-2">
-          <span className="text-xs font-mono text-muted/60">
+          <span className="text-xs font-mono text-muted-a11y">
             Your take:
           </span>
           <PepperRow level={userSpice} size={16} />
@@ -390,7 +390,7 @@ function UserSpiceRow({
           </button>
         </div>
         {spiceDifference >= 2 && (
-          <p className="mt-1.5 text-xs font-body text-muted/70 italic">
+          <p className="mt-1.5 text-xs font-body text-muted-a11y italic">
             Spice is personal — your experience may vary
           </p>
         )}
@@ -401,7 +401,7 @@ function UserSpiceRow({
   // Unrated or editing: interactive chilies
   return (
     <div className="flex items-center gap-2">
-      <span className="text-xs font-mono text-muted/60">Your take:</span>
+      <span className="text-xs font-mono text-muted-a11y">Your take:</span>
       <span className="inline-flex items-center gap-0.5">
         {Array.from({ length: 5 }, (_, i) => (
           <button

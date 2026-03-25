@@ -24,6 +24,7 @@ import ExpandableText from "@/components/ui/ExpandableText";
 import BooktrackSection from "@/components/books/BooktrackSection";
 import AdminBookFlag from "@/components/books/AdminBookFlag";
 import SpotifyTrigger from "./SpotifyTrigger";
+import { PepperRow } from "@/components/ui/PepperIcon";
 
 // ── Helpers ──────────────────────────────────────────
 
@@ -539,8 +540,27 @@ export default async function BookPage({ params }: PageProps) {
               </div>
             </div>
 
+            {/* Compact spice in hero */}
+            {(() => {
+              const spiceLevel = romanceIoSpice?.spiceLevel
+                ?? (communitySpice && (communitySpice.ratingCount ?? 0) >= 5 ? communitySpice.spiceLevel : null)
+                ?? book.compositeSpice?.score
+                ?? null;
+              if (!spiceLevel) return null;
+              const isEstimated = !romanceIoSpice && !((communitySpice?.ratingCount ?? 0) >= 5);
+              return (
+                <div className="flex items-center gap-2 mt-3" role="img" aria-label={`Spice level ${Math.min(5, Math.max(1, Math.round(spiceLevel)))} out of 5`}>
+                  <span className="text-xs font-mono text-muted-a11y uppercase tracking-wide">Spice</span>
+                  <PepperRow level={spiceLevel} size={16} estimated={isEstimated} />
+                  {book.romanceIoHeatLabel && (
+                    <span className="text-xs font-body text-fire italic">{book.romanceIoHeatLabel}</span>
+                  )}
+                </div>
+              );
+            })()}
+
             {/* Action row — pushed to bottom of the hero via flex-grow spacer */}
-            <div className="mt-auto pt-4 flex flex-wrap items-center gap-2">
+            <div className="mt-auto pt-4 flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2">
               {/* Add to Hotlist — primary CTA (hidden on mobile where sticky footer handles it) */}
               <div className="hidden sm:block">
                 <BookDetailClient
@@ -550,23 +570,23 @@ export default async function BookPage({ params }: PageProps) {
                 />
               </div>
 
-              {/* Kindle — secondary CTA */}
+              {/* Kindle — secondary CTA (full-width on mobile) */}
               <a
                 href={kindleUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-ink text-white font-body font-medium text-sm px-4 min-h-[40px] hover:bg-ink/90 transition-colors"
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-white text-ink border border-border font-body font-medium text-sm px-4 min-h-[44px] hover:bg-cream transition-colors w-full sm:w-auto"
               >
                 Read on Kindle &rarr;
               </a>
 
-              {/* Print buy options — compact row */}
-              <div className="flex gap-1.5">
+              {/* Print buy options — share width on mobile */}
+              <div className="flex gap-1.5 w-full sm:w-auto">
                 <a
                   href={amazonDirectUrl ?? amazonSearchUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center rounded-lg bg-white text-ink border border-border font-body text-sm px-3 min-h-[40px] hover:bg-cream transition-colors"
+                  className="inline-flex items-center justify-center rounded-lg bg-white text-ink border border-border font-body text-sm px-3 min-h-[44px] hover:bg-cream transition-colors flex-1 sm:flex-initial"
                 >
                   Amazon
                 </a>
@@ -574,7 +594,7 @@ export default async function BookPage({ params }: PageProps) {
                   href={bnUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center rounded-lg bg-white text-ink border border-border font-body text-sm px-3 min-h-[40px] hover:bg-cream transition-colors"
+                  className="inline-flex items-center justify-center rounded-lg bg-white text-ink border border-border font-body text-sm px-3 min-h-[44px] hover:bg-cream transition-colors flex-1 sm:flex-initial"
                 >
                   B&amp;N
                 </a>
@@ -582,7 +602,7 @@ export default async function BookPage({ params }: PageProps) {
                   href={bookshopUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center rounded-lg bg-white text-ink border border-border font-body text-sm px-3 min-h-[40px] hover:bg-cream transition-colors"
+                  className="inline-flex items-center justify-center rounded-lg bg-white text-ink border border-border font-body text-sm px-3 min-h-[44px] hover:bg-cream transition-colors flex-1 sm:flex-initial"
                 >
                   Bookshop
                 </a>
@@ -622,7 +642,7 @@ export default async function BookPage({ params }: PageProps) {
 
             {/* Synopsis */}
             <div className="pb-6 border-b border-border">
-              <h2 className="text-xs font-mono text-muted uppercase tracking-wide mb-2">
+              <h2 className="text-xs font-mono text-muted-a11y uppercase tracking-wide mb-2">
                 About this book
               </h2>
               {hasSynopsis ? (
@@ -633,7 +653,7 @@ export default async function BookPage({ params }: PageProps) {
                     className="font-body text-ink/90 leading-[1.85]"
                     style={{ fontSize: "0.95rem" }}
                   />
-                  <span className="inline-block mt-2 text-xs font-mono text-muted/70">
+                  <span className="inline-block mt-2 text-xs font-mono text-muted-a11y">
                     AI-generated synopsis
                   </span>
                 </div>
@@ -647,14 +667,14 @@ export default async function BookPage({ params }: PageProps) {
                       href={`https://www.goodreads.com/book/show/${book.goodreadsId}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-block mt-2 text-xs font-mono text-muted/60 hover:text-fire transition-colors"
+                      className="inline-block mt-2 text-xs font-mono text-muted-a11y hover:text-fire transition-colors"
                     >
                       Description from Goodreads {"\u2197"}
                     </a>
                   )}
                 </div>
               ) : (
-                <p className="font-body text-muted/70 text-sm italic">
+                <p className="font-body text-muted-a11y text-sm italic">
                   No synopsis available yet.
                 </p>
               )}
@@ -719,7 +739,7 @@ export default async function BookPage({ params }: PageProps) {
             {/* Series navigation */}
             {book.seriesName && seriesBooks.length > 1 && (
               <div>
-                <h3 className="text-xs font-mono text-muted uppercase tracking-wide mb-2">
+                <h3 className="text-xs font-mono text-muted-a11y uppercase tracking-wide mb-2">
                   {book.seriesName}
                 </h3>
                 <div className="flex flex-col gap-1.5">
@@ -753,7 +773,7 @@ export default async function BookPage({ params }: PageProps) {
 
             {/* Source links */}
             <div>
-              <h3 className="text-xs font-mono text-muted uppercase tracking-wide mb-2">
+              <h3 className="text-xs font-mono text-muted-a11y uppercase tracking-wide mb-2">
                 View on
               </h3>
               <div className="flex flex-col gap-1">
@@ -762,7 +782,7 @@ export default async function BookPage({ params }: PageProps) {
                     href={`https://www.goodreads.com/book/show/${book.goodreadsId}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-sm font-body text-muted/70 hover:text-fire transition-colors"
+                    className="text-sm font-body text-muted-a11y hover:text-fire transition-colors"
                   >
                     See reviews on Goodreads <span className="opacity-50">{"\u2197"}</span>
                   </a>
@@ -772,7 +792,7 @@ export default async function BookPage({ params }: PageProps) {
                     href={romanceIoUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-sm font-body text-muted/70 hover:text-fire transition-colors"
+                    className="text-sm font-body text-muted-a11y hover:text-fire transition-colors"
                   >
                     View on Romance.io <span className="opacity-50">{"\u2197"}</span>
                   </a>

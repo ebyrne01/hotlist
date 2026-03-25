@@ -46,14 +46,17 @@ function injectWidget(data, goodreadsId, title, author) {
 
   const widget = document.createElement("div");
   widget.className = "hotlist-overlay";
+  widget.setAttribute("role", "region");
+  widget.setAttribute("aria-label", "Hotlist book data");
 
   if (data.found) {
     const book = data.book;
+    const spiceCount = Math.min(5, book.spiceLevel || 0);
 
     // Spice column content
     const spiceInner = book.spiceLevel
       ? `<div class="hotlist-spice">
-           <span class="hotlist-spice-peppers">${"\uD83C\uDF36\uFE0F".repeat(Math.min(5, book.spiceLevel))}</span>
+           <span class="hotlist-spice-peppers" role="img" aria-label="Spice level ${spiceCount} out of 5">${"\uD83C\uDF36\uFE0F".repeat(spiceCount)}</span>
            ${book.heatLabel ? `<span class="hotlist-heat-label">${book.heatLabel}</span>` : ""}
          </div>
          ${book.spiceAttribution ? `<span class="hotlist-spice-source">${book.spiceAttribution}</span>` : ""}`
@@ -78,11 +81,11 @@ function injectWidget(data, goodreadsId, title, author) {
       <div class="hotlist-header">
         <div class="hotlist-header-left">
           <span class="hotlist-wordmark">Hotlist</span>
-          <span class="hotlist-fire">\uD83D\uDD25</span>
+          <span class="hotlist-fire" role="img" aria-label="Hotlist logo">\uD83D\uDD25</span>
         </div>
         <div class="hotlist-actions">
-          <a href="${book.hotlistUrl}" target="_blank" class="hotlist-btn-view">View on Hotlist \u2192</a>
-          <button class="hotlist-btn-add" data-book-id="${book.id}" data-title="${escapeAttr(book.title)}" data-author="${escapeAttr(book.author)}">+ Add to Hotlist</button>
+          <a href="${book.hotlistUrl}" target="_blank" class="hotlist-btn-view" aria-label="View ${escapeAttr(book.title)} on Hotlist">View on Hotlist \u2192</a>
+          <button class="hotlist-btn-add" data-book-id="${book.id}" data-title="${escapeAttr(book.title)}" data-author="${escapeAttr(book.author)}" aria-label="Add ${escapeAttr(book.title)} to Hotlist">+ Add to Hotlist</button>
         </div>
       </div>
       <div class="hotlist-content">

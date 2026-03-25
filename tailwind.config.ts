@@ -14,6 +14,7 @@ const config: Config = {
         cream: "#faf7f2",
         ink: "#12080a",
         muted: "#7a6055",
+        "muted-a11y": "#5e473d",   // WCAG AA safe (5.3:1 on cream)
         gold: "#b07d2a",
         border: "#e0d2c8",
 

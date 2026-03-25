@@ -25,9 +25,9 @@ const SOURCE_OPACITY: Record<string, string> = {
   community: "opacity-100",
   creator: "opacity-100",
   romance_io: "opacity-100",
-  review_classifier: "opacity-70",
-  llm_inference: "opacity-60",
-  genre_bucketing: "opacity-50",
+  review_classifier: "opacity-80",
+  llm_inference: "opacity-80",
+  genre_bucketing: "opacity-80",
 };
 
 /** Is this an estimated (non-authoritative) source? */
@@ -56,13 +56,13 @@ export default function SpiceAttribution({
   return (
     <div
       className={clsx(
-        "text-xs font-mono text-muted",
+        "text-xs font-mono text-muted-a11y",
         opacity,
         className
       )}
     >
       {composite.conflictFlag ? (
-        <span className="text-fire/70 italic">
+        <span className="text-fire italic">
           {composite.attribution}
         </span>
       ) : composite.primarySource === "romance_io" && romanceIoUrl ? (
@@ -70,7 +70,7 @@ export default function SpiceAttribution({
           href={romanceIoUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-fire/60 hover:text-fire transition-colors"
+          className="inline-flex items-center gap-1 text-fire hover:text-fire/80 transition-colors"
         >
           romance.io
           <ExternalLink size={10} />
@@ -80,7 +80,7 @@ export default function SpiceAttribution({
       )}
 
       {!composite.conflictFlag && composite.signalCount > 1 && composite.primarySource !== "romance_io" && (
-        <span className="ml-1 text-muted/70">
+        <span className="ml-1 text-muted-a11y">
           ({composite.signalCount} sources)
         </span>
       )}

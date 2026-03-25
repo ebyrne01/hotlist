@@ -58,7 +58,7 @@
   font-family: "DM Mono", "Menlo", monospace;
   font-size: 9px;
   font-weight: 500;
-  color: #8a7e76;
+  color: #5e473d;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -97,13 +97,13 @@
 .hotlist-spice-source {
   font-family: "DM Mono", "Menlo", monospace;
   font-size: 10px;
-  color: #8a7e76;
+  color: #5e473d;
 }
 
 .hotlist-spice-unknown {
   font-family: "DM Mono", "Menlo", monospace;
   font-size: 11px;
-  color: #8a7e76;
+  color: #5e473d;
 }
 
 /* Tropes */
@@ -146,13 +146,13 @@
 
 .hotlist-btn-add {
   font-family: "DM Mono", "Menlo", monospace;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   color: #faf7f2;
   background: #d4430e;
   border: none;
   border-radius: 6px;
-  padding: 5px 12px;
+  padding: 8px 14px;
   cursor: pointer;
   transition: background 0.15s;
 }
@@ -177,7 +177,7 @@
 }
 
 .hotlist-rating-source {
-  color: #8a7e76;
+  color: #5e473d;
   font-size: 10px;
 }
 
@@ -188,6 +188,6 @@
 }
 
 .hotlist-rating-count {
-  color: #8a7e76;
+  color: #5e473d;
   font-size: 9px;
 }

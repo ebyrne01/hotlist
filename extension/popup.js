@@ -126,7 +126,9 @@ document.getElementById("grabBtn")?.addEventListener("click", async () => {
           const msg = JSON.parse(line);
           if (msg.status) {
             statusText.textContent = STATUS_MESSAGES[msg.status] || msg.status;
-            progressFill.style.width = (STATUS_PROGRESS[msg.status] || 0) + "%";
+            const progress = STATUS_PROGRESS[msg.status] || 0;
+            progressFill.style.width = progress + "%";
+            progressFill.parentElement.setAttribute("aria-valuenow", progress);
           }
           if (msg.result) {
             progressFill.style.width = "100%";
@@ -182,14 +184,15 @@ function renderResults(result) {
 
       const card = document.createElement("div");
       card.className = "book-card";
+      card.setAttribute("role", "listitem");
       card.innerHTML = `
-        ${book.coverUrl ? `<img class="book-cover" src="${book.coverUrl}" alt="">` : '<div class="book-cover"></div>'}
+        ${book.coverUrl ? `<img class="book-cover" src="${book.coverUrl}" alt="Cover of ${escapeHtml(book.title)}">` : '<div class="book-cover"></div>'}
         <div class="book-info">
           <div class="book-title">${escapeHtml(book.title)}</div>
           <div class="book-author">${escapeHtml(book.author)}</div>
           <div class="book-meta">
             ${gr?.rating ? `<span class="book-rating">${gr.rating.toFixed(1)} ★</span>` : ""}
-            ${spiceLevel > 0 ? `<span class="book-spice">${"🌶️".repeat(spiceLevel)}</span>` : ""}
+            ${spiceLevel > 0 ? `<span class="book-spice" role="img" aria-label="Spice level ${spiceLevel} out of 5">${"🌶️".repeat(spiceLevel)}</span>` : ""}
           </div>
         </div>
       `;
