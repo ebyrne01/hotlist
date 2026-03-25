@@ -107,7 +107,7 @@ All tables in the public schema:
 
 | Table | Purpose |
 |-------|---------|
-| `books` | Canonical book records. `goodreads_id` is UNIQUE but nullable (provisional entries). `enrichment_status`: pending → partial → complete. |
+| `books` | Canonical book records. `goodreads_id` is UNIQUE but nullable (provisional entries). `enrichment_status`: pending → partial → complete. `is_canon`: only canon books appear on public surfaces. Canon gate auto-promotes when enrichment completes + passes quality checks. |
 | `enrichment_queue` | Async enrichment jobs with retry logic. Job types: goodreads_detail, goodreads_rating, amazon_rating, romance_io_spice, metadata, ai_synopsis, trope_inference, review_classifier, llm_spice, ai_recommendations |
 | `book_ratings` | Per-source star ratings (goodreads, amazon, romance_io) |
 | `book_spice` | Legacy spice table (romance_io, hotlist_community, goodreads_inference). Being superseded by `spice_signals`. |
@@ -133,6 +133,14 @@ All tables in the public schema:
 | `book_buzz_signals` | Buzz events from discovery channels (reddit_mention, amazon_bestseller, booktok_grab, nyt_bestseller). One per book per source per day. Powers "What's Hot" ranking via time-decayed composite scoring. |
 | `cron_logs` | Cron job execution logs |
 | `pro_waitlist` | Email capture for future Pro tier |
+| `quality_flags` | Quality issue tracking (book_id, field_name, issue_type, source, priority P0-P3, auto_fixable, status). Sources: rules_engine, haiku_scanner, browser_harness, admin, feedback. |
+| `quality_health_log` | Weekly quality snapshots: canon count, coverage %, flag counts, enrichment status, search eval results. One row per pipeline run. |
+| `serper_query_cache` | Caches Serper search results (query_hash PK, result_status, miss_count). 30-day TTL. Prevents re-querying known misses. |
+| `search_analytics` | Search feedback (thumbs up/down on results). |
+| `search_intent_cache` | Cached NL search intent classifications. |
+| `reading_dna` | Per-user reading preference profile (trope affinities, spice preference, subgenre weights). |
+| `reading_dna_signals` | Individual signals that feed into reading DNA computation. |
+| `book_trope_vectors` | Precomputed trope similarity vectors for recommendation engine. |
 
 ## File structure
 
@@ -325,6 +333,15 @@ Book data flows through two independent systems:
 | `/api/cron/monthly-enrichment` | 1st of month 2 AM UTC | Bulk enrichment pass |
 | `/api/cron/spice-gap-monitor` | 1st of month 3 AM UTC | Audit spice coverage gaps, re-queue missing signals |
 | `/api/cron/data-hygiene` | Sundays 2 AM UTC | Remove junk book entries (scraping artifacts, summaries, box sets, non-books) |
+| `/api/cron/quality-pipeline` | Sundays 3 AM UTC | Auto-fixer, feedback→flags, quality scorecard, regression detector |
+| `/api/cron/search-eval` | Sundays 4 AM UTC | Tier 1 search quality + DB ground truth audit (zero AI cost) |
+| `/api/cron/quality-scanner` | Daily 3 AM UTC | Haiku semantic scanner (synopsis quality, series sanity, spice mismatch) |
+
+**GitHub Actions (not Vercel):**
+
+| Workflow | Schedule | Purpose |
+|----------|----------|---------|
+| `audit-harness.yml` | Sundays 5 AM UTC | Playwright browser audit: cover rendering, layout, enrichment stalls, audiobook detection. Pushes P0/P1 to `quality_flags`. |
 
 All cron endpoints require `Authorization: Bearer $CRON_SECRET`.
 
@@ -355,6 +372,8 @@ Every discovered book enters the `enrichment_queue`. The enrichment worker (ever
 
 Each job retries up to 3× with exponential backoff. Books progress through `enrichment_status`: pending → partial → complete.
 
+**Canon gate:** When a book reaches `enrichment_status = 'complete'`, the canon gate (`/lib/books/canon-gate.ts`) evaluates whether it should be promoted to `is_canon = true`. Requirements: passes romance check, has cover + GR ID, no open P0 quality flags. Non-canon books are invisible on public surfaces. The enrichment worker skips expensive AI jobs (ai_synopsis, trope_inference, llm_spice, ai_recommendations, review_classifier, booktrack_prompt, spotify_playlists) for non-canon books to prevent wasted spend — scraping/metadata jobs still run since they help determine canon eligibility.
+
 ### Spice quality assurance
 
 The **spice gap monitor** (monthly) audits spice coverage:
@@ -363,30 +382,93 @@ The **spice gap monitor** (monthly) audits spice coverage:
 3. Hierarchy violations (romance.io vs LLM disagreement >2.0) → logged
 4. Books stuck at genre-bucketing only → re-queues for upgrade
 
-### Data hygiene (automated cleanup)
+### Data quality pipeline
 
-The **data hygiene** cron (weekly, Sundays 2 AM UTC) detects and removes junk book entries that slip through discovery channels. Zero API cost — SQL pattern matching only.
+Quality runs as a **Sunday pipeline** of 4 sequential crons (2-5 AM UTC), plus a daily Haiku scanner and a weekly Playwright audit. Each system is independent — if one fails, the others still run.
 
-**What it catches:**
-1. **Garbled scraping artifacts**: `[Title] [By: Author]`, `[AudioCD(2012)]`, `[Paperback]`, `[Hardcover]` formats
-2. **Summary/study guide parasites**: "Summary of...", "SparkNotes", "CliffsNotes", "BookCaps"
-3. **Non-book entries**: Magazines, directories, yearbooks, planners (especially with "Unknown Author")
-4. **Box sets / compilations**: "Books 1-3", "Complete Series", "Box Set", "Omnibus"
-5. **"Title by Author" Unknown Author dupes**: Scraping artifacts where the author name ended up in the title
-6. **Series page entries**: "Series by Author" (Goodreads series pages, not actual books)
+#### Sunday pipeline execution order
 
-**Safety rules:**
-- Never deletes a book that's in a user's hotlist or has user ratings — unless a canonical version exists to migrate refs to
-- Migrates `hotlist_books` and `user_ratings` to the canonical edition before deleting duplicates
-- Logs everything: deletions, migrations, and skipped entries (visible in Vercel function logs)
+1. **Data hygiene** (2 AM) — Junk removal, dedup, series orphan detection. Zero API cost.
+2. **Quality pipeline** (3 AM) — Auto-fixer, feedback→flags, scorecard, regression detector.
+3. **Search eval** (4 AM) — Deterministic search checks + DB ground truth audit. Zero AI cost.
+4. **Browser audit** (5 AM, GitHub Actions) — Playwright visual checks against production.
 
-**Prevention (write-time):**
-- `saveGoodreadsBookToCache()` and `saveProvisionalBook()` in `cache.ts` use `normalizeTitle()` to deduplicate at write time — strips series suffixes, subtitles, "by Author" prefixes
+#### Layer 1: Write-time prevention
+
+- `saveGoodreadsBookToCache()` and `saveProvisionalBook()` in `cache.ts` use `normalizeTitle()` to deduplicate at write time
 - `isCompilationTitle()` in `utils.ts` filters box sets before they enter curated rows
+- `resolveExistingBook()` in `cache.ts` — shared dedup resolver checks GR ID, ISBN, Google Books ID, then normalized title+author before any insert
+- Canon gate (`/lib/books/canon-gate.ts`) — books must pass romance check, have cover + GR ID, no open P0 flags before `is_canon = true`
+- Enrichment worker skips AI jobs (ai_synopsis, trope_inference, llm_spice, ai_recommendations, etc.) for non-canon books to prevent wasted spend
 
-**Files:**
-- `/lib/books/data-hygiene.ts` — detection patterns + cleanup logic
-- `/app/api/cron/data-hygiene/route.ts` — cron endpoint
+#### Layer 2: Data hygiene (weekly cleanup)
+
+The data hygiene cron detects and removes junk entries that slip through prevention. SQL pattern matching only.
+
+**What it catches:** garbled scraping artifacts (`[By: Author]`, `[AudioCD]`), study guide parasites, non-book entries, box sets/compilations, "Title by Author" Unknown Author dupes, series page entries.
+
+**Safety:** Never deletes books with user data (hotlists, ratings) unless a canonical version exists to migrate refs to. Logs everything.
+
+#### Layer 3: Rules engine + Haiku scanner
+
+- **Rules engine** (`/lib/quality/rules-engine.ts`) — 8+ structural rules that fire on book writes. Detects: edition artifacts in titles/series, implausible page counts, junk patterns, missing data. Some rules are `auto_fixable` with `suggested_value`.
+- **Haiku scanner** (`/lib/quality/haiku-scanner.ts`) — 4 semantic checks: series name sanity, synopsis quality, spice/genre mismatch, wrong Goodreads ID. Daily cap. Runs via `/api/cron/quality-scanner`.
+
+#### Layer 4: Quality pipeline (weekly)
+
+Runs as `/api/cron/quality-pipeline` (Sundays 3 AM):
+
+1. **Auto-fixer** (`/lib/quality/auto-fixer.ts`) — Applies `suggested_value` from quality flags where `auto_fixable = true AND confidence >= 0.9`. Marks flags `auto_fixed`.
+2. **Feedback pipeline** (`/lib/quality/feedback-pipeline.ts`) — Converts `grab_feedback` entries (wrong_book, wrong_edition) into quality flags. 3+ reports on same book → escalate to P0 + auto-demote from canon.
+3. **Quality scorecard** (`/lib/quality/scorecard.ts`) — Computes coverage metrics (cover, synopsis, ratings, spice, tropes, ASIN, recommendations) + flag counts + enrichment status. Stored in `quality_health_log` for trend tracking.
+4. **Regression detector** (`/lib/quality/regression-detector.ts`) — Groups recent books by `discovery_source`, runs rules engine on batches of 10+. Warns if any batch has >3 P0 flags.
+
+#### Layer 5: Search eval (weekly)
+
+Runs as `/api/cron/search-eval` (Sundays 4 AM). Zero AI cost.
+
+- **Tier 1 (search quality):** Searches for 15 ground-truth bestsellers via `searchBooksInCache()`, asserts correct book ranks in top 3, validates rating accuracy within ±0.3 of canonical values.
+- **DB audit:** Checks 20 ground-truth books exist in DB with GR ID, cover, enrichment complete, and accurate ratings.
+- Results stored in `quality_health_log.search_eval` JSONB column.
+
+Library: `/lib/quality/search-eval.ts`. Full manual harness with Sonnet Tier 3: `scripts/search-eval.ts`.
+
+#### Layer 6: Browser audit (weekly, GitHub Actions)
+
+Runs via `.github/workflows/audit-harness.yml` (Sundays 5 AM). Playwright against production.
+
+- 11 structural checks per book: cover presence + aspect ratio (audiobook detection), rating accuracy, spice plausibility, synopsis quality, series name sanity, title cleanliness, foreign edition detection, enrichment stall indicators.
+- Optional Haiku visual checks on failures.
+- `--push-to-db` writes P0/P1 findings to `quality_flags`.
+- Known bug regression tests (BUG-001 through BUG-008).
+
+Script: `scripts/audit-harness.ts`. Requires GitHub repo secrets for Supabase + Anthropic.
+
+#### Quality tables
+
+| Table | Purpose |
+|-------|---------|
+| `quality_flags` | Issue tracking: book_id, field_name, issue_type, source, priority (P0-P3), confidence, auto_fixable, status (open/resolved/auto_fixed/dismissed) |
+| `quality_health_log` | Weekly snapshots: canon count, coverage percentages, flag counts, enrichment status, search eval results |
+| `serper_query_cache` | Caches Serper results to avoid re-querying known misses. 30-day TTL. Books with 3+ "no_data" results skipped entirely. |
+
+#### Serper query cache
+
+Before any Serper call in `romance-io-search.ts`, the cache is checked (`/lib/scraping/serper-cache.ts`). Books that returned "no_data" 3+ times are skipped entirely (`shouldSkipQuery()`). Saves ~20-30% of Serper budget on books genuinely not on romance.io.
+
+#### Key files
+- `/lib/books/data-hygiene.ts` — junk detection + cleanup
+- `/lib/quality/rules-engine.ts` — structural quality rules
+- `/lib/quality/haiku-scanner.ts` — semantic AI checks
+- `/lib/quality/auto-fixer.ts` — applies auto-fixable flag suggestions
+- `/lib/quality/feedback-pipeline.ts` — user feedback → quality flags
+- `/lib/quality/scorecard.ts` — coverage metrics + trend tracking
+- `/lib/quality/regression-detector.ts` — batch P0 spike detection
+- `/lib/quality/search-eval.ts` — automated search + DB audit
+- `/lib/scraping/serper-cache.ts` — Serper query dedup cache
+- `/lib/books/canon-gate.ts` — canon promotion/demotion logic
+- `scripts/audit-harness.ts` — Playwright browser audit (manual + GitHub Actions)
+- `scripts/search-eval.ts` — full 3-tier search eval (manual, includes Sonnet Tier 3)
 
 ### Amazon enrichment (bulk, ad-hoc)
 
