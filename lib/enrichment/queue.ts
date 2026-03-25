@@ -181,6 +181,8 @@ export async function markJobCompleted(
 
 /**
  * Mark a job as failed. Sets next_retry_at with exponential backoff.
+ * Rate limit errors get a much longer backoff (1-4 hours) to avoid
+ * hammering APIs that are actively throttling us.
  */
 export async function markJobFailed(
   jobId: string,
@@ -189,11 +191,13 @@ export async function markJobFailed(
 ): Promise<void> {
   const supabase = getAdminClient();
 
-  // Exponential backoff: 30s, 2min, 10min
-  const backoffMs = Math.min(
-    30_000 * Math.pow(4, attempts),
-    600_000 // max 10 minutes
-  );
+  const isRateLimited = errorMessage.toLowerCase().includes("rate limit");
+
+  // Rate-limited jobs: 1h, 2h, 4h — way longer than normal backoff
+  // Normal jobs: 30s, 2min, 10min
+  const backoffMs = isRateLimited
+    ? Math.min(3_600_000 * Math.pow(2, attempts - 1), 14_400_000) // 1h → 4h max
+    : Math.min(30_000 * Math.pow(4, attempts), 600_000); // 30s → 10min max
 
   await supabase
     .from("enrichment_queue")

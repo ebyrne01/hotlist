@@ -23,6 +23,7 @@ import CreateShareCardButton from "@/components/books/CreateShareCardButton";
 import ExpandableText from "@/components/ui/ExpandableText";
 import BooktrackSection from "@/components/books/BooktrackSection";
 import AdminBookFlag from "@/components/books/AdminBookFlag";
+import SpotifyTrigger from "./SpotifyTrigger";
 
 // ── Helpers ──────────────────────────────────────────
 
@@ -710,6 +711,10 @@ export default async function BookPage({ params }: PageProps) {
               booktrackMoods={book.booktrackMoods}
               bookTitle={book.title}
             />
+            {/* Fire-and-forget: trigger on-demand Spotify lookup if no playlists cached */}
+            {!book.spotifyPlaylists && (
+              <SpotifyTrigger bookId={book.id} title={book.title} author={book.author} />
+            )}
 
             {/* Series navigation */}
             {book.seriesName && seriesBooks.length > 1 && (

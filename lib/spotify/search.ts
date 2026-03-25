@@ -5,13 +5,15 @@
 
 import { getSpotifyToken } from "./client";
 
-// Simple rate limiter: ensure at least 2s between Spotify search calls
+// Rate limiter: ensure at least 5s between Spotify search calls.
+// Spotify's API enforces a rolling window — being too aggressive
+// triggers 429s with 75,000+ second retry-after headers.
 let lastCallTime = 0;
 async function rateLimit() {
   const now = Date.now();
   const elapsed = now - lastCallTime;
-  if (elapsed < 2000) {
-    await new Promise((r) => setTimeout(r, 2000 - elapsed));
+  if (elapsed < 5000) {
+    await new Promise((r) => setTimeout(r, 5000 - elapsed));
   }
   lastCallTime = Date.now();
 }
@@ -53,10 +55,12 @@ export async function searchBookPlaylists(
     .split(/\s+/)
     .filter((w) => w.length >= 3 && !stopWords.has(w));
 
+  let successfulQueries = 0;
+
   for (let i = 0; i < queries.length; i++) {
     const query = queries[i];
-    // Small delay between queries to avoid rate limits
-    if (i > 0) await new Promise((r) => setTimeout(r, 200));
+    // Delay between queries to avoid rate limits
+    if (i > 0) await new Promise((r) => setTimeout(r, 1000));
     try {
       const res = await fetch(
         `https://api.spotify.com/v1/search?${new URLSearchParams({
@@ -71,8 +75,12 @@ export async function searchBookPlaylists(
         const retryAfter = res.headers.get("Retry-After");
         throw new Error(`Spotify rate limited (retry after ${retryAfter ?? "?"}s)`);
       }
+      if (res.status === 401) {
+        throw new Error("Spotify token expired or invalid");
+      }
       if (!res.ok) continue;
 
+      successfulQueries++;
       const data = await res.json();
       for (const item of data.playlists?.items ?? []) {
         if (!item || results.has(item.id)) continue;
@@ -103,10 +111,16 @@ export async function searchBookPlaylists(
         });
       }
     } catch (err) {
-      // Re-throw rate limit errors so the enrichment worker retries the job
-      if (err instanceof Error && err.message.includes("rate limited")) throw err;
+      // Re-throw rate limit and auth errors so the enrichment worker retries
+      if (err instanceof Error && (err.message.includes("rate limit") || err.message.includes("token"))) throw err;
       console.warn("[spotify-search] Query failed:", err);
     }
+  }
+
+  // If zero queries succeeded (all errored with non-fatal errors), throw so
+  // the caller knows this wasn't a legitimate "no playlists found" result
+  if (successfulQueries === 0) {
+    throw new Error("Spotify search failed: no queries succeeded");
   }
 
   // Rank: prefer playlists with the full book title in the name, then word matches, then track count

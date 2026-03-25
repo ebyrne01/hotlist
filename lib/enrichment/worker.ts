@@ -88,6 +88,11 @@ const JOB_DELAY_MS = 300; // Delay between jobs to respect rate limits
 const CONCURRENCY = 3; // Max parallel jobs within a tier
 const STUCK_JOB_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes — reset jobs stuck in "running"
 
+// Spotify gets its own cap: max 3 books per cron tick.
+// Each book = 2 Spotify API calls (with 5s rate limit between calls),
+// so 3 books ≈ 30s of Spotify work. Prevents rate limit blowouts.
+const SPOTIFY_PER_TICK_CAP = 3;
+
 /**
  * Fetch genres for a book and upsert a genre_bucketing spice signal.
  * Safe to call even if the book has no genres — it's a no-op in that case.
@@ -178,55 +183,81 @@ export async function processEnrichmentQueue(
   // Auto-recover stuck jobs before processing
   const recovered = await recoverStuckJobs();
 
+  // Helper to run a single job with proper outcome tracking
+  async function runJob(job: QueuedJob): Promise<boolean> {
+    try {
+      const result = await processJob(job);
+      if (result === "no-data") {
+        if (job.attempts >= job.max_attempts) {
+          await markJobCompleted(job.id, "no_data");
+          console.log(`[enrichment-worker] ${job.job_type} for "${job.book_title}" — no data after ${job.attempts} attempts, marking complete`);
+        } else {
+          await markJobFailed(job.id, "no-data: external source returned no results", job.attempts);
+          console.log(`[enrichment-worker] ${job.job_type} for "${job.book_title}" — no data, will retry (attempt ${job.attempts}/${job.max_attempts})`);
+        }
+        await updateBookEnrichmentStatus(job.book_id);
+        return false;
+      }
+      await markJobCompleted(job.id, "data");
+      await updateBookEnrichmentStatus(job.book_id);
+      return true;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      await markJobFailed(job.id, msg, job.attempts);
+      console.warn(`[enrichment-worker] Job ${job.job_type} failed for "${job.book_title}": ${msg}`);
+      return false;
+    }
+  }
+
   // Process each priority tier in order
   for (const tier of JOB_TYPE_PRIORITY) {
     if (timeLeft() < 5000) break;
 
-    while (timeLeft() > 5000) {
-      // Claim a batch of jobs for this tier
-      const jobs = await claimJobs(CONCURRENCY, tier);
-      if (jobs.length === 0) break;
+    // Separate Spotify jobs from the rest — they need sequential
+    // processing with a per-tick cap to avoid rate limit blowouts
+    const nonSpotifyTypes = tier.filter((t) => t !== "spotify_playlists");
+    const hasSpotify = tier.includes("spotify_playlists");
 
-      // Process the batch in parallel
-      const results = await Promise.allSettled(
-        jobs.map(async (job) => {
-          try {
-            const result = await processJob(job);
-            if (result === "no-data") {
-              // External source returned nothing — retry with backoff
-              // On final attempt, complete it to avoid infinite loops
-              if (job.attempts >= job.max_attempts) {
-                await markJobCompleted(job.id, "no_data");
-                console.log(`[enrichment-worker] ${job.job_type} for "${job.book_title}" — no data after ${job.attempts} attempts, marking complete`);
-              } else {
-                await markJobFailed(job.id, "no-data: external source returned no results", job.attempts);
-                console.log(`[enrichment-worker] ${job.job_type} for "${job.book_title}" — no data, will retry (attempt ${job.attempts}/${job.max_attempts})`);
-              }
-              await updateBookEnrichmentStatus(job.book_id);
-              return { success: false } as const;
-            }
-            await markJobCompleted(job.id, "data");
-            await updateBookEnrichmentStatus(job.book_id);
-            return { success: true } as const;
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            await markJobFailed(job.id, msg, job.attempts);
-            console.warn(`[enrichment-worker] Job ${job.job_type} failed for "${job.book_title}": ${msg}`);
-            return { success: false } as const;
+    // Process non-Spotify jobs in parallel batches (existing behavior)
+    if (nonSpotifyTypes.length > 0) {
+      while (timeLeft() > 5000) {
+        const jobs = await claimJobs(CONCURRENCY, nonSpotifyTypes);
+        if (jobs.length === 0) break;
+
+        const results = await Promise.allSettled(jobs.map(runJob));
+
+        for (const r of results) {
+          if (r.status === "fulfilled" && r.value) {
+            processed++;
+          } else {
+            failed++;
           }
-        })
-      );
+        }
 
-      for (const r of results) {
-        if (r.status === "fulfilled" && r.value.success) {
-          processed++;
-        } else {
-          failed++;
+        await new Promise((r) => setTimeout(r, JOB_DELAY_MS));
+      }
+    }
+
+    // Process Spotify jobs sequentially with a per-tick cap
+    if (hasSpotify && timeLeft() > 10000) {
+      let spotifyCount = 0;
+      while (spotifyCount < SPOTIFY_PER_TICK_CAP && timeLeft() > 10000) {
+        const jobs = await claimJobs(1, ["spotify_playlists"]);
+        if (jobs.length === 0) break;
+
+        const success = await runJob(jobs[0]);
+        if (success) processed++;
+        else failed++;
+        spotifyCount++;
+
+        // Extra delay between Spotify jobs (on top of the in-search rate limit)
+        if (spotifyCount < SPOTIFY_PER_TICK_CAP) {
+          await new Promise((r) => setTimeout(r, 2000));
         }
       }
-
-      // Small delay between batches to respect rate limits
-      await new Promise((r) => setTimeout(r, JOB_DELAY_MS));
+      if (spotifyCount > 0) {
+        console.log(`[enrichment-worker] Processed ${spotifyCount}/${SPOTIFY_PER_TICK_CAP} Spotify jobs this tick`);
+      }
     }
   }
 
@@ -666,6 +697,8 @@ async function processJob(job: QueuedJob): Promise<"data" | "no-data"> {
 
     case "spotify_playlists": {
       if (!book_title || !book_author) break;
+      // Skip if Spotify credentials aren't configured — don't waste retries
+      if (!process.env.SPOTIFY_CLIENT_ID || !process.env.SPOTIFY_CLIENT_SECRET) break;
 
       const playlists = await searchBookPlaylists(book_title, book_author);
 
