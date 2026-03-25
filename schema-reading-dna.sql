@@ -18,6 +18,7 @@ create table reading_dna (
   source          text not null default 'quiz'
     check (source in ('quiz', 'import', 'scan', 'organic')),
   signal_count    integer not null default 0,
+  dna_description text,                         -- AI-generated reading personality blurb
   last_computed_at timestamptz default now(),
   created_at      timestamptz default now(),
   updated_at      timestamptz default now()

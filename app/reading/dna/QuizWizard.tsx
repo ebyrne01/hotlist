@@ -25,7 +25,7 @@ interface QuizWizardProps {
 type Step = "spice" | "tropes" | "books";
 const STEPS: Step[] = ["spice", "tropes", "books"];
 const MIN_TROPES = 3;
-const MIN_BOOKS = 5;
+const MIN_BOOKS = 3;
 
 export default function QuizWizard({ tropes, candidateBooks }: QuizWizardProps) {
   const router = useRouter();

@@ -13,6 +13,7 @@ import {
   SIGNAL_WEIGHTS,
 } from "@/lib/reading-dna";
 import { buildDnaProfile, type DnaSignal } from "@/lib/reading-dna/compute";
+import { generateDnaBlurb } from "@/lib/reading-dna/generate-blurb";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
@@ -40,10 +41,10 @@ export async function POST(request: NextRequest) {
     !Array.isArray(tropeSelections) ||
     tropeSelections.length < 3 ||
     !Array.isArray(bookSelections) ||
-    bookSelections.length < 5
+    bookSelections.length < 3
   ) {
     return NextResponse.json(
-      { error: "Invalid quiz data. Need spice (1-5), 3+ tropes, 5+ books." },
+      { error: "Invalid quiz data. Need spice (1-5), 3+ tropes, 3+ books." },
       { status: 400 }
     );
   }
@@ -111,6 +112,55 @@ export async function POST(request: NextRequest) {
 
   const profile = buildDnaProfile(dnaSignals, spiceLevel, []);
   await saveDna(user.id, profile, "quiz");
+
+  // Generate AI blurb (non-blocking to DNA save — if this fails, DNA is still saved)
+  try {
+    // Get top 5 trope affinities
+    const sortedTropes = Object.entries(profile.tropeAffinities)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 5)
+      .map(([slug, score]) => ({ slug, score }));
+
+    // Look up trope display names
+    const { data: tropeNameRows } = await admin
+      .from("tropes")
+      .select("slug, name")
+      .in(
+        "slug",
+        sortedTropes.map((t) => t.slug)
+      );
+
+    const tropeNameMap = new Map<string, string>();
+    for (const row of tropeNameRows ?? []) {
+      tropeNameMap.set(row.slug as string, row.name as string);
+    }
+
+    // Look up book titles
+    const { data: bookTitleRows } = await admin
+      .from("books")
+      .select("id, title")
+      .in("id", bookSelections);
+
+    const bookTitles = (bookTitleRows ?? []).map((b) => b.title as string);
+
+    const blurb = await generateDnaBlurb({
+      topTropes: sortedTropes.map((t) => ({
+        name: tropeNameMap.get(t.slug) ?? t.slug,
+        score: t.score,
+      })),
+      spicePreferred: profile.spicePreferred,
+      bookTitles,
+    });
+
+    if (blurb) {
+      await admin
+        .from("reading_dna")
+        .update({ dna_description: blurb })
+        .eq("user_id", user.id);
+    }
+  } catch (err) {
+    console.error("[reading-dna] Blurb generation failed (DNA still saved):", err);
+  }
 
   return NextResponse.json({ success: true, signalCount: profile.signalCount });
 }

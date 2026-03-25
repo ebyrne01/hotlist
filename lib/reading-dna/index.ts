@@ -20,6 +20,7 @@ export interface ReadingDnaRow {
   source: "quiz" | "import" | "scan" | "organic";
   signalCount: number;
   lastComputedAt: string;
+  dnaDescription: string | null;
 }
 
 // ── Read ─────────────────────────────────────────────
@@ -46,6 +47,7 @@ export async function getDna(userId: string): Promise<ReadingDnaRow | null> {
     source: data.source,
     signalCount: data.signal_count,
     lastComputedAt: data.last_computed_at,
+    dnaDescription: (data.dna_description as string) ?? null,
   };
 }
 
