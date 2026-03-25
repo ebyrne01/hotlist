@@ -51,6 +51,14 @@
       "schedule": "0 2 * * 0"
     },
     {
+      "path": "/api/cron/quality-pipeline",
+      "schedule": "0 3 * * 0"
+    },
+    {
+      "path": "/api/cron/search-eval",
+      "schedule": "0 4 * * 0"
+    },
+    {
       "path": "/api/cron/quality-scanner",
       "schedule": "0 3 * * *"
     }

@@ -1,0 +1,68 @@
+name: Browser Audit Harness
+
+on:
+  schedule:
+    # Sundays 5 AM UTC (after data-hygiene at 2, quality-pipeline at 3, search-eval at 4)
+    - cron: '0 5 * * 0'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Audit mode'
+        required: false
+        default: 'full-catalog'
+        type: choice
+        options:
+          - full-catalog
+          - full-catalog --haiku-on-fail
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium
+
+      - name: Run audit harness
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          MODE="${{ github.event.inputs.mode || 'full-catalog' }}"
+          npx tsx scripts/audit-harness.ts --${MODE}
+
+      - name: Upload audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-report-${{ github.run_number }}
+          path: scripts/audit-reports/
+          retention-days: 30
+
+      - name: Summary
+        if: always()
+        run: |
+          REPORT=$(ls -t scripts/audit-reports/audit-*.json 2>/dev/null | head -1)
+          if [ -f "$REPORT" ]; then
+            echo "## Audit Results" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            node -e "
+              const r = require('./$REPORT');
+              console.log('- **Pass rate:** ' + r.summary.passRate + '%');
+              console.log('- **Books checked:** ' + r.summary.booksChecked);
+              console.log('- **P0:** ' + r.summary.bySeverity.P0 + ' | **P1:** ' + r.summary.bySeverity.P1);
+              console.log('- **Total issues:** ' + r.summary.totalIssues);
+            " >> $GITHUB_STEP_SUMMARY
+          fi
