@@ -273,6 +273,21 @@ async function processJob(job: QueuedJob): Promise<"data" | "no-data"> {
   const supabase = getAdminClient();
   const { book_id, job_type, book_title, book_author, book_isbn, book_goodreads_id } = job;
 
+  // Canon gate: skip expensive AI jobs for non-canon books.
+  // Scraping/metadata jobs still run (they help determine if a book should become canon).
+  const AI_JOB_TYPES: string[] = ["ai_synopsis", "trope_inference", "llm_spice", "ai_recommendations", "review_classifier", "booktrack_prompt", "spotify_playlists"];
+  if (AI_JOB_TYPES.includes(job_type)) {
+    const { data: bookRow } = await supabase
+      .from("books")
+      .select("is_canon")
+      .eq("id", book_id)
+      .single();
+    if (bookRow && bookRow.is_canon === false) {
+      console.log(`[enrichment-worker] Skipping ${job_type} for non-canon book "${book_title}"`);
+      return "no-data";
+    }
+  }
+
   console.log(`[enrichment-worker] Processing ${job_type} for "${book_title}"`);
 
   switch (job_type) {
