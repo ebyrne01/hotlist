@@ -17,8 +17,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.myhotlist.app";
-    const result = await runSearchEval(baseUrl);
+    const result = await runSearchEval();
 
     console.log(
       `[search-eval] Search: ${result.searchChecks.passed}/${result.searchChecks.total} passed. DB: ${result.dbChecks.passed}/${result.dbChecks.total} passed.`

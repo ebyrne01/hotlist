@@ -9,6 +9,7 @@
  */
 
 import { getAdminClient } from "@/lib/supabase/admin";
+import { searchBooksInCache } from "@/lib/books/cache";
 
 // ── Ground truth: top bestsellers with verified ratings ──
 
@@ -41,7 +42,7 @@ const GROUND_TRUTH: GroundTruthBook[] = [
   { title: "Funny Story", author: "Emily Henry", goodreadsRating: 0 },
 ];
 
-// ── Search API call ──
+// ── Search via direct DB query (avoids HTTP self-call issues on Vercel) ──
 
 interface SearchResult {
   id: string;
@@ -52,20 +53,20 @@ interface SearchResult {
   goodreadsRating: number | null;
 }
 
-async function runSearch(query: string, baseUrl: string): Promise<SearchResult[]> {
-  const url = `${baseUrl}/api/books/search?q=${encodeURIComponent(query)}`;
+async function runSearch(query: string): Promise<SearchResult[]> {
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return (data.books || []).map((b: Record<string, unknown>) => ({
-      id: b.id,
-      title: b.title,
-      author: b.author,
-      goodreadsId: b.goodreadsId ?? null,
-      coverUrl: b.coverUrl ?? null,
-      goodreadsRating: b.goodreadsRating ?? null,
-    }));
+    const books = await searchBooksInCache(query);
+    return books.map((b) => {
+      const grRating = b.ratings?.find(r => r.source === "goodreads");
+      return {
+        id: b.id,
+        title: b.title,
+        author: b.author,
+        goodreadsId: b.goodreadsId ?? null,
+        coverUrl: b.coverUrl ?? null,
+        goodreadsRating: grRating?.rating ?? null,
+      };
+    });
   } catch {
     return [];
   }
@@ -83,12 +84,12 @@ interface SearchCheck {
   detail: string;
 }
 
-async function runTier1Checks(baseUrl: string): Promise<SearchCheck[]> {
+async function runTier1Checks(): Promise<SearchCheck[]> {
   const checks: SearchCheck[] = [];
   const booksWithRatings = GROUND_TRUTH.filter(b => b.goodreadsRating > 0).slice(0, 15);
 
   for (const gt of booksWithRatings) {
-    const results = await runSearch(gt.title, baseUrl);
+    const results = await runSearch(gt.title);
 
     if (results.length === 0) {
       checks.push({
@@ -200,9 +201,9 @@ export interface SearchEvalResult {
   overallPass: boolean;
 }
 
-export async function runSearchEval(baseUrl: string): Promise<SearchEvalResult> {
+export async function runSearchEval(): Promise<SearchEvalResult> {
   const [searchChecks, dbChecks] = await Promise.all([
-    runTier1Checks(baseUrl),
+    runTier1Checks(),
     runDbAudit(),
   ]);
 
