@@ -125,11 +125,13 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
  * Full detail is filled in by the enrichment queue (goodreads_detail job).
  */
 async function inlineGoodreadsDiscovery(query: string): Promise<BookDetail[]> {
+  const supabase = getAdminClient();
   const results = await searchGoodreads(query);
   const saved: BookDetail[] = [];
 
   for (const result of results.slice(0, 5)) {
     if (isJunkTitle(result.title, result.author)) continue;
+    if (isCompilationTitle(result.title)) continue;
 
     // Save using search-level data (title, author, cover, goodreadsId).
     // saveGoodreadsBookToCache handles dedup via goodreads_id upsert.
@@ -144,6 +146,18 @@ async function inlineGoodreadsDiscovery(query: string): Promise<BookDetail[]> {
     if (book) {
       // Queue enrichment (goodreads_detail will fill in description, genres, etc.)
       queueEnrichmentJobs(book.id, book.title, book.author).catch(() => {});
+
+      // Only include in search results if the book is canon (or brand new).
+      // Previously-demoted books (foreign editions, junk) should not resurface.
+      // A book with enrichment complete + is_canon=false was deliberately excluded.
+      const { data: row } = await supabase
+        .from("books")
+        .select("is_canon, enrichment_status")
+        .eq("id", book.id)
+        .single();
+
+      if (row?.is_canon === false && row?.enrichment_status === "complete") continue;
+
       saved.push({ ...book, ratings: [], spice: [], compositeSpice: null, tropes: [] });
     }
   }
