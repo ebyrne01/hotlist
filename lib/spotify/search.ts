@@ -86,7 +86,9 @@ export async function searchBookPlaylists(
         if (!item || results.has(item.id)) continue;
 
         // Skip very short playlists (likely not book playlists)
-        if ((item.tracks?.total ?? 0) < 5) continue;
+        // Spotify search API returns track count as `items.total` (not `tracks.total`)
+        const trackCount = item.tracks?.total ?? item.items?.total ?? 0;
+        if (trackCount < 5) continue;
 
         const playlistName = (item.name ?? "").toLowerCase();
         const playlistDesc = (item.description ?? "").toLowerCase();
@@ -105,7 +107,7 @@ export async function searchBookPlaylists(
           description: item.description || null,
           externalUrl: item.external_urls?.spotify ?? `https://open.spotify.com/playlist/${item.id}`,
           imageUrl: item.images?.[0]?.url ?? null,
-          trackCount: item.tracks?.total ?? 0,
+          trackCount,
           ownerName: item.owner?.display_name ?? "Unknown",
           uri: item.uri,
         });
