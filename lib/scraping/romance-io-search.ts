@@ -30,6 +30,7 @@
  */
 
 import { extractTagsFromSnippet } from "./romance-io-tags";
+import { shouldSkipQuery, cacheResult } from "./serper-cache";
 
 const SERPER_ENDPOINT = "https://google.serper.dev/search";
 
@@ -344,6 +345,13 @@ export async function getRomanceIoSpice(
     // which also includes rating + spice level. Much higher tag extraction rate
     // than just "tagged". Author omitted — title + site: is enough for matching.
     const query = `site:romance.io "${title}" "tagged as"`;
+
+    // Check Serper cache — skip if this query has returned no data 3+ times
+    if (await shouldSkipQuery(query)) {
+      console.log(`[romance.io] Skipping "${title}" — persistent cache miss (3+ no-data results)`);
+      return null;
+    }
+
     const response = await fetch(SERPER_ENDPOINT, {
       method: "POST",
       headers: {
@@ -392,6 +400,7 @@ export async function getRomanceIoSpice(
 
     if (romanceIoResults.length === 0) {
       console.log(`[romance.io] No romance.io result found for "${title}"`);
+      await cacheResult(query, "no_data");
       return null;
     }
 
@@ -449,6 +458,7 @@ export async function getRomanceIoSpice(
 
     // LOW confidence — not worth storing
     if (confidence === "low") {
+      await cacheResult(query, "no_data");
       return null;
     }
 
@@ -551,6 +561,7 @@ export async function getRomanceIoSpice(
       );
       // Still return if we have a rating — the link and slug are valuable
       if (bestRating || confidence === "high") {
+        await cacheResult(query, "hit");
         return {
           spiceLevel: 3, // default to moderate if we can't parse
           heatLabel: "Open Door",
@@ -561,6 +572,7 @@ export async function getRomanceIoSpice(
           rawTags: allTags,
         };
       }
+      await cacheResult(query, "no_data");
       return null;
     }
 
@@ -568,6 +580,7 @@ export async function getRomanceIoSpice(
       `[romance.io] "${title}" → spice=${bestSpice.spiceLevel} (${bestSpice.heatLabel}), rating=${bestRating ?? "none"}, tags=${allTags.length}`
     );
 
+    await cacheResult(query, "hit");
     return {
       spiceLevel: bestSpice.spiceLevel,
       heatLabel: bestSpice.heatLabel,

@@ -3,6 +3,7 @@ import { runDataHygiene } from "@/lib/books/data-hygiene";
 import { runAutoFixer } from "@/lib/quality/auto-fixer";
 import { processGrabFeedback } from "@/lib/quality/feedback-pipeline";
 import { computeAndStoreScorecard } from "@/lib/quality/scorecard";
+import { detectBatchRegressions } from "@/lib/quality/regression-detector";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -41,11 +42,20 @@ export async function GET(request: Request) {
     const scorecard = await computeAndStoreScorecard();
     console.log(`[data-hygiene] Scorecard: ${scorecard.canonCount} canon books, ${scorecard.flags.openTotal} open flags`);
 
+    // Phase 9: Regression detector — check recent discovery batches for P0 spikes
+    const regressions = await detectBatchRegressions();
+    if (regressions.warnings.length > 0) {
+      console.warn(`[data-hygiene] REGRESSION WARNINGS:`, regressions.warnings);
+    } else {
+      console.log(`[data-hygiene] Regression detector: ${regressions.batchesChecked} batches checked, no warnings`);
+    }
+
     return NextResponse.json({
       hygiene,
       autofix,
       feedback,
       scorecard,
+      regressions,
     });
   } catch (error) {
     console.error("[cron/data-hygiene] Fatal error:", error);
