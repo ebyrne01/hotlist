@@ -374,7 +374,7 @@ Every discovered book enters the `enrichment_queue`. The enrichment worker (ever
 
 Each job retries up to 3× with exponential backoff. Books progress through `enrichment_status`: pending → partial → complete.
 
-**Canon gate:** When a book reaches `enrichment_status = 'complete'`, the canon gate (`/lib/books/canon-gate.ts`) evaluates whether it should be promoted to `is_canon = true`. Requirements: passes romance check, has cover + GR ID, no open P0 quality flags. Non-canon books are invisible on public surfaces. The enrichment worker skips expensive AI jobs (ai_synopsis, trope_inference, llm_spice, ai_recommendations, review_classifier, booktrack_prompt, spotify_playlists) for non-canon books to prevent wasted spend — scraping/metadata jobs still run since they help determine canon eligibility.
+**Canon gate:** When a book reaches `enrichment_status = 'complete'`, the canon gate (`/lib/books/canon-gate.ts`) evaluates whether it should be promoted to `is_canon = true`. Requirements: passes romance check OR adjacent-genre check (fantasy, gothic, dark academia, vampires, mythology, etc. with GR rating count >= 500), has cover + GR ID, no open P0 quality flags. The adjacent-genre gate allows popular crossover titles (Legendborn, Babel, A Dowry of Blood) that BookTok romance readers commonly read. Non-canon books are invisible on public surfaces. The enrichment worker skips expensive AI jobs (ai_synopsis, trope_inference, llm_spice, ai_recommendations, review_classifier, booktrack_prompt, spotify_playlists) for non-canon books to prevent wasted spend — scraping/metadata jobs still run since they help determine canon eligibility.
 
 ### Spice quality assurance
 
@@ -400,7 +400,7 @@ Quality runs as a **Sunday pipeline** of 4 sequential crons (2-5 AM UTC), plus a
 - `saveGoodreadsBookToCache()` and `saveProvisionalBook()` in `cache.ts` use `normalizeTitle()` to deduplicate at write time
 - `isCompilationTitle()` in `utils.ts` filters box sets before they enter curated rows
 - `resolveExistingBook()` in `cache.ts` — shared dedup resolver checks GR ID, ISBN, Google Books ID, then normalized title+author before any insert
-- Canon gate (`/lib/books/canon-gate.ts`) — books must pass romance check, have cover + GR ID, no open P0 flags before `is_canon = true`
+- Canon gate (`/lib/books/canon-gate.ts`) — books must pass romance check OR adjacent-genre check (fantasy, gothic, dark academia, etc. with GR rating count >= 500), have cover + GR ID, no open P0 flags before `is_canon = true`
 - Enrichment worker skips AI jobs (ai_synopsis, trope_inference, llm_spice, ai_recommendations, etc.) for non-canon books to prevent wasted spend
 
 #### Layer 2: Data hygiene (weekly cleanup)

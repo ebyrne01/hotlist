@@ -13,6 +13,49 @@ import { isRomanceByGenres, isKnownRomanceAuthor } from "./romance-filter";
 import { isCompilationTitle } from "./utils";
 
 /**
+ * Adjacent genres that BookTok romance readers commonly read.
+ * Books in these genres can pass the canon gate IF they have sufficient
+ * popularity (GR rating count >= 500), preventing random low-quality
+ * entries while allowing popular crossover titles like Legendborn,
+ * A Dowry of Blood, Babel, etc.
+ */
+const ADJACENT_GENRE_TERMS = [
+  "fantasy",
+  "romantasy",
+  "dark academia",
+  "gothic",
+  "gothic fiction",
+  "gothic horror",
+  "vampires",
+  "witches",
+  "fairy tales",
+  "fairy tale retellings",
+  "retellings",
+  "mythology",
+  "greek mythology",
+  "paranormal",
+  "urban fantasy",
+  "fae",
+  "young adult fantasy",
+  "ya fantasy",
+  "dark fantasy",
+  "epic fantasy",
+  "high fantasy",
+  "magical realism",
+  "speculative fiction",
+];
+
+function isAdjacentGenre(genres: string[]): boolean {
+  for (const genre of genres) {
+    const lower = genre.toLowerCase();
+    if (ADJACENT_GENRE_TERMS.some((term) => lower.includes(term))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Detect foreign-language editions and titles stuffed with marketing copy.
  * These slip through genre checks because the *genre* is romance, but the
  * book itself is a German translation or has Amazon blurb text in the title.
@@ -139,15 +182,17 @@ export async function evaluateCanonReadiness(bookId: string): Promise<CanonGateR
     blockers.push("enrichment_incomplete");
   }
 
-  // 2. Must be a romance book
+  // 2. Must be romance OR a popular adjacent-genre book
   const genres: string[] = book.genres ?? [];
   const tropeCount = tropesResult.data?.length ?? 0;
   const hasRomanceGenre = isRomanceByGenres(genres);
   const hasRomanceAuthor = isKnownRomanceAuthor(book.author);
   const hasRomanceTropes = tropeCount > 0; // book_tropes only contains romance tropes
+  const grRatingCountForGenre = ratingsResult.data?.rating_count ?? 0;
+  const hasAdjacentGenre = isAdjacentGenre(genres) && grRatingCountForGenre >= 500;
 
-  if (!hasRomanceGenre && !hasRomanceAuthor && !hasRomanceTropes) {
-    blockers.push("not_romance");
+  if (!hasRomanceGenre && !hasRomanceAuthor && !hasRomanceTropes && !hasAdjacentGenre) {
+    blockers.push("not_romance_or_adjacent");
   }
 
   // 3. Must have a cover
