@@ -30,8 +30,11 @@ function isForeignOrMarketingTitle(title: string): boolean {
   const MARKETING_PATTERNS = [
     "perfect for readers of",
     "from the author of",
+    "from the bestselling author",
+    "from the multi-million",
     "for fans of",
     "for all readers of",
+    "chapter sampler",
     "leseproben",
     "bestsellerautorin",
     "aus der welt",
@@ -39,7 +42,12 @@ function isForeignOrMarketingTitle(title: string): boolean {
     "roman |",
     "roman -",
   ];
-  return MARKETING_PATTERNS.some((p) => lower.includes(p));
+  if (MARKETING_PATTERNS.some((p) => lower.includes(p))) return true;
+
+  // Titles over 100 chars are almost always marketing-stuffed editions
+  if (title.length > 100) return true;
+
+  return false;
 }
 
 /**
