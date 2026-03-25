@@ -17,6 +17,13 @@ const sourceLabels: Record<string, string> = {
   romance_io: "romance.io",
 };
 
+/** Color-coded source labels for quick visual parsing */
+const sourceColors: Record<string, string> = {
+  goodreads: "text-[#5C4033]",
+  amazon: "text-[#C47F17]",
+  romance_io: "text-fire",
+};
+
 export default function RatingBadge({
   score,
   source,
@@ -25,6 +32,7 @@ export default function RatingBadge({
   external,
 }: RatingBadgeProps) {
   const label = sourceLabels[source] || source;
+  const colorClass = sourceColors[source] || "text-muted";
   const a11yLabel = `${label} rating: ${score !== null && score !== undefined ? score.toFixed(1) : "not available"}`;
 
   return (
@@ -42,9 +50,9 @@ export default function RatingBadge({
           {score !== null && score !== undefined ? score.toFixed(1) : "\u2014"}
         </span>
       )}
-      <span className="text-xs font-mono text-muted uppercase tracking-wide inline-flex items-center gap-0.5">
+      <span className={clsx("text-xs font-mono tracking-wide inline-flex items-center gap-0.5", colorClass)}>
         {label}
-        {external && <ExternalLink size={10} className="text-muted/70" />}
+        {external && <ExternalLink size={10} className="opacity-50" />}
       </span>
     </div>
   );

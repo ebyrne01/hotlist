@@ -25,7 +25,7 @@ export default function Badge({
   return (
     <span
       className={clsx(
-        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-mono whitespace-nowrap",
+        "inline-flex items-center rounded-full px-2.5 py-1.5 text-xs font-mono whitespace-nowrap min-h-[44px] sm:min-h-0 sm:py-0.5",
         variantStyles[variant],
         className
       )}

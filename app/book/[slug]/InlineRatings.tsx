@@ -105,25 +105,33 @@ export function InlineUserRating({ bookId }: { bookId: string }) {
 
   if (!authChecked) return null;
 
-  // Logged out: "+ Rate it" CTA
+  // Logged out: interactive stars that trigger auth on tap
   if (!user) {
     return (
-      <div className="flex flex-col items-center gap-0.5">
-        <button
-          onClick={() => openSignIn()}
-          className="text-xl font-display font-bold text-fire hover:text-fire/80 transition-colors"
+      <div className="flex flex-col items-center gap-1">
+        <span
+          className="inline-flex items-center gap-1"
+          role="radiogroup"
+          aria-label="Rate this book, 1 to 5 stars"
         >
-          + Rate
-        </button>
-        <span className="text-xs font-mono text-muted uppercase tracking-wide">
-          Your Rating
+          {Array.from({ length: 5 }, (_, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => openSignIn()}
+              className="p-0 transition-colors cursor-pointer hover:scale-110"
+              aria-label={`${i + 1} star${i > 0 ? "s" : ""}`}
+            >
+              <Star
+                size={24}
+                className="fill-none text-[#D4A574] transition-colors hover:fill-[#D4A574]"
+              />
+            </button>
+          ))}
         </span>
-        <button
-          onClick={() => openSignIn()}
-          className="text-xs font-mono text-fire/80 hover:text-fire transition-colors"
-        >
-          Sign in &rarr;
-        </button>
+        <span className="text-xs font-mono text-stone-400 tracking-wide">
+          Rate this book
+        </span>
       </div>
     );
   }
@@ -133,32 +141,37 @@ export function InlineUserRating({ bookId }: { bookId: string }) {
   // Just saved: brief checkmark
   if (justSaved) {
     return (
-      <div className="flex flex-col items-center gap-0.5">
-        <span className="text-xl font-display font-bold text-green-600">
+      <div className="flex flex-col items-center gap-1">
+        <span className="text-green-600">
           <Check size={24} strokeWidth={3} />
         </span>
-        <span className="text-xs font-mono text-green-600 uppercase tracking-wide">
-          Saved
+        <span className="text-xs font-mono text-green-600 tracking-wide">
+          Saved!
         </span>
       </div>
     );
   }
 
-  // Logged in, rated, not editing: show their rating
+  // Logged in, rated, not editing: show filled gold stars
   if (starRating > 0 && !editing) {
     return (
-      <div className="flex flex-col items-center gap-0.5">
-        <span className="text-xl font-display font-bold text-ink">
-          {starRating}.0
-        </span>
-        <span className="text-xs font-mono text-muted uppercase tracking-wide">
-          Your Rating
+      <div className="flex flex-col items-center gap-1">
+        <span className="inline-flex items-center gap-0.5">
+          {Array.from({ length: 5 }, (_, i) => (
+            <Star
+              key={i}
+              size={24}
+              className={clsx(
+                i < starRating ? "fill-gold text-gold" : "fill-none text-[#D4A574]/40"
+              )}
+            />
+          ))}
         </span>
         <button
           onClick={() => setEditing(true)}
-          className="text-xs font-mono text-fire/80 hover:text-fire transition-colors"
+          className="text-xs font-mono text-stone-400 hover:text-fire transition-colors tracking-wide"
         >
-          Edit
+          Your rating &middot; edit
         </button>
       </div>
     );
@@ -167,10 +180,14 @@ export function InlineUserRating({ bookId }: { bookId: string }) {
   // Logged in, unrated or editing: interactive stars
   return (
     <div
-      className="flex flex-col items-center gap-0.5"
+      className="flex flex-col items-center gap-1"
       onMouseLeave={() => setHovered(0)}
     >
-      <span className="inline-flex items-center gap-0.5">
+      <span
+        className="inline-flex items-center gap-0.5"
+        role="radiogroup"
+        aria-label="Rate this book, 1 to 5 stars"
+      >
         {Array.from({ length: 5 }, (_, i) => {
           const starIndex = i + 1;
           const filled = starIndex <= Math.round(display);
@@ -178,25 +195,27 @@ export function InlineUserRating({ bookId }: { bookId: string }) {
             <button
               key={i}
               type="button"
+              role="radio"
+              aria-checked={starIndex === starRating}
               disabled={saving}
-              className="p-0 transition-colors cursor-pointer hover:scale-110"
+              className="p-0 transition-colors cursor-pointer hover:scale-110 focus-visible:outline-2 focus-visible:outline-fire focus-visible:outline-offset-2 rounded"
               onMouseEnter={() => setHovered(starIndex)}
               onClick={() => saveRating(starIndex)}
               aria-label={`${starIndex} star${starIndex > 1 ? "s" : ""}`}
             >
               <Star
-                size={18}
+                size={24}
                 className={clsx(
                   "transition-colors",
-                  filled ? "fill-gold text-gold" : "fill-none text-border"
+                  filled ? "fill-gold text-gold" : "fill-none text-[#D4A574]"
                 )}
               />
             </button>
           );
         })}
       </span>
-      <span className="text-xs font-mono text-muted uppercase tracking-wide">
-        Your Rating
+      <span className="text-xs font-mono text-stone-400 tracking-wide">
+        Rate this book
       </span>
     </div>
   );

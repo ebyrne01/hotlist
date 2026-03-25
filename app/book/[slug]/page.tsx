@@ -17,7 +17,7 @@ import { Video } from "lucide-react";
 import BookDetailClient from "./BookDetailClient";
 import BookPreview from "@/components/books/BookPreview";
 import { InlineUserRating } from "./InlineRatings";
-import SpiceSection from "./SpiceSection";
+import InlineSpiceRating from "./InlineSpiceRating";
 import BookTokMentions from "@/components/books/BookTokMentions";
 import CreateShareCardButton from "@/components/books/CreateShareCardButton";
 import ExpandableText from "@/components/ui/ExpandableText";
@@ -351,7 +351,6 @@ export default async function BookPage({ params }: PageProps) {
     (s) => s.source === "romance_io" && s.confidence === "high"
   );
   const communitySpice = book.spice.find((s) => s.source === "hotlist_community");
-  const inferredSpice = book.spice.find((s) => s.source === "goodreads_inference");
 
   // Affiliate links
   const amazonTag = process.env.AMAZON_AFFILIATE_TAG;
@@ -445,14 +444,20 @@ export default async function BookPage({ params }: PageProps) {
                 {book.seriesName && (
                   <span className="text-muted">
                     {" \u00B7 "}
-                    {book.seriesPosition
-                      ? `${book.seriesName} #${book.seriesPosition}`
-                      : book.seriesName}
+                    <a
+                      href="#series-nav"
+                      className="hover:underline hover:text-fire transition-colors"
+                    >
+                      {book.seriesName}
+                    </a>
+                    {book.seriesPosition && (
+                      <span className="text-muted/60"> #{book.seriesPosition}</span>
+                    )}
                   </span>
                 )}
               </p>
               {/* Compact metadata line */}
-              <div className="mt-1 flex items-center gap-2">
+              <div className="mt-1 flex items-center flex-wrap gap-x-2 gap-y-0.5">
                 <p className="text-xs font-mono text-muted/70">
                   {[
                     book.publishedYear,
@@ -462,6 +467,19 @@ export default async function BookPage({ params }: PageProps) {
                     .filter(Boolean)
                     .join(" \u00B7 ")}
                 </p>
+                {book.spotifyPlaylists && book.spotifyPlaylists.length > 0 && (
+                  <a
+                    href={book.spotifyPlaylists[0].externalUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs font-mono text-[#1DB954] hover:text-[#1ed760] transition-colors"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
+                    </svg>
+                    Listen {"\u2197"}
+                  </a>
+                )}
                 <AdminBookFlag bookId={book.id} bookTitle={book.title} />
               </div>
             </div>
@@ -540,27 +558,55 @@ export default async function BookPage({ params }: PageProps) {
               </div>
             </div>
 
-            {/* Compact spice in hero */}
+            {/* Compact spice in hero with source attribution */}
             {(() => {
               const spiceLevel = romanceIoSpice?.spiceLevel
                 ?? (communitySpice && (communitySpice.ratingCount ?? 0) >= 5 ? communitySpice.spiceLevel : null)
                 ?? book.compositeSpice?.score
                 ?? null;
               if (!spiceLevel) return null;
-              const isEstimated = !romanceIoSpice && !((communitySpice?.ratingCount ?? 0) >= 5);
+              const hasRomanceIo = !!romanceIoSpice;
+              const hasCommunity = !hasRomanceIo && (communitySpice?.ratingCount ?? 0) >= 5;
+              const isEstimated = !hasRomanceIo && !hasCommunity;
               return (
-                <div className="flex items-center gap-2 mt-3" role="img" aria-label={`Spice level ${Math.min(5, Math.max(1, Math.round(spiceLevel)))} out of 5`}>
+                <div className="flex items-center flex-wrap gap-x-2 gap-y-1 mt-3" role="img" aria-label={`Spice level ${Math.min(5, Math.max(1, Math.round(spiceLevel)))} out of 5`}>
                   <span className="text-xs font-mono text-muted-a11y uppercase tracking-wide">Spice</span>
                   <PepperRow level={spiceLevel} size={16} estimated={isEstimated} />
                   {book.romanceIoHeatLabel && (
                     <span className="text-xs font-body text-fire italic">{book.romanceIoHeatLabel}</span>
                   )}
+                  {hasRomanceIo && (
+                    <span className="text-[11px] font-mono text-stone-400">
+                      {"\u00B7 via "}
+                      <a
+                        href={romanceIoUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hover:text-fire transition-colors"
+                      >
+                        romance.io {"\u2197"}
+                      </a>
+                    </span>
+                  )}
+                  {hasCommunity && (
+                    <span className="text-[11px] font-mono text-stone-400">
+                      {"\u00B7 community rating"}
+                    </span>
+                  )}
+                  {isEstimated && (
+                    <span className="text-[11px] font-mono text-stone-400" title="Estimated from genre, reviews, and AI analysis">
+                      {"\u00B7 estimated \u24D8"}
+                    </span>
+                  )}
                 </div>
               );
             })()}
 
-            {/* Action row — pushed to bottom of the hero via flex-grow spacer */}
-            <div className="mt-auto pt-4 flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2">
+            {/* Personal spice rating — "Your take" */}
+            <InlineSpiceRating bookId={book.id} />
+
+            {/* Row 1: Primary actions — "what do I do with this book" */}
+            <div className="mt-auto pt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
               {/* Add to Hotlist — primary CTA (hidden on mobile where sticky footer handles it) */}
               <div className="hidden sm:block">
                 <BookDetailClient
@@ -570,45 +616,7 @@ export default async function BookPage({ params }: PageProps) {
                 />
               </div>
 
-              {/* Kindle — secondary CTA (full-width on mobile) */}
-              <a
-                href={kindleUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-white text-ink border border-border font-body font-medium text-sm px-4 min-h-[44px] hover:bg-cream transition-colors w-full sm:w-auto"
-              >
-                Read on Kindle &rarr;
-              </a>
-
-              {/* Print buy options — share width on mobile */}
-              <div className="flex gap-1.5 w-full sm:w-auto">
-                <a
-                  href={amazonDirectUrl ?? amazonSearchUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center rounded-lg bg-white text-ink border border-border font-body text-sm px-3 min-h-[44px] hover:bg-cream transition-colors flex-1 sm:flex-initial"
-                >
-                  Amazon
-                </a>
-                <a
-                  href={bnUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center rounded-lg bg-white text-ink border border-border font-body text-sm px-3 min-h-[44px] hover:bg-cream transition-colors flex-1 sm:flex-initial"
-                >
-                  B&amp;N
-                </a>
-                <a
-                  href={bookshopUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center rounded-lg bg-white text-ink border border-border font-body text-sm px-3 min-h-[44px] hover:bg-cream transition-colors flex-1 sm:flex-initial"
-                >
-                  Bookshop
-                </a>
-              </div>
-
-              {/* Reading status — right-aligned on desktop */}
+              {/* Reading status — right-aligned on desktop, full-width on mobile */}
               <div className="sm:ml-auto">
                 <BookDetailClient
                   section="reading-status"
@@ -618,8 +626,46 @@ export default async function BookPage({ params }: PageProps) {
               </div>
             </div>
 
-            {/* Creator share card button */}
-            <CreateShareCardButton bookSlug={book.slug} />
+            {/* Row 2: Buy links — "where do I get this book" (demoted, text-link style) */}
+            <div className="flex items-center flex-wrap gap-x-4 gap-y-1 mt-3">
+              <a
+                href={kindleUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-mono text-stone-500 hover:text-fire transition-colors"
+              >
+                Read on Kindle &rarr;
+              </a>
+              <a
+                href={amazonDirectUrl ?? amazonSearchUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-mono text-stone-500 hover:text-fire transition-colors"
+              >
+                Amazon
+              </a>
+              <a
+                href={bnUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-mono text-stone-500 hover:text-fire transition-colors"
+              >
+                B&amp;N
+              </a>
+              <a
+                href={bookshopUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-mono text-stone-500 hover:text-fire transition-colors"
+              >
+                Bookshop
+              </a>
+            </div>
+
+            {/* Row 3: Secondary actions (text link style) */}
+            <div className="mt-2">
+              <CreateShareCardButton bookSlug={book.slug} />
+            </div>
 
             {/* Enrichment poller */}
             {enrichmentStatus !== "complete" && (
@@ -649,11 +695,12 @@ export default async function BookPage({ params }: PageProps) {
                 <div>
                   <ExpandableText
                     text={cleanSynopsis(book.aiSynopsis!, book.title, book.author)}
+                    hookLine
                     maxLines={3}
                     className="font-body text-ink/90 leading-[1.85]"
                     style={{ fontSize: "0.95rem" }}
                   />
-                  <span className="inline-block mt-2 text-xs font-mono text-muted-a11y">
+                  <span className="inline-block mt-1 text-[10px] font-mono text-muted-a11y/60">
                     AI-generated synopsis
                   </span>
                 </div>
@@ -680,33 +727,6 @@ export default async function BookPage({ params }: PageProps) {
               )}
             </div>
 
-            {/* Spice detail — full SpiceSection */}
-            <div className="py-6 border-b border-border">
-              <SpiceSection
-                bookId={book.id}
-                compositeSpice={book.compositeSpice}
-                romanceIoSpice={romanceIoSpice ? {
-                  spiceLevel: romanceIoSpice.spiceLevel,
-                  source: "romance_io",
-                  ratingCount: romanceIoSpice.ratingCount,
-                  confidence: romanceIoSpice.confidence ?? null,
-                } : null}
-                romanceIoHeatLabel={book.romanceIoHeatLabel}
-                romanceIoSlug={book.romanceIoSlug}
-                communitySpice={communitySpice ? {
-                  spiceLevel: communitySpice.spiceLevel,
-                  source: "hotlist_community",
-                  ratingCount: communitySpice.ratingCount,
-                  confidence: null,
-                } : null}
-                inferredSpice={inferredSpice ? {
-                  spiceLevel: inferredSpice.spiceLevel,
-                  source: "goodreads_inference",
-                  ratingCount: inferredSpice.ratingCount,
-                  confidence: inferredSpice.confidence ?? null,
-                } : null}
-              />
-            </div>
 
             {/* Seen on BookTok */}
             <div className="py-6">
@@ -724,6 +744,51 @@ export default async function BookPage({ params }: PageProps) {
           {/* ── Sidebar (280px on desktop, full-width stacked on mobile) ── */}
           <div className="space-y-6">
 
+            {/* Series navigation — first in sidebar (decision-critical info) */}
+            {book.seriesName && seriesBooks.length > 1 && (
+              <div id="series-nav">
+                <h3 className="text-xs font-mono text-muted-a11y uppercase tracking-wide mb-2">
+                  {book.seriesName}
+                </h3>
+                <div className="flex flex-col gap-1.5">
+                  {seriesBooks.map((sb) => {
+                    const isCurrent = sb.id === book.id;
+                    const sharedClasses = "flex items-center gap-2 px-3 py-2 rounded-lg text-sm";
+                    const inner = (
+                      <>
+                        <span className={`text-xs font-mono ${isCurrent ? "text-fire" : "text-muted"}`}>
+                          {sb.seriesPosition ?? "?"}
+                        </span>
+                        <span className="truncate">{sb.title}</span>
+                        {isCurrent && (
+                          <span className="ml-auto text-[10px] font-mono text-fire/60">
+                            current
+                          </span>
+                        )}
+                      </>
+                    );
+                    return isCurrent ? (
+                      <div
+                        key={sb.id}
+                        className={`${sharedClasses} bg-fire/5 border border-fire/20 text-ink font-medium`}
+                        aria-current="page"
+                      >
+                        {inner}
+                      </div>
+                    ) : (
+                      <Link
+                        key={sb.id}
+                        href={`/book/${sb.slug}`}
+                        className={`${sharedClasses} border border-border hover:border-muted/40 hover:bg-cream/50 text-ink/80 transition-colors`}
+                      >
+                        {inner}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Booktrack — Spotify playlists + AI reading vibes prompt */}
             <BooktrackSection
               spotifyPlaylists={book.spotifyPlaylists}
@@ -734,41 +799,6 @@ export default async function BookPage({ params }: PageProps) {
             {/* Fire-and-forget: trigger on-demand Spotify lookup if no playlists cached */}
             {!book.spotifyPlaylists && (
               <SpotifyTrigger bookId={book.id} title={book.title} author={book.author} />
-            )}
-
-            {/* Series navigation */}
-            {book.seriesName && seriesBooks.length > 1 && (
-              <div>
-                <h3 className="text-xs font-mono text-muted-a11y uppercase tracking-wide mb-2">
-                  {book.seriesName}
-                </h3>
-                <div className="flex flex-col gap-1.5">
-                  {seriesBooks.map((sb) => {
-                    const isCurrent = sb.id === book.id;
-                    return (
-                      <Link
-                        key={sb.id}
-                        href={`/book/${sb.slug}`}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
-                          isCurrent
-                            ? "bg-fire/5 border border-fire/20 text-ink font-medium"
-                            : "border border-border hover:border-muted/40 text-ink/80"
-                        }`}
-                      >
-                        <span className={`text-xs font-mono ${isCurrent ? "text-fire" : "text-muted"}`}>
-                          {sb.seriesPosition ?? "?"}
-                        </span>
-                        <span className="truncate">{sb.title}</span>
-                        {isCurrent && (
-                          <span className="ml-auto text-[10px] font-mono text-fire/60">
-                            current
-                          </span>
-                        )}
-                      </Link>
-                    );
-                  })}
-                </div>
-              </div>
             )}
 
             {/* Source links */}
@@ -807,7 +837,9 @@ export default async function BookPage({ params }: PageProps) {
         {/* Readers also loved */}
         <section className="mt-8 sm:mt-12 pt-6 sm:pt-8 border-t border-border">
           <h2 className="font-display text-xl sm:text-2xl font-bold text-ink mb-4">
-            Readers also loved
+            {book.tropes.length > 0
+              ? `More ${book.tropes[0].name.toLowerCase()} reads`
+              : "Similar vibes"}
           </h2>
           {relatedBooks.length > 0 ? (
             <BookRow books={relatedBooks} />

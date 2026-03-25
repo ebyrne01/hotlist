@@ -31,7 +31,7 @@ export default function CreateShareCardButton({ bookSlug }: Props) {
   return (
     <Link
       href={`/creator/card/${bookSlug}`}
-      className="inline-flex items-center gap-2 px-3 py-2 text-xs font-mono bg-fire/5 border border-fire/10 rounded-lg text-fire hover:bg-fire/10 transition-colors"
+      className="inline-flex items-center gap-1.5 text-xs font-mono text-stone-500 hover:text-fire transition-colors"
     >
       <svg width="14" height="14" viewBox="0 0 16 16">
         <path
