@@ -520,5 +520,32 @@ export async function runDataHygiene(): Promise<CleanupResult> {
     }
   }
 
+  // Phase 6: Series orphan detection
+  // Canon books missing series_name whose author has other series books in our DB.
+  // These likely scraped a standalone edition on Goodreads. Re-queue goodreads_detail
+  // to re-scrape (the canonical edition usually has series info).
+  const { data: seriesOrphans } = await supabase.rpc("find_series_orphans");
+
+  if (seriesOrphans && seriesOrphans.length > 0) {
+    let requeued = 0;
+    for (const orphan of seriesOrphans) {
+      // Re-queue goodreads_detail to re-scrape series data
+      await supabase.from("enrichment_queue").upsert(
+        {
+          book_id: orphan.id,
+          job_type: "goodreads_detail",
+          status: "pending",
+          attempts: 0,
+          max_attempts: 2,
+          next_retry_at: new Date().toISOString(),
+          error_message: null,
+        },
+        { onConflict: "book_id,job_type" }
+      );
+      requeued++;
+    }
+    result.details.push(`[series-orphans] Re-queued ${requeued} books for series data re-scrape`);
+  }
+
   return result;
 }
