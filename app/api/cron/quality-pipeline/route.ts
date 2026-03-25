@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { runAutoFixer } from "@/lib/quality/auto-fixer";
-import { processGrabFeedback } from "@/lib/quality/feedback-pipeline";
+import { processGrabFeedback, processGrabCorrections } from "@/lib/quality/feedback-pipeline";
 import { computeAndStoreScorecard } from "@/lib/quality/scorecard";
 import { detectBatchRegressions } from "@/lib/quality/regression-detector";
 
@@ -30,6 +30,15 @@ export async function GET(request: Request) {
       `[quality-pipeline] Feedback: ${feedback.processed} processed, ${feedback.flagsCreated} flags created, ${feedback.escalatedToP0} escalated`
     );
 
+    // 2b. Apply grab corrections — search for correct books, update grabs + hotlists
+    const corrections = await processGrabCorrections();
+    console.log(
+      `[quality-pipeline] Corrections: ${corrections.processed} processed, ${corrections.corrected} corrected, ${corrections.hotlistsUpdated} hotlists updated`
+    );
+    if (corrections.failed.length > 0) {
+      console.warn(`[quality-pipeline] Correction failures:`, corrections.failed);
+    }
+
     // 3. Quality scorecard (trend tracking)
     const scorecard = await computeAndStoreScorecard();
     console.log(
@@ -46,7 +55,7 @@ export async function GET(request: Request) {
       );
     }
 
-    return NextResponse.json({ autofix, feedback, scorecard, regressions });
+    return NextResponse.json({ autofix, feedback, corrections, scorecard, regressions });
   } catch (error) {
     console.error("[cron/quality-pipeline] Fatal error:", error);
     return NextResponse.json(

@@ -329,10 +329,14 @@ CRITICAL RULES:
 - If you cannot find a Goodreads ID after 2 search attempts, submit with null goodreads_id. Do not keep retrying.
 
 SEARCH STRATEGY when a search returns 0 results:
-- Try ONE variation: title alone without author, or a shorter query.
+The preliminary scan often misreads book covers — titles and author names may be garbled. The search system tries fuzzy matching and query variations automatically, but if you get 0 results, try these strategies IN ORDER:
+1. Author name alone (e.g., "J.M. Grosvalet") — author names are often partially correct even when titles are mangled.
+2. Title alone without author — removes noise from garbled author names.
+3. The most distinctive word from the title — short common words fail, but distinctive words like "Quicksilver" or "Medusa" often work.
+4. Fix obvious OCR errors: missing spaces ("BloodSo" → "Blood So"), swapped letters, truncated words. Think about what the REAL title might be if the cover was partially obscured or blurry.
 - Do NOT add descriptive keywords like "dragon shifter", "fantasy romance" to searches.
 - Do NOT search for "book one", "book 1", or "series name book one" — you must find the CANDIDATE book, not Book 1.
-- Maximum 2 search attempts per candidate. After that, submit with null goodreads_id.
+- Maximum 3 search attempts per candidate. After that, submit with null goodreads_id and include the original title/author from the scan as-is.
 
 KNOWN WHISPER ERRORS — the preliminary scan should have corrected these, but double-check:
 - "Sara J. Mass" → Sarah J. Maas
@@ -391,7 +395,7 @@ Verify each candidate on Goodreads using search_goodreads, then call submit_book
   // Agentic loop — reuses existing tool execution logic
   let messages: Anthropic.Messages.MessageParam[] = [{ role: "user", content: userMessage }];
   let submittedBooks: SubmittedBook[] | null = null;
-  const maxTurns = 6;
+  const maxTurns = 7;
   let turn = 0;
   let rateLimitRetries = 0;
   const MAX_RATE_LIMIT_RETRIES = 2;

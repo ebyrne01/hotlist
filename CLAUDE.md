@@ -210,7 +210,7 @@ All tables in the public schema:
   transcript-preprocessor.ts  — Whisper error correction, noise removal
   frame-extractor.ts          — ffmpeg frame extraction (adaptive density)
   book-agent.ts               — Two-phase pipeline: Haiku observe + Sonnet verify
-  agent-search.ts             — Tiered search for agent (local DB → Google Books → Goodreads)
+  agent-search.ts             — Tiered search for agent (local DB → fuzzy trigram → Google Books → Goodreads, with smart query variations)
   book-resolver.ts            — Types only (ResolvedBook, etc.)
   index.ts                    — Pipeline orchestrator
 /components/books/            — Book-specific components (BookCard, SpiceDisplay, SpiceAttribution)
@@ -237,7 +237,7 @@ All tables in the public schema:
 2. Download video/audio via RapidAPI (detects carousel vs video posts)
 3. Transcribe audio via Whisper + extract frames via ffmpeg (parallel). Carousel posts skip Whisper, use slide images directly.
 4. **Phase 1 — Haiku observation** (single turn, vision + transcript, no tools): Reads ALL frames + full transcript. Returns structured candidate list with title, author, source, confidence, sentiment, and creator quote. Filters out comparison books ("if you loved X") and series predecessors.
-5. **Phase 2 — Sonnet verification** (multi-turn, text-only, tool use): Takes candidate list (NO images), searches Goodreads via tiered search (local DB → Google Books → Goodreads scraping), confirms book identities, submits final verified list. Max 6 turns, 3-min time budget. Critical rule: never swaps candidates for Book 1 of their series.
+5. **Phase 2 — Sonnet verification** (multi-turn, text-only, tool use): Takes candidate list (NO images), searches Goodreads via tiered search (local DB → Google Books → Goodreads scraping), confirms book identities, submits final verified list. Max 7 turns, 3-min time budget. Critical rule: never swaps candidates for Book 1 of their series. Retry strategy: author alone → title alone → distinctive word → OCR error correction.
 6. Queue enrichment for all matched books + **kick off enrichment worker immediately** (fire-and-forget, no 5-min wait)
 7. Cache result in `video_grabs` table (includes `video_title` from RapidAPI)
 8. Register creator handle + book mentions in `creator_handles` / `creator_book_mentions` (fire-and-forget)
@@ -421,7 +421,7 @@ The data hygiene cron detects and removes junk entries that slip through prevent
 Runs as `/api/cron/quality-pipeline` (Sundays 3 AM):
 
 1. **Auto-fixer** (`/lib/quality/auto-fixer.ts`) — Applies `suggested_value` from quality flags where `auto_fixable = true AND confidence >= 0.9`. Marks flags `auto_fixed`.
-2. **Feedback pipeline** (`/lib/quality/feedback-pipeline.ts`) — Converts `grab_feedback` entries (wrong_book, wrong_edition) into quality flags. 3+ reports on same book → escalate to P0 + auto-demote from canon.
+2. **Feedback pipeline** (`/lib/quality/feedback-pipeline.ts`) — Two functions: (a) `processGrabFeedback()` converts `grab_feedback` entries into quality flags (3+ reports → P0 + auto-demote), (b) `processGrabCorrections()` parses user correction notes ("I, Medusa by Ayana Gray"), searches for the correct book, updates `video_grabs.extracted_books` JSONB, and adds the book to the associated hotlist. Creates provisional books from Google Books if needed.
 3. **Quality scorecard** (`/lib/quality/scorecard.ts`) — Computes coverage metrics (cover, synopsis, ratings, spice, tropes, ASIN, recommendations) + flag counts + enrichment status. Stored in `quality_health_log` for trend tracking.
 4. **Regression detector** (`/lib/quality/regression-detector.ts`) — Groups recent books by `discovery_source`, runs rules engine on batches of 10+. Warns if any batch has >3 P0 flags.
 
