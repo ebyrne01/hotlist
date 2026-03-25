@@ -185,16 +185,19 @@ export async function processGrabCorrections(): Promise<GrabCorrectionResult> {
       let correctBook: { id: string; title: string; author: string; goodreads_id: string | null } | null = null;
 
       // Helper: check if a result title is a reasonable match for the correction
+      const STOP_WORDS = new Set(["the", "a", "an", "of", "in", "on", "at", "to", "for", "and", "or", "by", "is", "it", "no", "not", "don", "dont"]);
       const correctionTitleNorm = correction.title.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
-      const correctionWords = correctionTitleNorm.split(/\s+/).filter(w => w.length > 2);
+      const correctionWords = correctionTitleNorm.split(/\s+/).filter(w => w.length > 2 && !STOP_WORDS.has(w));
 
       const isTitleMatch = (resultTitle: string): boolean => {
         const norm = resultTitle.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
-        // Exact or substring match
+        // Exact or substring match (most reliable)
         if (norm.includes(correctionTitleNorm) || correctionTitleNorm.includes(norm)) return true;
-        // Word overlap: at least 50% of correction words appear in result
+        // Word overlap: at least 70% of distinctive correction words must appear
+        // This prevents "Reign of Ruin" matching "A Reign of Rose" (only 1/2 distinctive words)
+        if (correctionWords.length === 0) return false;
         const matchCount = correctionWords.filter(w => norm.includes(w)).length;
-        return correctionWords.length > 0 && matchCount / correctionWords.length >= 0.5;
+        return matchCount / correctionWords.length >= 0.7;
       };
 
       // Step 1: Search agent (local DB, Google Books, Goodreads)
