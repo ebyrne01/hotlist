@@ -236,6 +236,31 @@ export async function searchBooksInCache(query: string): Promise<BookDetail[]> {
 
   if (allBooks.length === 0) return [];
 
+  // Series expansion: if a title match has a series, pull in other books from
+  // the same series. When someone searches "fourth wing" they expect all
+  // Empyrean books, not just the one whose title matches.
+  const seriesNames = new Set<string>();
+  for (const book of allBooks) {
+    const sn = book.series_name as string | null;
+    if (sn) seriesNames.add(sn);
+  }
+  if (seriesNames.size > 0 && seriesNames.size <= 3) {
+    const { data: seriesBooks } = await supabase
+      .from("books")
+      .select("*")
+      .eq("is_canon", true)
+      .in("series_name", Array.from(seriesNames))
+      .not("series_position", "is", null)
+      .limit(30);
+
+    for (const book of seriesBooks ?? []) {
+      const id = book.id as string;
+      if (!seen.has(id)) {
+        seen.add(id);
+        allBooks.push(book);
+      }
+    }
+  }
 
   // Detect if the query looks like an author name (2-3 words, no common title words)
   const TITLE_NOISE = new Set(["the", "of", "and", "a", "an", "in", "to", "for", "is", "on", "at", "by"]);
