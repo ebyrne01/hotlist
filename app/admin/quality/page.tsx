@@ -37,6 +37,62 @@ interface Stats {
   dismissedToday: number;
 }
 
+interface CoverageMetric {
+  count: number;
+  pct: number;
+}
+
+interface Scorecard {
+  computedAt: string;
+  canonCount: number;
+  coverage: {
+    cover: CoverageMetric;
+    synopsis: CoverageMetric;
+    goodreadsRating: CoverageMetric;
+    amazonRating: CoverageMetric;
+    romanceIoSpice: CoverageMetric;
+    tropes: CoverageMetric;
+    amazonAsin: CoverageMetric;
+    aiRecommendations: CoverageMetric;
+  };
+  flags: {
+    openP0: number;
+    openP1: number;
+    openTotal: number;
+  };
+  enrichment: {
+    complete: number;
+    partial: number;
+    pending: number;
+  };
+}
+
+interface SourceHealth {
+  jobType: string;
+  total: number;
+  succeeded: number;
+  noData: number;
+  failed: number;
+  successRate: number;
+}
+
+interface HealthReport {
+  lookbackHours: number;
+  sources: SourceHealth[];
+  warnings: string[];
+}
+
+interface RecentAutoFix {
+  id: string;
+  bookTitle: string;
+  bookAuthor: string;
+  fieldName: string;
+  issueType: string;
+  originalValue: string | null;
+  suggestedValue: string | null;
+  createdAt: string;
+}
+
 // ── Labels ────────────────────────────────────────────
 
 const ISSUE_LABELS: Record<string, string> = {
@@ -68,6 +124,17 @@ const ISSUE_LABELS: Record<string, string> = {
   wrong_edition: "Wrong Goodreads Edition",
 };
 
+const COVERAGE_LABELS: Record<string, string> = {
+  cover: "Covers",
+  synopsis: "Synopsis",
+  goodreadsRating: "GR Rating",
+  amazonRating: "AMZ Rating",
+  romanceIoSpice: "Romance.io Spice",
+  tropes: "Tropes",
+  amazonAsin: "Amazon ASIN",
+  aiRecommendations: "AI Recs",
+};
+
 const PRIORITY_COLORS: Record<string, string> = {
   P0: "bg-red-100 text-red-800",
   P1: "bg-orange-100 text-orange-800",
@@ -88,6 +155,9 @@ export default function QualityDashboard() {
   const [loading, setLoading] = useState(true);
   const [resolving, setResolving] = useState<Set<string>>(new Set());
   const [scanRunning, setScanRunning] = useState(false);
+  const [scorecard, setScorecard] = useState<Scorecard | null>(null);
+  const [health, setHealth] = useState<HealthReport | null>(null);
+  const [recentFixes, setRecentFixes] = useState<RecentAutoFix[]>([]);
   const limit = 50;
 
   const jsonHeaders = { "Content-Type": "application/json" };
@@ -144,10 +214,47 @@ export default function QualityDashboard() {
     }
   }, []);
 
+  const fetchScorecard = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/quality/scorecard");
+      if (res.ok) setScorecard(await res.json());
+    } catch { /* best-effort */ }
+  }, []);
+
+  const fetchHealth = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/quality/health");
+      if (res.ok) setHealth(await res.json());
+    } catch { /* best-effort */ }
+  }, []);
+
+  const fetchRecentFixes = useCallback(async () => {
+    try {
+      const params = new URLSearchParams({ status: "auto_fixed", limit: "10", page: "1" });
+      const res = await fetch(`/api/admin/quality/flags?${params}`);
+      if (res.ok) {
+        const data: FlagResponse = await res.json();
+        setRecentFixes(data.flags.map((f) => ({
+          id: f.id,
+          bookTitle: f.bookTitle,
+          bookAuthor: f.bookAuthor,
+          fieldName: f.fieldName,
+          issueType: f.issueType,
+          originalValue: f.originalValue,
+          suggestedValue: f.suggestedValue,
+          createdAt: f.createdAt,
+        })));
+      }
+    } catch { /* best-effort */ }
+  }, []);
+
   useEffect(() => {
     fetchFlags();
     fetchStats();
-  }, [fetchFlags, fetchStats]);
+    fetchScorecard();
+    fetchHealth();
+    fetchRecentFixes();
+  }, [fetchFlags, fetchStats, fetchScorecard, fetchHealth, fetchRecentFixes]);
 
   const resolveFlag = async (flagId: string, action: "confirm" | "dismiss", applyFix = false) => {
     setResolving((prev) => new Set(prev).add(flagId));
@@ -258,6 +365,101 @@ export default function QualityDashboard() {
         <StatCard label="Confirmed" value={stats.confirmedToday} color="text-green-600" />
         <StatCard label="Dismissed" value={stats.dismissedToday} color="text-gray-500" />
       </div>
+
+      {/* ── Scorecard Widget ── */}
+      {scorecard && (
+        <div className="border rounded p-4 mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-bold text-base">Quality Scorecard</h2>
+            <span className="text-xs text-gray-400">
+              {scorecard.canonCount.toLocaleString()} canon books
+            </span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {(Object.entries(scorecard.coverage) as [string, CoverageMetric][]).map(([key, metric]) => (
+              <CoverageBar key={key} label={COVERAGE_LABELS[key] || key} pct={metric.pct} count={metric.count} />
+            ))}
+          </div>
+          <div className="flex gap-4 mt-3 pt-3 border-t text-xs text-gray-500">
+            <span>Enrichment: {scorecard.enrichment.complete} complete, {scorecard.enrichment.partial} partial, {scorecard.enrichment.pending} pending</span>
+            <span>Flags: <span className="text-red-600 font-bold">{scorecard.flags.openP0} P0</span> / <span className="text-orange-600 font-bold">{scorecard.flags.openP1} P1</span> / {scorecard.flags.openTotal} total</span>
+          </div>
+        </div>
+      )}
+
+      {/* ── Source Health Widget ── */}
+      {health && health.sources.length > 0 && (
+        <div className="border rounded p-4 mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-bold text-base">Enrichment Source Health</h2>
+            <span className="text-xs text-gray-400">Last {health.lookbackHours}h</span>
+          </div>
+          {health.warnings.length > 0 && (
+            <div className="bg-red-50 border border-red-200 rounded p-2 mb-3 text-xs text-red-700">
+              {health.warnings.map((w, i) => <p key={i}>{w}</p>)}
+            </div>
+          )}
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="border-b">
+                <tr>
+                  <th className="px-2 py-1.5">Source</th>
+                  <th className="px-2 py-1.5 text-right">Total</th>
+                  <th className="px-2 py-1.5 text-right">Success</th>
+                  <th className="px-2 py-1.5 text-right">No Data</th>
+                  <th className="px-2 py-1.5 text-right">Failed</th>
+                  <th className="px-2 py-1.5 text-right">Rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                {health.sources.map((s) => (
+                  <tr key={s.jobType} className="border-b last:border-0">
+                    <td className="px-2 py-1.5 font-medium">{s.jobType}</td>
+                    <td className="px-2 py-1.5 text-right">{s.total}</td>
+                    <td className="px-2 py-1.5 text-right text-green-700">{s.succeeded}</td>
+                    <td className="px-2 py-1.5 text-right text-yellow-600">{s.noData}</td>
+                    <td className="px-2 py-1.5 text-right text-red-600">{s.failed}</td>
+                    <td className="px-2 py-1.5 text-right">
+                      <span className={s.successRate < 0.3 ? "text-red-600 font-bold" : s.successRate < 0.6 ? "text-yellow-600" : "text-green-700"}>
+                        {Math.round(s.successRate * 100)}%
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── Recent Auto-Fixes Widget ── */}
+      {recentFixes.length > 0 && (
+        <div className="border rounded p-4 mb-6">
+          <h2 className="font-bold text-base mb-3">Recent Auto-Fixes</h2>
+          <div className="space-y-2">
+            {recentFixes.map((fix) => (
+              <div key={fix.id} className="flex items-start gap-3 text-xs border-b last:border-0 pb-2 last:pb-0">
+                <span className="bg-green-100 text-green-800 px-1.5 py-0.5 rounded shrink-0">
+                  {ISSUE_LABELS[fix.issueType] || fix.issueType}
+                </span>
+                <div className="min-w-0">
+                  <span className="font-medium">{fix.bookTitle}</span>
+                  <span className="text-gray-400"> by {fix.bookAuthor}</span>
+                  {fix.originalValue && (
+                    <span className="text-gray-400"> — <span className="line-through">{fix.originalValue}</span></span>
+                  )}
+                  {fix.suggestedValue && (
+                    <span className="text-green-700"> → {fix.suggestedValue}</span>
+                  )}
+                </div>
+                <span className="text-gray-400 shrink-0 ml-auto">
+                  {new Date(fix.createdAt).toLocaleDateString()}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 mb-4">
@@ -459,6 +661,27 @@ function StatCard({ label, value, color }: { label: string; value: number; color
     <div className="border rounded p-4">
       <p className={`text-2xl font-bold ${color}`}>{value}</p>
       <p className="text-xs text-gray-500 uppercase tracking-wide">{label}</p>
+    </div>
+  );
+}
+
+function CoverageBar({ label, pct, count }: { label: string; pct: number; count: number }) {
+  const barColor =
+    pct >= 90 ? "bg-green-500" :
+    pct >= 70 ? "bg-yellow-500" :
+    pct >= 50 ? "bg-orange-500" :
+    "bg-red-500";
+
+  return (
+    <div>
+      <div className="flex justify-between mb-1">
+        <span className="text-xs text-gray-600">{label}</span>
+        <span className="text-xs font-bold">{pct}%</span>
+      </div>
+      <div className="h-2 bg-gray-100 rounded overflow-hidden">
+        <div className={`h-full ${barColor} rounded`} style={{ width: `${Math.min(pct, 100)}%` }} />
+      </div>
+      <span className="text-[10px] text-gray-400">{count.toLocaleString()} books</span>
     </div>
   );
 }

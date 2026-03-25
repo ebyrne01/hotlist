@@ -18,7 +18,15 @@
     "amazon:fetch": "npx tsx scripts/amazon-enrichment/fetch-amazon-ratings.ts",
     "amazon:fetch:test": "npx tsx scripts/amazon-enrichment/fetch-amazon-ratings.ts --test",
     "amazon:import": "npx tsx scripts/amazon-enrichment/import-amazon-ratings.ts",
-    "amazon:validate": "npx tsx scripts/amazon-enrichment/validate-results.ts"
+    "amazon:validate": "npx tsx scripts/amazon-enrichment/validate-results.ts",
+    "quality:backfill": "npx tsx scripts/quality-backfill.ts --fast",
+    "quality:scan": "npx tsx scripts/quality-scanner-backfill.ts",
+    "quality:scan:quick": "npx tsx scripts/quality-scanner-backfill.ts --limit 50",
+    "audit": "npx tsx scripts/audit-harness.ts",
+    "audit:quick": "npx tsx scripts/audit-harness.ts --quick",
+    "audit:books": "npx tsx scripts/audit-harness.ts --books-only",
+    "audit:authors": "npx tsx scripts/audit-harness.ts --authors-only",
+    "audit:push": "npx tsx scripts/audit-harness.ts --quick --push-to-db"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
@@ -45,6 +53,7 @@
     "dotenv": "^17.3.1",
     "eslint": "^8",
     "eslint-config-next": "14.2.35",
+    "playwright": "^1.58.2",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
     "typescript": "^5"
