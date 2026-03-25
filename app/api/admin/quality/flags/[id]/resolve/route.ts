@@ -17,9 +17,10 @@ export async function POST(
 
   const { id: flagId } = await params;
   const body = await req.json();
-  const { action, applyFix } = body as {
+  const { action, applyFix, newGoodreadsId } = body as {
     action: "confirm" | "dismiss";
     applyFix?: boolean;
+    newGoodreadsId?: string;
   };
 
   if (!action || !["confirm", "dismiss"].includes(action)) {
@@ -43,6 +44,89 @@ export async function POST(
   }
 
   let fixApplied = false;
+
+  // Remap Goodreads ID: clear stale GR data, set new ID, re-queue enrichment
+  const GR_REMAP_ISSUE_TYPES = ["goodreads_wrong_book", "wrong_book", "wrong_edition", "goodreads_foreign_edition", "foreign_edition"];
+  if (action === "confirm" && newGoodreadsId && GR_REMAP_ISSUE_TYPES.includes(flag.issue_type)) {
+    const grId = newGoodreadsId.trim();
+
+    // Check for dupe — another book already has this GR ID
+    const { data: existing } = await supabase
+      .from("books")
+      .select("id, title")
+      .eq("goodreads_id", grId)
+      .neq("id", flag.book_id)
+      .limit(1);
+
+    if (existing && existing.length > 0) {
+      return NextResponse.json(
+        { error: `Another book already has Goodreads ID ${grId}: "${existing[0].title}" (${existing[0].id})` },
+        { status: 409 }
+      );
+    }
+
+    // Clear GR-derived fields and set new ID
+    const { error: updateError } = await supabase
+      .from("books")
+      .update({
+        goodreads_id: grId,
+        goodreads_url: null,
+        description: null,
+        genres: [],
+        series_name: null,
+        series_position: null,
+        page_count: null,
+        published_year: null,
+        data_refreshed_at: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", flag.book_id);
+
+    if (updateError) {
+      return NextResponse.json(
+        { error: `Failed to remap Goodreads ID: ${updateError.message}` },
+        { status: 500 }
+      );
+    }
+
+    // Delete stale GR rating
+    await supabase
+      .from("book_ratings")
+      .delete()
+      .eq("book_id", flag.book_id)
+      .eq("source", "goodreads");
+
+    // Re-queue goodreads_detail + goodreads_rating
+    for (const jobType of ["goodreads_detail", "goodreads_rating"]) {
+      await supabase.from("enrichment_queue").upsert(
+        {
+          book_id: flag.book_id,
+          job_type: jobType,
+          status: "pending",
+          attempts: 0,
+          max_attempts: jobType === "goodreads_rating" ? 5 : 3,
+          next_retry_at: new Date().toISOString(),
+        },
+        { onConflict: "book_id,job_type" }
+      );
+    }
+
+    fixApplied = true;
+
+    await supabase
+      .from("quality_flags")
+      .update({
+        status: "confirmed",
+        resolved_at: new Date().toISOString(),
+        resolved_by: "admin",
+        suggested_value: grId,
+      })
+      .eq("id", flagId);
+
+    console.log(`[quality] Remapped book ${flag.book_id} to Goodreads ID ${grId}, re-queued enrichment`);
+
+    return NextResponse.json({ ok: true, flagId, action, fixApplied, remappedTo: grId });
+  }
 
   if (action === "dismiss") {
     await supabase

@@ -135,6 +135,11 @@ const COVERAGE_LABELS: Record<string, string> = {
   aiRecommendations: "AI Recs",
 };
 
+const REMAP_ISSUE_TYPES = [
+  "goodreads_wrong_book", "wrong_book", "wrong_edition",
+  "goodreads_foreign_edition", "foreign_edition",
+];
+
 const PRIORITY_COLORS: Record<string, string> = {
   P0: "bg-red-100 text-red-800",
   P1: "bg-orange-100 text-orange-800",
@@ -154,6 +159,7 @@ export default function QualityDashboard() {
   const [stats, setStats] = useState<Stats>({ open: 0, autoFixable: 0, confirmedToday: 0, dismissedToday: 0 });
   const [loading, setLoading] = useState(true);
   const [resolving, setResolving] = useState<Set<string>>(new Set());
+  const [remapInputs, setRemapInputs] = useState<Record<string, string>>({});
   const [scanRunning, setScanRunning] = useState(false);
   const [scorecard, setScorecard] = useState<Scorecard | null>(null);
   const [health, setHealth] = useState<HealthReport | null>(null);
@@ -256,13 +262,16 @@ export default function QualityDashboard() {
     fetchRecentFixes();
   }, [fetchFlags, fetchStats, fetchScorecard, fetchHealth, fetchRecentFixes]);
 
-  const resolveFlag = async (flagId: string, action: "confirm" | "dismiss", applyFix = false) => {
+  const resolveFlag = async (flagId: string, action: "confirm" | "dismiss", applyFix = false, newGoodreadsId?: string) => {
     setResolving((prev) => new Set(prev).add(flagId));
     try {
+      const payload: Record<string, unknown> = { action, applyFix };
+      if (newGoodreadsId) payload.newGoodreadsId = newGoodreadsId;
+
       const res = await fetch(`/api/admin/quality/flags/${flagId}/resolve`, {
         method: "POST",
         headers: jsonHeaders,
-        body: JSON.stringify({ action, applyFix }),
+        body: JSON.stringify(payload),
       });
       if (res.ok) {
         // Remove from current list
@@ -580,30 +589,54 @@ export default function QualityDashboard() {
                     </td>
                     <td className="px-3 py-2">
                       {status === "open" && (
-                        <div className="flex gap-1">
-                          {flag.autoFixable && (
-                            <button
-                              onClick={() => resolveFlag(flag.id, "confirm", true)}
-                              disabled={resolving.has(flag.id)}
-                              className="px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700 disabled:opacity-50"
-                            >
-                              Fix
-                            </button>
+                        <div className="flex flex-col gap-1">
+                          {REMAP_ISSUE_TYPES.includes(flag.issueType) && (
+                            <div className="flex gap-1">
+                              <input
+                                type="text"
+                                placeholder="Correct GR ID"
+                                value={remapInputs[flag.id] || ""}
+                                onChange={(e) => setRemapInputs((prev) => ({ ...prev, [flag.id]: e.target.value }))}
+                                className="px-1.5 py-1 border rounded text-xs w-[100px]"
+                              />
+                              <button
+                                onClick={() => {
+                                  const grId = remapInputs[flag.id]?.trim();
+                                  if (!grId) return alert("Enter a Goodreads ID first");
+                                  resolveFlag(flag.id, "confirm", false, grId);
+                                }}
+                                disabled={resolving.has(flag.id)}
+                                className="px-2 py-1 bg-purple-600 text-white rounded text-xs hover:bg-purple-700 disabled:opacity-50"
+                              >
+                                Remap
+                              </button>
+                            </div>
                           )}
-                          <button
-                            onClick={() => resolveFlag(flag.id, "confirm")}
-                            disabled={resolving.has(flag.id)}
-                            className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 disabled:opacity-50"
-                          >
-                            Confirm
-                          </button>
-                          <button
-                            onClick={() => resolveFlag(flag.id, "dismiss")}
-                            disabled={resolving.has(flag.id)}
-                            className="px-2 py-1 bg-gray-400 text-white rounded text-xs hover:bg-gray-500 disabled:opacity-50"
-                          >
-                            Dismiss
-                          </button>
+                          <div className="flex gap-1">
+                            {flag.autoFixable && (
+                              <button
+                                onClick={() => resolveFlag(flag.id, "confirm", true)}
+                                disabled={resolving.has(flag.id)}
+                                className="px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700 disabled:opacity-50"
+                              >
+                                Fix
+                              </button>
+                            )}
+                            <button
+                              onClick={() => resolveFlag(flag.id, "confirm")}
+                              disabled={resolving.has(flag.id)}
+                              className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 disabled:opacity-50"
+                            >
+                              Confirm
+                            </button>
+                            <button
+                              onClick={() => resolveFlag(flag.id, "dismiss")}
+                              disabled={resolving.has(flag.id)}
+                              className="px-2 py-1 bg-gray-400 text-white rounded text-xs hover:bg-gray-500 disabled:opacity-50"
+                            >
+                              Dismiss
+                            </button>
+                          </div>
                         </div>
                       )}
                     </td>
