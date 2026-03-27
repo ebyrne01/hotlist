@@ -1,14 +1,24 @@
 import { createClient } from "@supabase/supabase-js";
 
+let _adminClient: ReturnType<typeof createClient> | null = null;
+
 /**
  * Server-side Supabase client using service_role key.
+ * Singleton within a single Vercel function invocation.
  * Bypasses RLS — use only in server components, API routes, and lib functions.
- * Disables Next.js fetch cache so we always get fresh data.
  */
 export function getAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { global: { fetch: (...args) => fetch(args[0], { ...args[1], cache: "no-store" }) } }
-  );
+  if (!_adminClient) {
+    _adminClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      {
+        global: {
+          fetch: (...args) =>
+            fetch(args[0], { ...args[1], cache: "no-store" }),
+        },
+      }
+    );
+  }
+  return _adminClient;
 }

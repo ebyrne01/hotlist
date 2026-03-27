@@ -11,7 +11,7 @@ import TropeGrid from "@/components/home/TropeGrid";
 import BookRow from "@/components/books/BookRow";
 import { getNYTBestsellerRomance } from "@/lib/books/nyt-lists";
 import { getRomanceNewReleases } from "@/lib/books/new-releases";
-import { hydrateBookDetail } from "@/lib/books/cache";
+import { hydrateBookDetailBatch } from "@/lib/books/cache";
 import { isJunkTitle } from "@/lib/books/romance-filter";
 import { deduplicateBooks, diversifyByAuthor, isCompilationTitle, hasYAGenre } from "@/lib/books/utils";
 import { getTopBuzzBooks, getBuzzScoresForBooks } from "@/lib/books/buzz-score";
@@ -141,9 +141,15 @@ async function getWhatsHot(): Promise<BookDetail[]> {
           .not("cover_url", "is", null);
 
         if (backfillRows) {
-          for (const row of backfillRows as Record<string, unknown>[]) {
-            if (isJunkTitle(row.title as string)) continue;
-            nytBooks.push(await hydrateBookDetail(supabase, row));
+          const filtered = (backfillRows as Record<string, unknown>[]).filter(
+            (r) => !isJunkTitle(r.title as string)
+          );
+          if (filtered.length > 0) {
+            const batchMap = await hydrateBookDetailBatch(supabase, filtered);
+            for (const row of filtered) {
+              const hydrated = batchMap.get(row.id as string);
+              if (hydrated) nytBooks.push(hydrated);
+            }
           }
         }
       }
@@ -169,12 +175,17 @@ async function getWhatsHot(): Promise<BookDetail[]> {
       .not("cover_url", "is", null);
 
     if (buzzBooks) {
-      for (const row of buzzBooks as Record<string, unknown>[]) {
-        if (isJunkTitle(row.title as string)) continue;
-        const hydrated = await hydrateBookDetail(supabase, row);
-        if (isHomepageQualified(hydrated) && !existingIds.has(hydrated.id)) {
-          qualified.push(hydrated);
-          existingIds.add(hydrated.id);
+      const filtered = (buzzBooks as Record<string, unknown>[]).filter(
+        (r) => !isJunkTitle(r.title as string)
+      );
+      if (filtered.length > 0) {
+        const batchMap = await hydrateBookDetailBatch(supabase, filtered);
+        for (const row of filtered) {
+          const hydrated = batchMap.get(row.id as string);
+          if (hydrated && isHomepageQualified(hydrated) && !existingIds.has(hydrated.id)) {
+            qualified.push(hydrated);
+            existingIds.add(hydrated.id);
+          }
         }
       }
     }
@@ -206,13 +217,18 @@ async function getWhatsHot(): Promise<BookDetail[]> {
           .not("cover_url", "is", null);
 
         if (backfillBooks) {
-          for (const row of backfillBooks as Record<string, unknown>[]) {
-            if (qualified.length >= TARGET_HOT_BOOKS) break;
-            if (isJunkTitle(row.title as string)) continue;
-            const hydrated = await hydrateBookDetail(supabase, row);
-            if (isHomepageQualified(hydrated) && !existingIds.has(hydrated.id)) {
-              qualified.push(hydrated);
-              existingIds.add(hydrated.id);
+          const filtered = (backfillBooks as Record<string, unknown>[]).filter(
+            (r) => !isJunkTitle(r.title as string)
+          );
+          if (filtered.length > 0) {
+            const batchMap = await hydrateBookDetailBatch(supabase, filtered);
+            for (const row of filtered) {
+              if (qualified.length >= TARGET_HOT_BOOKS) break;
+              const hydrated = batchMap.get(row.id as string);
+              if (hydrated && isHomepageQualified(hydrated) && !existingIds.has(hydrated.id)) {
+                qualified.push(hydrated);
+                existingIds.add(hydrated.id);
+              }
             }
           }
         }
@@ -257,9 +273,15 @@ async function getWhatsHot(): Promise<BookDetail[]> {
   if (!fallbackBooks || fallbackBooks.length === 0) return [];
 
   const fallbackHydrated: BookDetail[] = [];
-  for (const book of fallbackBooks.slice(0, 12) as Record<string, unknown>[]) {
-    if (isJunkTitle(book.title as string)) continue;
-    fallbackHydrated.push(await hydrateBookDetail(supabase, book));
+  const fallbackFiltered = (fallbackBooks.slice(0, 12) as Record<string, unknown>[]).filter(
+    (r) => !isJunkTitle(r.title as string)
+  );
+  if (fallbackFiltered.length > 0) {
+    const batchMap = await hydrateBookDetailBatch(supabase, fallbackFiltered);
+    for (const row of fallbackFiltered) {
+      const hydrated = batchMap.get(row.id as string);
+      if (hydrated) fallbackHydrated.push(hydrated);
+    }
   }
   return fallbackHydrated.filter((b) => !!b.coverUrl).slice(0, TARGET_HOT_BOOKS);
 }
@@ -298,10 +320,16 @@ async function getSpiciest(): Promise<BookDetail[]> {
 
   if (!books || books.length === 0) return [];
 
+  const spiceFiltered = (books as Record<string, unknown>[]).filter(
+    (r) => !isJunkTitle(r.title as string)
+  );
   const hydrated: BookDetail[] = [];
-  for (const book of books as Record<string, unknown>[]) {
-    if (isJunkTitle(book.title as string)) continue;
-    hydrated.push(await hydrateBookDetail(supabase, book));
+  if (spiceFiltered.length > 0) {
+    const batchMap = await hydrateBookDetailBatch(supabase, spiceFiltered);
+    for (const row of spiceFiltered) {
+      const h = batchMap.get(row.id as string);
+      if (h) hydrated.push(h);
+    }
   }
 
   // Spice section filter: confirmed spice >= 4, cover, GR rating, no YA
@@ -378,18 +406,30 @@ async function getRomantasyPicks(): Promise<BookDetail[]> {
 
     if (!fallback || fallback.length === 0) return [];
 
+    const fallbackFiltered = (fallback as Record<string, unknown>[]).filter(
+      (r) => !isJunkTitle(r.title as string)
+    );
     const hydrated: BookDetail[] = [];
-    for (const book of fallback as Record<string, unknown>[]) {
-      if (isJunkTitle(book.title as string)) continue;
-      hydrated.push(await hydrateBookDetail(supabase, book));
+    if (fallbackFiltered.length > 0) {
+      const batchMap = await hydrateBookDetailBatch(supabase, fallbackFiltered);
+      for (const row of fallbackFiltered) {
+        const h = batchMap.get(row.id as string);
+        if (h) hydrated.push(h);
+      }
     }
     return diversifyByAuthor(deduplicateBooks(hydrated.filter(isRomantasyQualified))).slice(0, 8);
   }
 
+  const mainFiltered = (books as Record<string, unknown>[]).filter(
+    (r) => !isJunkTitle(r.title as string)
+  );
   const hydrated: BookDetail[] = [];
-  for (const book of books as Record<string, unknown>[]) {
-    if (isJunkTitle(book.title as string)) continue;
-    hydrated.push(await hydrateBookDetail(supabase, book));
+  if (mainFiltered.length > 0) {
+    const batchMap = await hydrateBookDetailBatch(supabase, mainFiltered);
+    for (const row of mainFiltered) {
+      const h = batchMap.get(row.id as string);
+      if (h) hydrated.push(h);
+    }
   }
 
   return diversifyByAuthor(deduplicateBooks(hydrated.filter(isRomantasyQualified))).slice(0, 8);
@@ -530,16 +570,13 @@ export default async function Home() {
               .eq("is_canon", true);
 
             if (dbBooks && dbBooks.length > 0) {
-              const hydrated = await Promise.all(
-                (dbBooks as Record<string, unknown>[]).map((b) =>
-                  hydrateBookDetail(adminForYou, b)
-                )
-              );
+              const batchMap = await hydrateBookDetailBatch(adminForYou, dbBooks as Record<string, unknown>[]);
+              const hydrated = Array.from(batchMap.values());
               // Sort by DNA score order
               const idOrder = new Map(topIds.map((id, i) => [id, i]));
               forYouBooks = hydrated
-                .filter((b) => b.coverUrl && b.tropes.length > 0)
-                .sort((a, b) => (idOrder.get(a.id) ?? 99) - (idOrder.get(b.id) ?? 99))
+                .filter((b: BookDetail) => b.coverUrl && b.tropes.length > 0)
+                .sort((a: BookDetail, b: BookDetail) => (idOrder.get(a.id) ?? 99) - (idOrder.get(b.id) ?? 99))
                 .slice(0, 10);
             }
           }

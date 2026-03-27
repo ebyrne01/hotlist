@@ -7,7 +7,8 @@ import BookCover from "@/components/ui/BookCover";
 import RatingBadge from "@/components/ui/RatingBadge";
 import Badge from "@/components/ui/Badge";
 import BookRow from "@/components/books/BookRow";
-import { hydrateBookDetail } from "@/lib/books/cache";
+import { hydrateBookDetailBatch } from "@/lib/books/cache";
+import { cache } from "react";
 import { getBookDetail } from "@/lib/books";
 import { extractGoodreadsIdFromSlug } from "@/lib/books/goodreads-search";
 import { isJunkTitle } from "@/lib/books/romance-filter";
@@ -51,7 +52,7 @@ function cleanSynopsis(text: string, title: string, author: string): string {
 
 // ── Data fetching ────────────────────────────────────
 
-async function getBook(slug: string): Promise<BookDetail | null> {
+const getBook = cache(async (slug: string): Promise<BookDetail | null> => {
   // Try the main book service first (handles slug, goodreads_id, ISBN lookups)
   const detail = await getBookDetail(slug);
   if (detail) return detail;
@@ -63,7 +64,7 @@ async function getBook(slug: string): Promise<BookDetail | null> {
   }
 
   return null;
-}
+});
 
 async function getRelatedBooks(
   book: BookDetail,
@@ -89,10 +90,14 @@ async function getRelatedBooks(
       .not("cover_url", "is", null);
 
     if (recBooks && recBooks.length > 0) {
+      const filtered = (recBooks as Record<string, unknown>[]).filter(
+        (b) => !isJunkTitle(b.title as string)
+      );
+      const batchMap = await hydrateBookDetailBatch(supabase, filtered);
       const results: BookDetail[] = [];
-      for (const b of recBooks as Record<string, unknown>[]) {
-        if (isJunkTitle(b.title as string)) continue;
-        results.push(await hydrateBookDetail(supabase, b));
+      for (const b of filtered) {
+        const hydrated = batchMap.get(b.id as string);
+        if (hydrated) results.push(hydrated);
       }
 
       // Preserve AI ordering
@@ -123,10 +128,14 @@ async function getRelatedBooks(
 
     if (!authorBooks || authorBooks.length === 0) return [];
 
+    const filteredAuthor = (authorBooks as Record<string, unknown>[]).filter(
+      (b) => !isJunkTitle(b.title as string)
+    );
+    const authorBatchMap = await hydrateBookDetailBatch(supabase, filteredAuthor);
     const results: BookDetail[] = [];
-    for (const b of authorBooks as Record<string, unknown>[]) {
-      if (isJunkTitle(b.title as string)) continue;
-      results.push(await hydrateBookDetail(supabase, b));
+    for (const b of filteredAuthor) {
+      const hydrated = authorBatchMap.get(b.id as string);
+      if (hydrated) results.push(hydrated);
     }
 
     return deduplicateBooks(results)
@@ -164,10 +173,14 @@ async function getRelatedBooks(
 
   if (!relatedDbBooks || relatedDbBooks.length === 0) return [];
 
+  const filteredRelated = (relatedDbBooks as Record<string, unknown>[]).filter(
+    (b) => !isJunkTitle(b.title as string)
+  );
+  const relatedBatchMap = await hydrateBookDetailBatch(supabase, filteredRelated);
   const results: BookDetail[] = [];
-  for (const b of relatedDbBooks as Record<string, unknown>[]) {
-    if (isJunkTitle(b.title as string)) continue;
-    results.push(await hydrateBookDetail(supabase, b));
+  for (const b of filteredRelated) {
+    const hydrated = relatedBatchMap.get(b.id as string);
+    if (hydrated) results.push(hydrated);
   }
 
   const orderMap = new Map(sortedIds.map((id, i) => [id, i]));
