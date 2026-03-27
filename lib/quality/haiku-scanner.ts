@@ -18,7 +18,7 @@ import { getAdminClient } from "@/lib/supabase/admin";
 
 export const HAIKU_MODEL = "claude-haiku-4-5-20251001";
 export const SONNET_MODEL = "claude-sonnet-4-6";
-const DEFAULT_DAILY_LIMIT = 500;
+const DEFAULT_DAILY_LIMIT = 50;
 
 // ── Types ─────────────────────────────────────────────
 

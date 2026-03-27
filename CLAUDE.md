@@ -44,9 +44,9 @@ RAPIDAPI_VIDEO_HOST=           # specific host for chosen downloader API
 RAPIDAPI_TIKTOK_HOST=          # optional — specialized TikTok downloader API host (e.g. tiktok-downloader...p.rapidapi.com)
 OPENAI_API_KEY=                # from platform.openai.com — Whisper transcription
 CRON_SECRET=                   # shared secret for Vercel cron job auth
-SPICE_LLM_DAILY_LIMIT=        # optional, default 100 — max LLM spice inferences per day
-AI_SYNOPSIS_DAILY_LIMIT=      # optional, default 1000 — max AI synopsis generations per day
-TROPE_INFERENCE_DAILY_LIMIT=  # optional, default 1000 — max trope inferences per day
+SPICE_LLM_DAILY_LIMIT=        # optional, default 25 — max LLM spice inferences per day
+AI_SYNOPSIS_DAILY_LIMIT=      # optional, default 50 — max AI synopsis generations per day
+TROPE_INFERENCE_DAILY_LIMIT=  # optional, default 50 — max trope inferences per day
 APIFY_API_TOKEN=              # from apify.com — Amazon product scraping for bulk enrichment
 ```
 
@@ -359,7 +359,7 @@ Book data flows through two independent systems:
 
 | Path | Schedule | Purpose |
 |------|----------|---------|
-| `/api/cron/enrichment-worker` | Every 2 min | Process pending enrichment queue jobs |
+| `/api/cron/enrichment-worker` | Every 10 min | Process pending enrichment queue jobs |
 | `/api/cron/spice-backfill` | Every 6 hours | LLM inference + review classifier backfill |
 | `/api/cron/refresh-spice` | Daily 4 AM UTC | Re-aggregate community signals, queue stale romance_io re-scrapes, recompute genre bucketing |
 | `/api/cron/new-releases-discovery` | Daily 5 AM UTC | Google Books new romance releases |

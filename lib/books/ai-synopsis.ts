@@ -3,7 +3,7 @@ import { saveSynopsis } from "./cache";
 import { getAdminClient } from "@/lib/supabase/admin";
 
 const SYNOPSIS_MODEL = "claude-haiku-4-5-20251001";
-const DEFAULT_DAILY_LIMIT = 1000;
+const DEFAULT_DAILY_LIMIT = 50;
 
 /**
  * Check how many AI synopses have been generated today.

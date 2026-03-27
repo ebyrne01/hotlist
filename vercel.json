@@ -31,7 +31,7 @@
   "crons": [
     {
       "path": "/api/cron/enrichment-worker",
-      "schedule": "*/2 * * * *"
+      "schedule": "*/10 * * * *"
     },
     {
       "path": "/api/cron/spice-backfill",

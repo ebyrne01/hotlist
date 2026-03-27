@@ -13,7 +13,7 @@ import { getAdminClient } from "@/lib/supabase/admin";
 
 const MODEL = "claude-haiku-4-5-20251001";
 const MIN_DESCRIPTION_LENGTH = 50;
-const DEFAULT_DAILY_LIMIT = 100;
+const DEFAULT_DAILY_LIMIT = 25;
 
 /** Sources that outrank LLM inference — skip if any of these exist */
 const HIGHER_CONFIDENCE_SOURCES = ["community", "romance_io", "review_classifier"];

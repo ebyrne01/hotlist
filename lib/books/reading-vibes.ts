@@ -7,7 +7,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { getAdminClient } from "@/lib/supabase/admin";
 
 const BOOKTRACK_MODEL = "claude-haiku-4-5-20251001";
-const DEFAULT_DAILY_LIMIT = 500;
+const DEFAULT_DAILY_LIMIT = 50;
 
 interface ReadingVibesInput {
   title: string;
