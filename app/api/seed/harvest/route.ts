@@ -271,7 +271,7 @@ export async function POST(request: Request) {
     }
 
     // 2. Skip junk titles
-    if (isJunkTitle(book.title, book.author)) {
+    if (isJunkTitle(book.title, book.author || undefined)) {
       skippedJunk++;
       skipped++;
       continue;
@@ -331,7 +331,7 @@ export async function POST(request: Request) {
       if (book.asin && book.amazonRating != null) skipJobs.add("amazon_rating");
       if (book.romanceIoSpice != null) skipJobs.add("romance_io_spice");
 
-      await queueEnrichmentJobs(newBook.id, book.title, book.author, skipJobs);
+      await queueEnrichmentJobs(newBook.id, book.title, book.author || "Unknown", skipJobs);
       enrichmentJobsQueued += 12 - skipJobs.size;
 
       newBooks.push(`${book.title} by ${book.author}`);
