@@ -7,8 +7,13 @@
 
 import { getAdminClient } from "@/lib/supabase/admin";
 import { NextRequest, NextResponse } from "next/server";
+import { checkOrigin } from "@/lib/api/cors";
 
 export async function POST(request: NextRequest) {
+  if (!checkOrigin(request)) {
+    return NextResponse.json({ error: "Unauthorized origin" }, { status: 403 });
+  }
+
   try {
     const { analyticsId, feedback, note } = await request.json();
 

@@ -10,6 +10,7 @@
  */
 
 import { NextResponse } from "next/server";
+import { requireCronAuth, cronUnauthorized } from "@/lib/api/cron-auth";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { inferSpiceFromDescription } from "@/lib/spice/llm-inference";
 import { classifyReviews } from "@/lib/spice/review-classifier";
@@ -23,9 +24,8 @@ const REVIEW_BATCH_SIZE = 15; // ~3s per book (1.5s Goodreads delay + processing
 const LLM_BATCH_SIZE = 30; // Fast — just API calls, no scraping
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!requireCronAuth(request)) {
+    return cronUnauthorized();
   }
 
   const startTime = Date.now();

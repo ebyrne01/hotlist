@@ -8,6 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { requireCronAuth, cronUnauthorized } from "@/lib/api/cron-auth";
 import { getAdminClient } from "@/lib/supabase/admin";
 import {
   SEED_LIST_URLS,
@@ -21,10 +22,8 @@ export const maxDuration = 300; // Vercel Pro
 const TIME_BUDGET_MS = 240_000;
 
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  const isDev = process.env.NODE_ENV === "development";
-  if (!isDev && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!requireCronAuth(request)) {
+    return cronUnauthorized();
   }
 
   const startTime = Date.now();

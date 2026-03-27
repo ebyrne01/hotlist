@@ -5,9 +5,12 @@ import { saveBookToCache } from "@/lib/books/cache";
 import { corsJson, corsOptions } from "@/lib/api/cors";
 import type { BookDetail } from "@/lib/types";
 
-export { corsOptions as OPTIONS };
+export function OPTIONS(req: Request) {
+  return corsOptions(req.headers.get("origin"));
+}
 
 export async function GET(request: NextRequest) {
+  const origin = request.headers.get("origin");
   const params = request.nextUrl.searchParams;
   const supabase = getAdminClient();
 
@@ -159,12 +162,12 @@ export async function GET(request: NextRequest) {
       searchUrl: title
         ? `https://www.myhotlist.app/search?q=${encodeURIComponent(title + (author ? " " + author : ""))}`
         : null,
-    });
+    }, 200, origin);
   }
 
   const detail = await hydrateBookDetail(supabase, bookRow);
 
-  return corsJson({ found: true, book: formatForExtension(detail) });
+  return corsJson({ found: true, book: formatForExtension(detail) }, 200, origin);
 }
 
 /**

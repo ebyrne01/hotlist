@@ -4,7 +4,7 @@ import { getAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/api/require-admin";
 import { isJunkTitle } from "@/lib/books/romance-filter";
 import { queueEnrichmentJobs } from "@/lib/enrichment/queue";
-import { CORS_HEADERS, corsOptions } from "@/lib/api/cors";
+import { getCorsHeaders, corsOptions } from "@/lib/api/cors";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -209,11 +209,14 @@ async function writeHarvestRatings(
 
 // ── Main handler ──
 
-export async function OPTIONS() {
-  return corsOptions();
+export function OPTIONS(req: Request) {
+  return corsOptions(req.headers.get("origin"));
 }
 
 export async function POST(request: Request) {
+  const origin = request.headers.get("origin");
+  const headers = getCorsHeaders(origin);
+
   // Auth: admin session or CRON_SECRET (used by extension + cron)
   const authHeader = request.headers.get("authorization");
   const auth = await requireAdmin();
@@ -222,7 +225,7 @@ export async function POST(request: Request) {
     if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
       return NextResponse.json(
         { error: "Not authenticated" },
-        { status: 401, headers: CORS_HEADERS }
+        { status: 401, headers }
       );
     }
   } else {
@@ -234,7 +237,7 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400, headers: CORS_HEADERS });
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400, headers });
   }
 
   const parsed = harvestPayloadSchema.safeParse(body);
@@ -243,7 +246,7 @@ export async function POST(request: Request) {
     console.warn("[harvest] Validation failed:", JSON.stringify(flat).slice(0, 500));
     return NextResponse.json(
       { error: "Validation failed", details: flat },
-      { status: 400, headers: CORS_HEADERS }
+      { status: 400, headers }
     );
   }
 
@@ -362,5 +365,5 @@ export async function POST(request: Request) {
     skippedJunk,
     enrichmentJobsQueued,
     details: { newBooks, updatedBooks },
-  }, { headers: CORS_HEADERS });
+  }, { headers });
 }

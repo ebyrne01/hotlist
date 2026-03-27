@@ -10,6 +10,7 @@
  */
 
 import { NextResponse } from "next/server";
+import { requireCronAuth, cronUnauthorized } from "@/lib/api/cron-auth";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { aggregateCommunitySpice } from "@/lib/spice/community-aggregation";
 import { computeGenreBucketing } from "@/lib/spice/genre-bucketing";
@@ -20,9 +21,8 @@ export const maxDuration = 60;
 const STALE_DAYS = 30;
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!requireCronAuth(request)) {
+    return cronUnauthorized();
   }
 
   const startTime = Date.now();

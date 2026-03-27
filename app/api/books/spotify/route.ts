@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { searchBookPlaylists } from "@/lib/spotify/search";
+import { checkOrigin } from "@/lib/api/cors";
 
 /**
  * POST /api/books/spotify
@@ -10,6 +11,10 @@ import { searchBookPlaylists } from "@/lib/spotify/search";
  * Skips if playlists were already fetched (within 7 days).
  */
 export async function POST(req: NextRequest) {
+  if (!checkOrigin(req)) {
+    return NextResponse.json({ error: "Unauthorized origin" }, { status: 403 });
+  }
+
   const { bookId, title, author } = (await req.json()) as {
     bookId: string;
     title: string;

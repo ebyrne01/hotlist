@@ -10,12 +10,17 @@ import { getAdminClient } from "@/lib/supabase/admin";
 import { hydrateBookDetailBatch } from "@/lib/books/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { checkOrigin } from "@/lib/api/cors";
 
 const schema = z.object({
-  bookIds: z.array(z.string().uuid()).min(1).max(50),
+  bookIds: z.array(z.string().uuid()).min(1).max(20),
 });
 
 export async function POST(request: NextRequest) {
+  if (!checkOrigin(request)) {
+    return NextResponse.json({ error: "Unauthorized origin" }, { status: 403 });
+  }
+
   try {
     const body = await request.json();
     const parsed = schema.safeParse(body);

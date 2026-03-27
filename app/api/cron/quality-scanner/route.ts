@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireCronAuth, cronUnauthorized } from "@/lib/api/cron-auth";
 import Anthropic from "@anthropic-ai/sdk";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { scanBook, isUnderDailyLimit } from "@/lib/quality/haiku-scanner";
@@ -11,9 +12,8 @@ const INTER_BOOK_DELAY_MS = 1200;
 const TIME_BUDGET_MS = 55_000;
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!requireCronAuth(request)) {
+    return cronUnauthorized();
   }
 
   if (!(await isUnderDailyLimit())) {

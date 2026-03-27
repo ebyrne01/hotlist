@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireCronAuth, cronUnauthorized } from "@/lib/api/cron-auth";
 import { runAutoFixer } from "@/lib/quality/auto-fixer";
 import { processGrabFeedback, processGrabCorrections } from "@/lib/quality/feedback-pipeline";
 import { computeAndStoreScorecard } from "@/lib/quality/scorecard";
@@ -12,9 +13,8 @@ export const maxDuration = 120;
  * Runs Sundays 3 AM UTC (1 hour after data-hygiene, so cleanup happens first).
  */
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!requireCronAuth(request)) {
+    return cronUnauthorized();
   }
 
   try {

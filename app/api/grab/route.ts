@@ -5,9 +5,11 @@ import {
   getCachedGrab,
   type GrabStatus,
 } from "@/lib/video";
-import { CORS_HEADERS, corsOptions } from "@/lib/api/cors";
+import { getCorsHeaders, corsOptions, checkOrigin } from "@/lib/api/cors";
 
-export { corsOptions as OPTIONS };
+export function OPTIONS(req: Request) {
+  return corsOptions(req.headers.get("origin"));
+}
 
 const bodySchema = z.object({
   url: z
@@ -38,6 +40,16 @@ const bodySchema = z.object({
  * Each line is: { "status": "downloading" } or { "result": {...} }
  */
 export async function POST(req: NextRequest) {
+  const origin = req.headers.get("origin");
+  const headers = getCorsHeaders(origin);
+
+  if (!checkOrigin(req)) {
+    return Response.json(
+      { error: "Unauthorized origin" },
+      { status: 403, headers }
+    );
+  }
+
   let body: { url: string; debug?: boolean };
   try {
     const raw = await req.json();
@@ -45,7 +57,7 @@ export async function POST(req: NextRequest) {
   } catch {
     return Response.json(
       { error: "Invalid request. Please provide a valid TikTok, Instagram, or YouTube URL." },
-      { status: 400 }
+      { status: 400, headers }
     );
   }
 
@@ -55,7 +67,7 @@ export async function POST(req: NextRequest) {
   // Check cache first (instant response, no streaming needed)
   const cached = await getCachedGrab(body.url);
   if (cached) {
-    return NextResponse.json(cached, { headers: CORS_HEADERS });
+    return NextResponse.json(cached, { headers });
   }
 
   // Stream progress updates
@@ -106,7 +118,7 @@ export async function POST(req: NextRequest) {
       "Content-Type": "text/plain; charset=utf-8",
       "Transfer-Encoding": "chunked",
       "Cache-Control": "no-cache",
-      ...CORS_HEADERS,
+      ...headers,
     },
   });
 }

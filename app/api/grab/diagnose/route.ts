@@ -14,7 +14,7 @@ import { z } from "zod";
 import { getVideoDownloadUrl, detectPlatform } from "@/lib/video/downloader";
 import { transcribeAudio } from "@/lib/video/transcription";
 import { extractFrames } from "@/lib/video/frame-extractor";
-import { CORS_HEADERS } from "@/lib/api/cors";
+import { getCorsHeaders, corsOptions, checkOrigin } from "@/lib/api/cors";
 
 export const maxDuration = 60;
 
@@ -36,11 +36,21 @@ const bodySchema = z.object({
     ),
 });
 
-export async function OPTIONS() {
-  return new Response(null, { status: 204, headers: CORS_HEADERS });
+export function OPTIONS(req: Request) {
+  return corsOptions(req.headers.get("origin"));
 }
 
 export async function POST(req: NextRequest) {
+  const origin = req.headers.get("origin");
+  const headers = getCorsHeaders(origin);
+
+  if (!checkOrigin(req)) {
+    return NextResponse.json(
+      { error: "Unauthorized origin" },
+      { status: 403, headers }
+    );
+  }
+
   let body: { url: string };
   try {
     const raw = await req.json();
@@ -48,7 +58,7 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json(
       { error: "Invalid request. Please provide a valid TikTok, Instagram, or YouTube URL." },
-      { status: 400, headers: CORS_HEADERS }
+      { status: 400, headers }
     );
   }
 
@@ -60,7 +70,7 @@ export async function POST(req: NextRequest) {
     if (platform === "unknown") {
       return NextResponse.json(
         { error: "Unsupported platform. Must be TikTok, Instagram, or YouTube." },
-        { status: 400, headers: CORS_HEADERS }
+        { status: 400, headers }
       );
     }
 
@@ -72,7 +82,7 @@ export async function POST(req: NextRequest) {
     if (!download) {
       return NextResponse.json(
         { error: "Could not download video.", timing },
-        { status: 422, headers: CORS_HEADERS }
+        { status: 422, headers }
       );
     }
 
@@ -80,7 +90,7 @@ export async function POST(req: NextRequest) {
     if (!mediaUrl) {
       return NextResponse.json(
         { error: "No audio or video URL found.", timing },
-        { status: 422, headers: CORS_HEADERS }
+        { status: 422, headers }
       );
     }
 
@@ -114,7 +124,7 @@ export async function POST(req: NextRequest) {
         frameCount,
         timing,
       },
-      { headers: CORS_HEADERS }
+      { headers }
     );
   } catch (err) {
     console.error("[/api/grab/diagnose] Pipeline error:", err);
@@ -123,7 +133,7 @@ export async function POST(req: NextRequest) {
         error: err instanceof Error ? err.message : "Pipeline failed",
         timing,
       },
-      { status: 500, headers: CORS_HEADERS }
+      { status: 500, headers }
     );
   }
 }
