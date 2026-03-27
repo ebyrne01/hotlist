@@ -239,8 +239,10 @@ export async function POST(request: Request) {
 
   const parsed = harvestPayloadSchema.safeParse(body);
   if (!parsed.success) {
+    const flat = parsed.error.flatten();
+    console.warn("[harvest] Validation failed:", JSON.stringify(flat).slice(0, 500));
     return NextResponse.json(
-      { error: "Validation failed", details: parsed.error.flatten() },
+      { error: "Validation failed", details: flat },
       { status: 400, headers: CORS_HEADERS }
     );
   }
