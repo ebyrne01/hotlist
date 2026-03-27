@@ -11,7 +11,7 @@
  * caption contains a clear book reference pattern like "Title by Author".
  */
 
-import { searchBooksForAgent, type AgentSearchResult } from "./agent-search";
+import { searchBooksForAgent } from "./agent-search";
 import { getBookDetail } from "@/lib/books";
 import type { ResolvedBook, ResolvedBookMatched } from "./book-resolver";
 

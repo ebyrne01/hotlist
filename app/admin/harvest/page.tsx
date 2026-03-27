@@ -25,11 +25,11 @@ export default async function HarvestDashboardPage() {
       data: {
         allTime: data?.reduce((sum, r) => sum + (r.books_added ?? 0), 0) ?? 0,
         thisMonth: data
-          ?.filter((r) => {
+          ?.filter(() => {
             // Filter handled below
             return true;
           })
-          .reduce((sum, r) => sum + (r.books_added ?? 0), 0) ?? 0,
+          .reduce((sum, row) => sum + (row.books_added ?? 0), 0) ?? 0,
       },
     }));
 
