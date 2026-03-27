@@ -4,6 +4,7 @@ import { getAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/api/require-admin";
 import { isJunkTitle } from "@/lib/books/romance-filter";
 import { queueEnrichmentJobs } from "@/lib/enrichment/queue";
+import { CORS_HEADERS, corsOptions } from "@/lib/api/cors";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -208,14 +209,21 @@ async function writeHarvestRatings(
 
 // ── Main handler ──
 
+export async function OPTIONS() {
+  return corsOptions();
+}
+
 export async function POST(request: Request) {
-  // Auth: admin session or CRON_SECRET
+  // Auth: admin session or CRON_SECRET (used by extension + cron)
+  const authHeader = request.headers.get("authorization");
   const auth = await requireAdmin();
   let userId: string | null = null;
   if ("error" in auth) {
-    const authHeader = request.headers.get("authorization");
     if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-      return auth.error;
+      return NextResponse.json(
+        { error: "Not authenticated" },
+        { status: 401, headers: CORS_HEADERS }
+      );
     }
   } else {
     userId = auth.userId;
@@ -226,14 +234,14 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400, headers: CORS_HEADERS });
   }
 
   const parsed = harvestPayloadSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
       { error: "Validation failed", details: parsed.error.flatten() },
-      { status: 400 }
+      { status: 400, headers: CORS_HEADERS }
     );
   }
 
@@ -352,5 +360,5 @@ export async function POST(request: Request) {
     skippedJunk,
     enrichmentJobsQueued,
     details: { newBooks, updatedBooks },
-  });
+  }, { headers: CORS_HEADERS });
 }
