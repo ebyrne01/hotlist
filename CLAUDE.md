@@ -141,6 +141,7 @@ All tables in the public schema:
 | `reading_dna` | Per-user reading preference profile (trope affinities, spice preference, subgenre weights). |
 | `reading_dna_signals` | Individual signals that feed into reading DNA computation. |
 | `book_trope_vectors` | Precomputed trope similarity vectors for recommendation engine. |
+| `harvest_log` | Logs each harvest upload: user_id, books_submitted/added/updated/skipped, sources array. |
 
 ## File structure
 
@@ -151,7 +152,9 @@ All tables in the public schema:
 /app/api/books/               — Book operations (search, enrich, refresh-spice)
 /app/api/grab/                — BookTok video grab (streaming)
 /app/api/admin/quality/       — Quality flag CRUD, scorecard, health, scan APIs
+/app/api/seed/harvest/        — Harvest API: receives book batches from Chrome extension harvester
 /app/admin/quality/           — Admin quality dashboard (triage + monitoring widgets)
+/app/admin/harvest/           — Admin harvest dashboard (recent uploads, stats, source frequency)
 /app/book/[slug]/             — Book detail page + SpiceSection
 /app/booktok/                 — BookTok UI
 /app/discover/                — Creator discovery index (trending + all creators)
@@ -212,7 +215,20 @@ All tables in the public schema:
   book-agent.ts               — Two-phase pipeline: Haiku observe + Sonnet verify
   agent-search.ts             — Tiered search for agent (local DB → fuzzy trigram → Google Books → Goodreads, with smart query variations)
   book-resolver.ts            — Types only (ResolvedBook, etc.)
+  caption-validator.ts        — Backup caption check: cross-references video title against agent results
   index.ts                    — Pipeline orchestrator
+/scripts/seed-from-csv.ts      — CLI harvest import from CSV files
+
+/extension-harvest/            — Book Harvester Chrome extension (admin tool, separate from user extension)
+  manifest.json                — Manifest V3
+  popup.html/js/css            — Popup UI: scan, batch, export CSV, upload
+  background.js                — Badge handler
+  parsers/utils.js             — Shared parser helpers
+  parsers/goodreads-list.js    — Goodreads list/genre/shelf parser
+  parsers/amazon-list.js       — Amazon category/bestseller parser
+  parsers/romanceio.js         — Romance.io list parser
+  parsers/generic-links.js     — Blog/generic fallback parser
+
 /components/books/            — Book-specific components (BookCard, SpiceDisplay, SpiceAttribution)
 /components/ui/               — Base UI primitives (Badge, BookCover, SpiceIndicator)
 /components/hotlists/         — Hotlist table + detail components
@@ -238,9 +254,10 @@ All tables in the public schema:
 3. Transcribe audio via Whisper + extract frames via ffmpeg (parallel). Carousel posts skip Whisper, use slide images directly.
 4. **Phase 1 — Haiku observation** (single turn, vision + transcript, no tools): Reads ALL frames + full transcript. Returns structured candidate list with title, author, source, confidence, sentiment, and creator quote. Filters out comparison books ("if you loved X") and series predecessors.
 5. **Phase 2 — Sonnet verification** (multi-turn, text-only, tool use): Takes candidate list (NO images), searches Goodreads via tiered search (local DB → Google Books → Goodreads scraping), confirms book identities, submits final verified list. Max 7 turns, 3-min time budget. Critical rule: never swaps candidates for Book 1 of their series. Retry strategy: author alone → title alone → distinctive word → OCR error correction.
-6. Queue enrichment for all matched books + **kick off enrichment worker immediately** (fire-and-forget, no 5-min wait)
-7. Cache result in `video_grabs` table (includes `video_title` from RapidAPI)
-8. Register creator handle + book mentions in `creator_handles` / `creator_book_mentions` (fire-and-forget)
+6. **Caption validation** (backup check): Cross-references the TikTok caption (`video_title`) against agent results. If caption names a book the agent missed → search and add it. If agent returned 1 book but caption names a different one → prepend caption's pick (likely the featured book, agent matched a visible-but-not-featured cover). Skips comparison captions ("if you loved X"). Module: `caption-validator.ts`.
+7. Queue enrichment for all matched books + **kick off enrichment worker immediately** (fire-and-forget, no 5-min wait)
+8. Cache result in `video_grabs` table (includes `video_title` from RapidAPI)
+9. Register creator handle + book mentions in `creator_handles` / `creator_book_mentions` (fire-and-forget)
 
 ### Hotlist creation from grabs
 - Hotlist name uses the **video title/caption** (hashtags stripped), e.g. "All the books we gave 5 stars in 2025"
@@ -276,7 +293,9 @@ Verified creators get a public profile and affiliate monetization:
 - **Auto-Hotlist creator mode**: When verified creators use BookTok grab, hotlists are auto-set to public (`is_public: true`)
 - **Analytics**: `analytics_events` table tracks profile_view, affiliate_click, etc. API: `POST /api/analytics/event`
 
-## Chrome Extension
+## Chrome Extensions
+
+### User-facing extension (`extension/`)
 
 Browser extension that meets users on Goodreads, Amazon, and video sites:
 
@@ -287,6 +306,24 @@ Browser extension that meets users on Goodreads, Amazon, and video sites:
 - **Popup** (`popup.html/js`): BookTok grab UI with streaming progress, results display.
 - **Backend**: `/api/books/lookup` — multi-identifier lookup (goodreads_id, isbn, asin, title+author), CORS-enabled, auto-provisioning.
 - **CORS**: `lib/api/cors.ts` shared utility. All data is public, no auth needed.
+
+### Book Harvester extension (`extension-harvest/`)
+
+Admin-only Chrome extension for bulk book discovery from Goodreads, Amazon, romance.io, and blog pages. Separate from the user-facing extension.
+
+- **Manifest V3**: `extension-harvest/manifest.json` — permissions for `activeTab`, `scripting`, `storage`, `unlimitedStorage`
+- **Parsers** (`extension-harvest/parsers/`): Site-specific IIFE scripts injected via `chrome.scripting.executeScript()` with `world: "MAIN"`:
+  - `utils.js` — shared helpers: `dedupKey()`, `parseSeries()`, `cleanTitle()`, `cleanAuthor()`, `normalizeFormat()`, `mergeBooks()`
+  - `goodreads-list.js` — extracts books from Goodreads list/genre/shelf pages (schema.org rows + fallback link scraping). Captures GR ID, rating, rating count, cover, series, format.
+  - `amazon-list.js` — extracts books from Amazon category/bestseller/new-release pages. Captures ASIN, rating, rating count, cover, series, format.
+  - `romanceio.js` — extracts books from romance.io/new and /top pages. Captures title, author, cover, spice level (flame emoji/SVG/class detection).
+  - `generic-links.js` — fallback parser for blog pages.
+- **Popup** (`popup.html/js/css`): Scan Page button, book preview, batch accumulation (stored in `chrome.storage.local`), Export CSV, Upload to Hotlist.
+- **Source picker**: Categorized dropdown of harvest source URLs (Goodreads, Amazon, romance.io, blogs). Navigates the active tab on selection.
+- **Auth**: First upload prompts for API key (`CRON_SECRET`), stored in `chrome.storage.local`, sent as `Authorization: Bearer` header.
+- **Backend**: `POST /api/seed/harvest` — receives up to 500 books per batch, deduplicates (GR ID → ASIN → ISBN → normalized title+author), writes pre-captured ratings to `book_ratings` and `spice_signals`, queues enrichment with `skipJobTypes` optimization. CORS-enabled. Auth via admin session or `Bearer CRON_SECRET`.
+- **Admin dashboard**: `/admin/harvest` — shows recent harvests, aggregate stats, source frequency.
+- **CLI import**: `scripts/seed-from-csv.ts` — reads CSV, maps columns, POSTs to harvest endpoint.
 
 ## Enrichment Architecture
 
@@ -363,6 +400,7 @@ Hotlist acquires books through **multiple automated discovery channels** that ru
 | **Author expansion** | Weekly | Goodreads scraping | Crawls full bibliographies of authors already in DB, romance-gated | Free (scraping) |
 | **Seed lists** | Daily | Curated | Refreshes editorial/curated book lists | Minimal |
 | **Reddit buzz** | Weekly (Fri) | Serper + Haiku | Scans r/RomanceBooks, r/Romantasy, r/romancelandia, r/Fantasy for book mentions. Haiku extracts titles from snippets. | ~$0.05/run |
+| **Harvest (extension)** | On-demand | Chrome extension | Admin scans Goodreads lists, Amazon categories, romance.io pages. Batch upload via `/api/seed/harvest`. Pre-captures ratings + spice. | Free |
 
 ### Enrichment pipeline (how books get data)
 
