@@ -13,19 +13,19 @@ export const maxDuration = 120;
 
 const harvestBookSchema = z.object({
   title: z.string().min(1).max(500),
-  author: z.string().min(1).max(300),
-  isbn13: z.string().length(13).optional().nullable(),
+  author: z.string().max(300).optional().nullable(),
+  isbn13: z.string().optional().nullable(),
   goodreadsId: z.string().max(20).optional().nullable(),
-  asin: z.string().length(10).optional().nullable(),
+  asin: z.string().max(20).optional().nullable(),
   seriesName: z.string().max(200).optional().nullable(),
-  seriesPosition: z.number().int().min(1).max(100).optional().nullable(),
-  coverUrl: z.string().url().max(2000).optional().nullable(),
+  seriesPosition: z.number().int().min(0).max(100).optional().nullable(),
+  coverUrl: z.string().max(2000).optional().nullable(),
   goodreadsRating: z.number().min(0).max(5).optional().nullable(),
   goodreadsRatingCount: z.number().int().min(0).optional().nullable(),
   amazonRating: z.number().min(0).max(5).optional().nullable(),
   amazonRatingCount: z.number().int().min(0).optional().nullable(),
   romanceIoSpice: z.number().int().min(1).max(5).optional().nullable(),
-  format: z.enum(["kindle", "audiobook", "paperback", "hardcover"]).optional().nullable(),
+  format: z.string().optional().nullable(),
   source: z.string().max(100),
 });
 
@@ -104,7 +104,7 @@ async function findExistingBook(
 
   // 4. Normalized title + author last name
   const normTitle = normalizeTitle(book.title);
-  const authorLastName = book.author.split(" ").pop()?.toLowerCase() ?? "";
+  const authorLastName = (book.author || "").split(" ").pop()?.toLowerCase() ?? "";
   if (normTitle && authorLastName) {
     const { data: candidates } = await supabase
       .from("books")
