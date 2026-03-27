@@ -23,6 +23,9 @@
     },
     "app/api/cron/spice-gap-monitor/route.ts": {
       "maxDuration": 300
+    },
+    "app/api/seed/harvest/route.ts": {
+      "maxDuration": 120
     }
   },
   "crons": [

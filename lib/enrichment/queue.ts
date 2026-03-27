@@ -54,17 +54,22 @@ export async function queueEnrichmentJobs(
   bookId: string,
   title: string,
   author: string,
+  skipJobTypes?: Set<string>,
 ): Promise<void> {
   const supabase = getAdminClient();
 
   // Always include goodreads_detail — even if we have a goodreads_id, the book
   // may have been saved from search results with minimal data (no description,
   // cover, genres). The worker re-scrapes when goodreads_id exists.
-  const jobs: JobType[] = [
+  const allJobs: JobType[] = [
     "goodreads_detail", "goodreads_rating", "amazon_rating", "romance_io_spice",
     "metadata", "ai_synopsis", "trope_inference", "review_classifier", "llm_spice",
     "booktrack_prompt", "spotify_playlists", "ai_recommendations",
   ];
+
+  const jobs = skipJobTypes
+    ? allJobs.filter((j) => !skipJobTypes.has(j))
+    : allJobs;
 
   // Serper-dependent jobs get more retries — transient Google index misses are common
   const SERPER_JOBS = new Set<JobType>(["romance_io_spice", "amazon_rating", "goodreads_rating"]);

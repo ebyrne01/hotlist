@@ -25,6 +25,7 @@ import { preprocessTranscript } from "./transcript-preprocessor";
 import { queueEnrichmentJobs } from "@/lib/enrichment/queue";
 import { processEnrichmentQueue } from "@/lib/enrichment/worker";
 import { registerCreatorMentions } from "@/lib/creators/register";
+import { validateAgentResultsWithCaption } from "./caption-validator";
 
 export type GrabStatus =
   | "downloading"
@@ -384,6 +385,23 @@ async function grabPipeline(
     `[grab] Agent identified ${resolved.length} books:`,
     JSON.stringify(resolved.map((b) => b.matched ? { matched: true, title: b.book.title } : { matched: false, rawTitle: b.rawTitle }))
   );
+
+  // Step 5b: Caption validation — cross-reference video title/caption against agent results
+  // This is a backup check: if the caption explicitly names a book the agent missed,
+  // or contradicts the agent's single pick, we correct the results.
+  const videoTitle = download.videoTitle ?? null;
+  if (videoTitle) {
+    try {
+      const { results: validated, captionOverrides } =
+        await validateAgentResultsWithCaption(videoTitle, resolved);
+      if (captionOverrides.length > 0) {
+        console.log(`[grab] Caption validation applied ${captionOverrides.length} correction(s):`, captionOverrides);
+        resolved = validated;
+      }
+    } catch (err) {
+      console.warn("[grab] Caption validation failed (non-fatal):", err);
+    }
+  }
 
   if (resolved.length === 0 && transcript) {
     return {
