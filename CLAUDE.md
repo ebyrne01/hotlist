@@ -120,7 +120,7 @@ All tables in the public schema:
 | `hotlists` | User-created comparison lists. BookTok grabs store `source_creator_handle`, `source_video_url`, `source_video_thumbnail`, `source_platform`. |
 | `hotlist_books` | Books within a hotlist (position, added_at) |
 | `profiles` | Extended user data. Creator fields: `is_creator`, `creator_verified_at`, `vanity_slug` (UNIQUE), `bio`, `tiktok_handle`, `instagram_handle`, `youtube_handle`, `blog_url`, `amazon_affiliate_tag`, `bookshop_affiliate_id` |
-| `creator_applications` | Self-serve creator verification requests. Status: pending → approved / rejected |
+| `creator_applications` | Self-serve creator verification requests. Status: pending → approved / rejected. Columns: `reviewer_note` (text, optional rejection feedback), `reviewed_at` (timestamptz), `claim_handle_id` (uuid FK → creator_handles, links claim requests to auto-generated handles) |
 | `analytics_events` | Lightweight event tracking (profile_view, affiliate_click, etc.) |
 | `homepage_cache` | Cached book ID lists for homepage rows (24h TTL) |
 | `nyt_trending` | NYT bestseller entries with rank + weeks_on_list |
@@ -152,9 +152,12 @@ All tables in the public schema:
 /app/api/books/               — Book operations (search, enrich, refresh-spice)
 /app/api/grab/                — BookTok video grab (streaming)
 /app/api/admin/quality/       — Quality flag CRUD, scorecard, health, scan APIs
+/app/api/admin/creators/      — Creator application list + review (approve/reject) APIs
+/app/api/creators/claim/      — Claim request API for auto-generated creator handles
 /app/api/seed/harvest/        — Harvest API: receives book batches from Chrome extension harvester
 /app/admin/quality/           — Admin quality dashboard (triage + monitoring widgets)
 /app/admin/harvest/           — Admin harvest dashboard (recent uploads, stats, source frequency)
+/app/admin/creators/          — Admin creator application dashboard (approve/reject with notes)
 /app/book/[slug]/             — Book detail page + SpiceSection
 /app/booktok/                 — BookTok UI
 /app/discover/                — Creator discovery index (trending + all creators)
@@ -280,14 +283,15 @@ All tables in the public schema:
 - `/discover/[handle]` — auto-generated page showing all books recommended by a creator, with follow button
 - "Seen on BookTok" section on book detail pages shows which creators recommended each book
 - Hotlists created from BookTok grabs use video title as name + creator handle as byline (see "Hotlist creation from grabs" above)
-- Creators can claim their handle (future: upgrade to full creator profile)
+- **Claim flow**: Creators can claim their auto-generated handle via interactive banner on `/discover/@handle`. Clicking "Claim" (requires auth) creates a `creator_applications` entry with `claim_handle_id` linked. Admin approves → sets `creator_handles.claimed_by`, promotes user to verified creator. Claimed handles with vanity slugs show "Visit full profile" link.
 
 ## Creator Platform
 
 Verified creators get a public profile and affiliate monetization:
 
-- **Self-serve application**: `/profile/creator` — non-creators fill out application form → `creator_applications` table (status: pending → approved/rejected)
-- **Creator settings**: Verified creators manage vanity URL, bio, social handles, Amazon affiliate tag, Bookshop.org affiliate ID
+- **Self-serve application**: `/profile/creator` — non-creators fill out application form → `creator_applications` table (status: pending → approved/rejected). Rejected creators see reviewer feedback + re-apply button. Pending shows submission date + "within 48 hours" messaging.
+- **Admin approval**: `/admin/creators` — admin dashboard with status tabs (pending/approved/rejected), approve/reject buttons, optional rejection note. Claim applications show link to `/discover/@handle`. Accessible via admin nav links in Navbar.
+- **Creator settings**: Verified creators manage vanity URL (min 3 chars, lowercase+numbers+hyphens, uniqueness check), bio, social handles, Amazon affiliate tag, Bookshop.org affiliate ID. "View your public profile" link shown when vanity slug is set.
 - **Public profile**: `/{vanitySlug}` — server-rendered page with avatar, bio, verified badge, social links, public hotlists with mini book covers, reading stats. Reserved word guard prevents conflicts with app routes.
 - **Affiliate tag threading**: Creator's `amazon_affiliate_tag` flows through `getHotlistWithBooks()` → `HotlistDetail.ownerAffiliateTag` → `HotlistTable.affiliateTag` → Buy links. Default tag (`NEXT_PUBLIC_AMAZON_AFFILIATE_TAG`) used when no creator tag is set.
 - **Auto-Hotlist creator mode**: When verified creators use BookTok grab, hotlists are auto-set to public (`is_public: true`)
