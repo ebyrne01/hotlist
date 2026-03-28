@@ -14,6 +14,8 @@ interface CreatorApplication {
   content_description: string;
   status: string;
   created_at: string;
+  reviewer_note: string | null;
+  reviewed_at: string | null;
 }
 
 interface CreatorSettings {
@@ -38,6 +40,9 @@ export default function CreatorSettingsPage() {
   const [applicationLoaded, setApplicationLoaded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [applicationSuccess, setApplicationSuccess] = useState(false);
+
+  const [applyError, setApplyError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Application form fields
   const [platform, setPlatform] = useState("tiktok");
@@ -118,6 +123,7 @@ export default function CreatorSettingsPage() {
     e.preventDefault();
     if (!user) return;
     setSubmitting(true);
+    setApplyError(null);
 
     const { error } = await supabase.from("creator_applications").insert({
       user_id: user.id,
@@ -128,9 +134,32 @@ export default function CreatorSettingsPage() {
       status: "pending",
     });
 
-    if (!error) {
+    if (error) {
+      setApplyError("Something went wrong submitting your application. Please try again.");
+    } else {
       setApplicationSuccess(true);
     }
+    setSubmitting(false);
+  }
+
+  // Re-apply after rejection
+  async function handleReapply() {
+    if (!user || !application) return;
+    setSubmitting(true);
+    setApplyError(null);
+
+    const { error } = await supabase
+      .from("creator_applications")
+      .delete()
+      .eq("id", application.id);
+
+    if (error) {
+      setApplyError("Couldn't reset your application. Please try again.");
+      setSubmitting(false);
+      return;
+    }
+
+    setApplication(null);
     setSubmitting(false);
   }
 
@@ -153,12 +182,29 @@ export default function CreatorSettingsPage() {
     setSlugChecking(false);
   }
 
+  // Validate vanity slug format
+  function validateSlug(slug: string): string | null {
+    if (!slug) return null; // empty is fine
+    if (slug.length < 3) return "Must be at least 3 characters.";
+    if (!/^[a-z0-9-]+$/.test(slug)) return "Only lowercase letters, numbers, and hyphens.";
+    if (slug.startsWith("-") || slug.endsWith("-")) return "Cannot start or end with a hyphen.";
+    return null;
+  }
+
   // Save creator settings
   async function handleSaveSettings(e: React.FormEvent) {
     e.preventDefault();
     if (!user || slugError) return;
+
+    const slugValidation = validateSlug(settings.vanity_slug);
+    if (slugValidation) {
+      setSlugError(slugValidation);
+      return;
+    }
+
     setSaving(true);
     setSaveSuccess(false);
+    setSaveError(null);
 
     const { error } = await supabase
       .from("profiles")
@@ -174,7 +220,9 @@ export default function CreatorSettingsPage() {
       })
       .eq("id", user.id);
 
-    if (!error) {
+    if (error) {
+      setSaveError("Couldn't save your settings. Please try again.");
+    } else {
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     }
@@ -229,9 +277,19 @@ export default function CreatorSettingsPage() {
         <h1 className="font-display text-2xl font-bold text-ink mb-1">
           Creator Settings
         </h1>
-        <p className="text-sm text-muted font-body mb-8">
+        <p className="text-sm text-muted font-body mb-4">
           Manage your public creator profile and affiliate links.
         </p>
+
+        {settings.vanity_slug && (
+          <Link
+            href={`/${settings.vanity_slug}`}
+            className="inline-flex items-center gap-1 text-sm font-mono text-fire hover:text-fire/80 transition-colors mb-8"
+          >
+            View your public profile &rarr;
+          </Link>
+        )}
+        {!settings.vanity_slug && <div className="mb-4" />}
 
         <form onSubmit={handleSaveSettings} className="space-y-6">
           {/* Vanity URL */}
@@ -251,7 +309,8 @@ export default function CreatorSettingsPage() {
                     .toLowerCase()
                     .replace(/[^a-z0-9-]/g, "");
                   updateSetting("vanity_slug", val);
-                  setSlugError("");
+                  const err = validateSlug(val);
+                  setSlugError(err || "");
                 }}
                 onBlur={() => checkSlugUniqueness(settings.vanity_slug)}
                 placeholder="your-name"
@@ -407,6 +466,11 @@ export default function CreatorSettingsPage() {
                 Settings saved!
               </span>
             )}
+            {saveError && (
+              <span className="text-sm font-mono text-red-600">
+                {saveError}
+              </span>
+            )}
           </div>
         </form>
 
@@ -427,6 +491,10 @@ export default function CreatorSettingsPage() {
 
   // Pending application
   if (application?.status === "pending" || applicationSuccess) {
+    const submittedDate = application?.created_at
+      ? new Date(application.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+      : null;
+
     return (
       <div className="max-w-2xl mx-auto px-4 py-10">
         <div className="bg-white border border-border rounded-lg p-8 text-center">
@@ -434,12 +502,53 @@ export default function CreatorSettingsPage() {
             Application Received
           </h1>
           <p className="text-sm text-muted font-body leading-relaxed max-w-md mx-auto">
-            Your application is under review. We&apos;ll get back to you within
-            48 hours.
+            Your application is under review. We typically respond within 48 hours.
           </p>
+          {submittedDate && (
+            <p className="text-xs text-muted/70 font-mono mt-2">
+              Submitted {submittedDate}
+            </p>
+          )}
           <Link
             href="/profile"
             className="inline-block mt-6 text-fire font-mono text-sm hover:underline"
+          >
+            Back to profile
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // Rejected application
+  if (application?.status === "rejected") {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-10">
+        <div className="bg-white border border-border rounded-lg p-8 text-center">
+          <h1 className="font-display text-2xl font-bold text-ink mb-3">
+            Application Not Approved
+          </h1>
+          <p className="text-sm text-muted font-body leading-relaxed max-w-md mx-auto">
+            Your application wasn&apos;t approved this time.
+          </p>
+          {application.reviewer_note && (
+            <p className="text-sm text-ink/70 font-body italic mt-3 max-w-md mx-auto">
+              &ldquo;{application.reviewer_note}&rdquo;
+            </p>
+          )}
+          {applyError && (
+            <p className="text-sm text-red-600 font-body mt-3">{applyError}</p>
+          )}
+          <button
+            onClick={handleReapply}
+            disabled={submitting}
+            className="mt-6 px-6 py-2.5 bg-fire text-cream text-sm font-mono rounded-lg hover:bg-fire/90 transition-colors disabled:opacity-50"
+          >
+            {submitting ? "..." : "Re-apply"}
+          </button>
+          <Link
+            href="/profile"
+            className="block mt-4 text-fire font-mono text-sm hover:underline"
           >
             Back to profile
           </Link>
@@ -537,6 +646,9 @@ export default function CreatorSettingsPage() {
         >
           {submitting ? "Submitting..." : "Submit Application"}
         </button>
+        {applyError && (
+          <p className="mt-3 text-sm text-red-600 font-body">{applyError}</p>
+        )}
       </form>
     </div>
   );

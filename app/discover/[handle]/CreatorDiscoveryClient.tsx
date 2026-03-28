@@ -39,6 +39,8 @@ export default function CreatorDiscoveryClient({ creator, books }: Props) {
   const grabCount = creator.grab_count as number || 0;
   const bookCount = creator.book_count as number || 0;
   const isClaimed = !!(creator.claimed_by);
+  const [claimStatus, setClaimStatus] = useState<"idle" | "loading" | "submitted" | "error">("idle");
+  const [claimError, setClaimError] = useState<string | null>(null);
 
   // Check follow status on load
   useEffect(() => {
@@ -55,28 +57,46 @@ export default function CreatorDiscoveryClient({ creator, books }: Props) {
       });
   }, [user, creator.id]);
 
+  const [followLoading, setFollowLoading] = useState(false);
+  const [followError, setFollowError] = useState<string | null>(null);
+
   async function toggleFollow() {
     if (!user) {
       openSignIn();
       return;
     }
+    setFollowLoading(true);
+    setFollowError(null);
     const supabase = createClient();
+    const wasFollowing = isFollowing;
 
-    if (isFollowing) {
-      await supabase
-        .from("user_follows")
-        .delete()
-        .eq("user_id", user.id)
-        .eq("creator_handle_id", creator.id as string);
-      setIsFollowing(false);
-      setFollowerCount((c) => Math.max(0, c - 1));
-    } else {
-      await supabase.from("user_follows").insert({
-        user_id: user.id,
-        creator_handle_id: creator.id as string,
-      });
-      setIsFollowing(true);
-      setFollowerCount((c) => c + 1);
+    // Optimistic update
+    setIsFollowing(!wasFollowing);
+    setFollowerCount((c) => wasFollowing ? Math.max(0, c - 1) : c + 1);
+
+    try {
+      if (wasFollowing) {
+        const { error } = await supabase
+          .from("user_follows")
+          .delete()
+          .eq("user_id", user.id)
+          .eq("creator_handle_id", creator.id as string);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("user_follows").insert({
+          user_id: user.id,
+          creator_handle_id: creator.id as string,
+        });
+        if (error) throw error;
+      }
+    } catch {
+      // Revert optimistic update
+      setIsFollowing(wasFollowing);
+      setFollowerCount((c) => wasFollowing ? c + 1 : Math.max(0, c - 1));
+      setFollowError("Couldn't update. Try again.");
+      setTimeout(() => setFollowError(null), 3000);
+    } finally {
+      setFollowLoading(false);
     }
   }
 
@@ -111,7 +131,8 @@ export default function CreatorDiscoveryClient({ creator, books }: Props) {
           </div>
           <button
             onClick={toggleFollow}
-            className={`px-4 py-2 rounded-lg text-xs font-mono transition-colors shrink-0 ${
+            disabled={followLoading}
+            className={`px-4 py-2 rounded-lg text-xs font-mono transition-colors shrink-0 disabled:opacity-40 ${
               isFollowing
                 ? "bg-cream border border-border text-muted hover:border-fire"
                 : "bg-fire text-white hover:bg-fire/90"
@@ -120,6 +141,10 @@ export default function CreatorDiscoveryClient({ creator, books }: Props) {
             {isFollowing ? "Following" : "Follow"}
           </button>
         </div>
+
+        {followError && (
+          <p className="text-xs text-red-600 font-body mt-1">{followError}</p>
+        )}
 
         {followerCount > 0 && (
           <p className="text-xs font-mono text-muted/70 mt-2">
@@ -143,16 +168,51 @@ export default function CreatorDiscoveryClient({ creator, books }: Props) {
         )}
 
         {/* Claim banner */}
-        {!isClaimed && (
-          <div className="mt-4 p-3 bg-fire/5 border border-fire/10 rounded-lg">
+        {!isClaimed && claimStatus !== "submitted" && (
+          <div className="mt-4 p-3 bg-fire/5 border border-fire/10 rounded-lg flex items-center justify-between">
             <p className="text-xs font-body text-ink">
               Are you <span className="font-semibold">{handle}</span>?{" "}
-              <span className="text-fire font-semibold">
-                Claim your profile
-              </span>{" "}
-              to customize this page and see analytics.
+              Claim this profile to customize it and see analytics.
+            </p>
+            <button
+              onClick={async () => {
+                if (!user) { openSignIn(); return; }
+                setClaimStatus("loading");
+                setClaimError(null);
+                try {
+                  const res = await fetch("/api/creators/claim", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ creator_handle_id: creator.id }),
+                  });
+                  if (!res.ok) {
+                    const data = await res.json();
+                    setClaimError(data.error || "Something went wrong.");
+                    setClaimStatus("error");
+                    return;
+                  }
+                  setClaimStatus("submitted");
+                } catch {
+                  setClaimError("Something went wrong. Please try again.");
+                  setClaimStatus("error");
+                }
+              }}
+              disabled={claimStatus === "loading"}
+              className="ml-3 shrink-0 px-3 py-1.5 bg-fire text-white text-xs font-mono rounded-lg hover:bg-fire/90 transition-colors disabled:opacity-40"
+            >
+              {claimStatus === "loading" ? "..." : "Claim"}
+            </button>
+          </div>
+        )}
+        {claimStatus === "submitted" && (
+          <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+            <p className="text-xs font-body text-green-700">
+              Claim request submitted! We&apos;ll review it within 48 hours.
             </p>
           </div>
+        )}
+        {claimError && claimStatus === "error" && (
+          <div className="mt-2 text-xs text-red-600 font-body">{claimError}</div>
         )}
       </div>
 
