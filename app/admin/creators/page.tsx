@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 
 interface Application {
   id: string;
@@ -165,8 +166,28 @@ export default function AdminCreatorsPage() {
               </div>
 
               {app.claimHandleId && (
-                <div className="mt-2 inline-block bg-amber-50 border border-amber-200 text-amber-700 text-xs font-mono px-2 py-1 rounded">
-                  Claiming @{app.handleUrl?.replace(/^@/, "")}
+                <Link
+                  href={`/discover/@${app.handleUrl?.replace(/^@/, "")}`}
+                  className="mt-2 inline-block bg-amber-50 border border-amber-200 text-amber-700 text-xs font-mono px-2 py-1 rounded hover:border-amber-400 transition-colors"
+                >
+                  Claiming @{app.handleUrl?.replace(/^@/, "")} &rarr;
+                </Link>
+              )}
+
+              {!app.claimHandleId && app.handleUrl && (
+                <div className="mt-2 text-xs font-mono text-muted">
+                  {app.platform === "blog" ? (
+                    <a
+                      href={app.handleUrl.startsWith("http") ? app.handleUrl : `https://${app.handleUrl}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:text-fire transition-colors"
+                    >
+                      {app.handleUrl} &#8599;
+                    </a>
+                  ) : (
+                    <span>@{app.handleUrl.replace(/^@/, "")}</span>
+                  )}
                 </div>
               )}
 

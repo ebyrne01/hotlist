@@ -115,6 +115,29 @@ export default function Navbar() {
                 >
                   My Hotlists
                 </Link>
+                {profile?.isAdmin && (
+                  <>
+                    <div className="border-t border-border my-1" />
+                    <Link
+                      href="/admin/creators"
+                      className="block px-3 py-2 text-xs font-mono text-muted hover:text-ink hover:bg-cream transition-colors"
+                    >
+                      Creator Apps
+                    </Link>
+                    <Link
+                      href="/admin/quality"
+                      className="block px-3 py-2 text-xs font-mono text-muted hover:text-ink hover:bg-cream transition-colors"
+                    >
+                      Quality
+                    </Link>
+                    <Link
+                      href="/admin/harvest"
+                      className="block px-3 py-2 text-xs font-mono text-muted hover:text-ink hover:bg-cream transition-colors"
+                    >
+                      Harvest
+                    </Link>
+                  </>
+                )}
                 <button
                   onClick={signOut}
                   className="block w-full text-left px-3 py-2 text-xs font-mono text-muted hover:text-ink hover:bg-cream transition-colors"
@@ -206,6 +229,32 @@ export default function Navbar() {
                 >
                   Profile
                 </Link>
+                {profile?.isAdmin && (
+                  <>
+                    <div className="border-t border-border my-1" />
+                    <Link
+                      href="/admin/creators"
+                      className="text-sm font-mono text-muted hover:text-ink transition-colors"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      Creator Apps
+                    </Link>
+                    <Link
+                      href="/admin/quality"
+                      className="text-sm font-mono text-muted hover:text-ink transition-colors"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      Quality
+                    </Link>
+                    <Link
+                      href="/admin/harvest"
+                      className="text-sm font-mono text-muted hover:text-ink transition-colors"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      Harvest
+                    </Link>
+                  </>
+                )}
                 <button
                   onClick={() => {
                     signOut();

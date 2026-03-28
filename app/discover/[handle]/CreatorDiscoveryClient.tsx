@@ -152,6 +152,15 @@ export default function CreatorDiscoveryClient({ creator, books }: Props) {
           </p>
         )}
 
+        {isClaimed && (creator.vanity_slug as string) && (
+          <Link
+            href={`/${creator.vanity_slug as string}`}
+            className="inline-flex items-center gap-1 text-sm font-mono text-fire hover:text-fire/80 transition-colors mt-2"
+          >
+            Visit full profile &rarr;
+          </Link>
+        )}
+
         {/* Top tropes */}
         {topTropes.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mt-4">

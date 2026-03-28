@@ -47,6 +47,18 @@ export default async function CreatorDiscoveryPage({ params }: PageProps) {
 
   if (!creator) notFound();
 
+  // If claimed, fetch the claiming creator's vanity slug
+  if (creator.claimed_by) {
+    const { data: claimerProfile } = await supabase
+      .from("profiles")
+      .select("vanity_slug")
+      .eq("id", creator.claimed_by as string)
+      .single();
+    if (claimerProfile) {
+      creator.vanity_slug = (claimerProfile as Record<string, unknown>).vanity_slug ?? null;
+    }
+  }
+
   // Fetch all book mentions for this creator
   const { data: mentions } = await supabase
     .from("creator_book_mentions")
