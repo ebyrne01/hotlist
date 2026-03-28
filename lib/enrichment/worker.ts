@@ -84,8 +84,14 @@ async function mergeProvisionalIntoExisting(
   return true;
 }
 
-const JOB_DELAY_MS = 300; // Delay between jobs to respect rate limits
-const CONCURRENCY = 3; // Max parallel jobs within a tier
+const JOB_DELAY_MS = 300; // Delay between scraping jobs to respect rate limits
+const AI_JOB_DELAY_MS = 100; // AI-tier jobs (Anthropic API) can handle faster throughput
+const CONCURRENCY = 5; // Max parallel jobs within a tier
+
+// AI-based job types that don't risk IP blocking — safe for faster throughput
+const AI_JOB_TYPES = new Set<string>([
+  "ai_synopsis", "trope_inference", "llm_spice", "ai_recommendations", "booktrack_prompt",
+]);
 const STUCK_JOB_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes — reset jobs stuck in "running"
 
 // Spotify gets its own cap: max 3 books per cron tick.
@@ -234,7 +240,9 @@ export async function processEnrichmentQueue(
           }
         }
 
-        await new Promise((r) => setTimeout(r, JOB_DELAY_MS));
+        // Use faster delay for AI-only batches, slower for scraping
+        const isAiBatch = nonSpotifyTypes.every((t) => AI_JOB_TYPES.has(t));
+        await new Promise((r) => setTimeout(r, isAiBatch ? AI_JOB_DELAY_MS : JOB_DELAY_MS));
       }
     }
 
