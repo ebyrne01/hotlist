@@ -26,7 +26,7 @@ async function getDailyTropeUsage(): Promise<number> {
     .from("enrichment_queue")
     .select("*", { count: "exact", head: true })
     .eq("job_type", "trope_inference")
-    .eq("status", "complete")
+    .eq("status", "completed")
     .gte("completed_at", todayStart.toISOString());
 
   return count ?? 0;
