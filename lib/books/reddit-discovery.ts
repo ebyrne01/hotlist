@@ -13,7 +13,7 @@
 import { getAdminClient } from "@/lib/supabase/admin";
 import { searchGoodreads, getGoodreadsBookById } from "./goodreads-search";
 import { saveGoodreadsBookToCache } from "./cache";
-import { scheduleEnrichment } from "@/lib/scraping";
+import { queueEnrichmentJobs } from "@/lib/enrichment/queue";
 import { scheduleMetadataEnrichment } from "./metadata-enrichment";
 import { isJunkTitle, isRomanceByGenres } from "./romance-filter";
 import { recordBuzzSignalsBatch } from "./buzz-signals";
@@ -332,7 +332,7 @@ export async function discoverRedditBuzz(
 
         progress.added++;
         scheduleMetadataEnrichment(saved.id, saved.title, saved.author, saved.isbn);
-        scheduleEnrichment(saved.id, saved.title, saved.author, saved.isbn);
+        await queueEnrichmentJobs(saved.id, saved.title, saved.author);
         onProgress?.(
           `[reddit-discovery] Added "${saved.title}" by ${saved.author}`
         );

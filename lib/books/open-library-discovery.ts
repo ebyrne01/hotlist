@@ -10,7 +10,7 @@
 import { getAdminClient } from "@/lib/supabase/admin";
 import { resolveToGoodreadsId, getGoodreadsBookById } from "./goodreads-search";
 import { saveGoodreadsBookToCache } from "./cache";
-import { scheduleEnrichment } from "@/lib/scraping";
+import { queueEnrichmentJobs } from "@/lib/enrichment/queue";
 import { scheduleMetadataEnrichment } from "./metadata-enrichment";
 import { isJunkTitle } from "./romance-filter";
 
@@ -215,7 +215,7 @@ export async function processOLWorks(
         existingGoodreadsIds.add(goodreadsId);
         existingTitles.add(title.toLowerCase());
         scheduleMetadataEnrichment(book.id, book.title, book.author, book.isbn);
-        scheduleEnrichment(book.id, book.title, book.author, book.isbn);
+        await queueEnrichmentJobs(book.id, book.title, book.author);
         onProgress?.(
           `[ol-discovery] Saved "${book.title}" by ${book.author} (${progress.processed}/${progress.total})`,
           progress

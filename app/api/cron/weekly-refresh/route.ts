@@ -17,7 +17,7 @@ import {
   getGoodreadsBookById,
 } from "@/lib/books/goodreads-search";
 import { saveGoodreadsBookToCache } from "@/lib/books/cache";
-import { scheduleEnrichment } from "@/lib/scraping";
+import { queueEnrichmentJobs } from "@/lib/enrichment/queue";
 import { scheduleMetadataEnrichment } from "@/lib/books/metadata-enrichment";
 import { isJunkTitle, isKnownRomanceAuthor } from "@/lib/books/romance-filter";
 
@@ -124,7 +124,7 @@ export async function GET(request: NextRequest) {
 
             if (saved) {
               booksAdded++;
-              scheduleEnrichment(saved.id, saved.title, saved.author, saved.isbn);
+              await queueEnrichmentJobs(saved.id, saved.title, saved.author);
               scheduleMetadataEnrichment(saved.id, saved.title, saved.author, saved.isbn);
             }
           }
@@ -226,7 +226,7 @@ export async function GET(request: NextRequest) {
 
             if (saved) {
               booksAdded++;
-              scheduleEnrichment(saved.id, saved.title, saved.author, saved.isbn);
+              await queueEnrichmentJobs(saved.id, saved.title, saved.author);
               scheduleMetadataEnrichment(saved.id, saved.title, saved.author, saved.isbn);
             }
           }
@@ -345,12 +345,7 @@ export async function GET(request: NextRequest) {
 
             if (saved) {
               booksAdded++;
-              scheduleEnrichment(
-                saved.id,
-                saved.title,
-                saved.author,
-                saved.isbn
-              );
+              await queueEnrichmentJobs(saved.id, saved.title, saved.author);
               scheduleMetadataEnrichment(
                 saved.id,
                 saved.title,

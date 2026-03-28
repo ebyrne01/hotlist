@@ -18,8 +18,8 @@ interface EnrichmentResult {
 }
 
 /**
- * Enrich a book with external ratings/spice data.
- * Only scrapes sources that are stale or missing.
+ * @deprecated Use the enrichment queue system instead (queueEnrichmentJobs from "@/lib/enrichment/queue").
+ * This function runs enrichment inline with no retry or status tracking.
  */
 export async function enrichBookWithExternalData(
   bookId: string,
@@ -258,9 +258,11 @@ export async function enrichBookWithExternalData(
 }
 
 /**
- * Fire-and-forget enrichment — call this when you don't want to block the user.
+ * @deprecated Use queueEnrichmentJobs from "@/lib/enrichment/queue" instead.
+ * This function runs enrichment synchronously with no retry or status tracking.
+ * All callsites have been migrated — do not use in new code.
  */
-export function scheduleEnrichment(
+function scheduleEnrichment(
   bookId: string,
   title: string,
   author: string,

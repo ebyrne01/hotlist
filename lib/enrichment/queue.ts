@@ -18,6 +18,9 @@
  */
 
 import { getAdminClient } from "@/lib/supabase/admin";
+import { scanBook, isUnderDailyLimit } from "@/lib/quality/haiku-scanner";
+import { tryPromoteToCanon } from "@/lib/books/canon-gate";
+import Anthropic from "@anthropic-ai/sdk";
 
 export type JobType =
   | "goodreads_detail"
@@ -257,29 +260,21 @@ export async function updateBookEnrichmentStatus(bookId: string): Promise<void> 
     .update({ enrichment_status: status })
     .eq("id", bookId);
 
-  // Fire Haiku quality scan when a book reaches "complete" — never blocks enrichment
+  // Post-enrichment hooks when a book reaches "complete"
   if (status === "complete") {
-    import("@/lib/quality/haiku-scanner").then(({ scanBook, isUnderDailyLimit }) => {
-      isUnderDailyLimit().then(underLimit => {
-        if (!underLimit) return;
-        import("@anthropic-ai/sdk").then(({ default: Anthropic }) => {
-          const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
-          scanBook(client, bookId).catch(err =>
-            console.warn("[haiku-scanner] Post-enrichment scan failed:", err)
-          );
-        });
-      });
-    }).catch(() => {
-      // Scanner module not available — ignore
-    });
+    try {
+      if (await isUnderDailyLimit()) {
+        const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+        await scanBook(client, bookId);
+      }
+    } catch (err) {
+      console.warn("[post-enrichment] Haiku scan failed:", err);
+    }
 
-    // Evaluate canon readiness — auto-promote if the book meets all requirements
-    import("@/lib/books/canon-gate").then(({ tryPromoteToCanon }) => {
-      tryPromoteToCanon(bookId).catch(err =>
-        console.warn("[canon-gate] Post-enrichment evaluation failed:", err)
-      );
-    }).catch(() => {
-      // Canon gate module not available — ignore
-    });
+    try {
+      await tryPromoteToCanon(bookId);
+    } catch (err) {
+      console.warn("[post-enrichment] Canon promotion failed:", err);
+    }
   }
 }

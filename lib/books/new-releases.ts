@@ -7,7 +7,7 @@
 
 import { getAdminClient } from "@/lib/supabase/admin";
 import { saveBookToCache, hydrateBookDetail } from "./cache";
-import { scheduleEnrichment } from "@/lib/scraping";
+import { queueEnrichmentJobs } from "@/lib/enrichment/queue";
 import { isJunkTitle, isKnownRomanceAuthor, isRomanceByGenres } from "./romance-filter";
 import type { BookDetail, BookData } from "@/lib/types";
 
@@ -143,7 +143,7 @@ export async function getRomanceNewReleases(): Promise<BookDetail[]> {
     const saved = await saveBookToCache(bookData);
     if (saved) {
       bookIds.push(saved.id);
-      scheduleEnrichment(saved.id, saved.title, saved.author, saved.isbn);
+      await queueEnrichmentJobs(saved.id, saved.title, saved.author);
     }
   }
 

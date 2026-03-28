@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/supabase/admin";
-import { scheduleEnrichment } from "@/lib/scraping";
+import { queueEnrichmentJobs } from "@/lib/enrichment/queue";
 import { isJunkTitle } from "@/lib/books/romance-filter";
 
 export const dynamic = "force-dynamic";
@@ -58,23 +58,16 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Process in batches of 10 with 2s delay
+  // Process in batches of 10
   const BATCH_SIZE = 10;
-  const BATCH_DELAY_MS = 2000;
   let queued = 0;
 
   for (let i = 0; i < needsEnrichment.length; i += BATCH_SIZE) {
     const batch = needsEnrichment.slice(i, i + BATCH_SIZE);
-
-    for (const book of batch) {
-      scheduleEnrichment(book.id, book.title, book.author, book.isbn ?? undefined);
-      queued++;
-    }
-
-    // Delay between batches (except the last one)
-    if (i + BATCH_SIZE < needsEnrichment.length) {
-      await new Promise((r) => setTimeout(r, BATCH_DELAY_MS));
-    }
+    await Promise.all(
+      batch.map((book) => queueEnrichmentJobs(book.id, book.title, book.author))
+    );
+    queued += batch.length;
   }
 
   return NextResponse.json({

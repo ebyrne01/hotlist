@@ -26,7 +26,7 @@ import {
   isRomanceBook as isRomanceByGenres,
 } from "./goodreads-search";
 import { saveGoodreadsBookToCache, hydrateBookDetail } from "./cache";
-import { scheduleEnrichment } from "@/lib/scraping";
+import { queueEnrichmentJobs } from "@/lib/enrichment/queue";
 import { scheduleMetadataEnrichment } from "./metadata-enrichment";
 import { isJunkTitle, isKnownRomanceAuthor } from "./romance-filter";
 import { recordBuzzSignal } from "./buzz-signals";
@@ -213,7 +213,7 @@ export async function getNYTBestsellerRomance(): Promise<BookDetail[]> {
 
         // Background enrichment
         scheduleMetadataEnrichment(saved.id, saved.title, saved.author, saved.isbn);
-        scheduleEnrichment(saved.id, saved.title, saved.author, saved.isbn);
+        await queueEnrichmentJobs(saved.id, saved.title, saved.author);
       }
     } catch (err) {
       console.warn(`[nyt] Error processing "${nytBook.title}":`, err);

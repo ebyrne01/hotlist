@@ -9,7 +9,7 @@ import * as cheerio from "cheerio";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { extractGoodreadsId, getGoodreadsBookById } from "./goodreads-search";
 import { saveGoodreadsBookToCache } from "./cache";
-import { scheduleEnrichment } from "@/lib/scraping";
+import { queueEnrichmentJobs } from "@/lib/enrichment/queue";
 import { scheduleMetadataEnrichment } from "./metadata-enrichment";
 import { isJunkTitle } from "./romance-filter";
 
@@ -222,7 +222,7 @@ export async function processListEntries(
           book.author,
           book.isbn
         );
-        scheduleEnrichment(book.id, book.title, book.author, book.isbn);
+        await queueEnrichmentJobs(book.id, book.title, book.author);
         onProgress?.(
           `[seed-lists] Saved "${book.title}" by ${book.author} (${progress.processed} of ${progress.total})`,
           progress
