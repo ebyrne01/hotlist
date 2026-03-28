@@ -18,11 +18,16 @@
  */
 
 import * as cheerio from "cheerio";
+import {
+  isCircuitOpen,
+  recordSuccess,
+  recordFailure,
+} from "@/lib/scraping/goodreads-circuit-breaker";
 
 const GOODREADS_DELAY_MS = 1500;
 const GOODREADS_SEARCH_URL = "https://www.goodreads.com/search?q=";
 const USER_AGENT =
-  "Hotlist/1.0 (myhotlist.app; book aggregator for romance readers)";
+  "Mozilla/5.0 (compatible; BookMetadata/1.0)";
 
 // ── Types ─────────────────────────────────────────────
 
@@ -120,6 +125,11 @@ function isJunkSearchResult(title: string, author?: string): boolean {
 export async function searchGoodreads(
   query: string
 ): Promise<GoodreadsSearchResult[]> {
+  if (isCircuitOpen()) {
+    console.warn("[goodreads-search] Circuit breaker open — skipping request");
+    return [];
+  }
+
   await sleep(GOODREADS_DELAY_MS);
 
   const url = GOODREADS_SEARCH_URL + encodeURIComponent(query);
@@ -132,13 +142,17 @@ export async function searchGoodreads(
     });
   } catch (err) {
     console.warn("[goodreads-search] Fetch failed:", err);
+    recordFailure();
     return [];
   }
 
   if (!res.ok) {
     console.warn(`[goodreads-search] HTTP ${res.status} for "${query}"`);
+    recordFailure();
     return [];
   }
+
+  recordSuccess();
 
   const html = await res.text();
   const $ = cheerio.load(html);
@@ -209,6 +223,11 @@ export async function searchGoodreads(
 export async function getGoodreadsBookById(
   goodreadsId: string
 ): Promise<GoodreadsBookDetail | null> {
+  if (isCircuitOpen()) {
+    console.warn("[goodreads-detail] Circuit breaker open — skipping request");
+    return null;
+  }
+
   await sleep(GOODREADS_DELAY_MS);
 
   const url = `https://www.goodreads.com/book/show/${goodreadsId}`;
@@ -221,13 +240,17 @@ export async function getGoodreadsBookById(
     });
   } catch (err) {
     console.warn(`[goodreads-detail] Fetch failed for ${goodreadsId}:`, err);
+    recordFailure();
     return null;
   }
 
   if (!res.ok) {
     console.warn(`[goodreads-detail] HTTP ${res.status} for ${goodreadsId}`);
+    recordFailure();
     return null;
   }
+
+  recordSuccess();
 
   const html = await res.text();
   const $ = cheerio.load(html);

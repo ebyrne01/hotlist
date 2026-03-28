@@ -1,7 +1,12 @@
 import * as cheerio from "cheerio";
+import {
+  isCircuitOpen,
+  recordSuccess,
+  recordFailure,
+} from "./goodreads-circuit-breaker";
 
 const USER_AGENT =
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+  "Mozilla/5.0 (compatible; BookMetadata/1.0)";
 
 export interface GoodreadsData {
   rating: number;
@@ -17,6 +22,11 @@ export async function scrapeGoodreadsRating(
   bookTitle: string,
   author: string
 ): Promise<GoodreadsData | null> {
+  if (isCircuitOpen()) {
+    console.warn("[goodreads-rating] Circuit breaker open — skipping request");
+    return null;
+  }
+
   try {
     // Respectful delay before scraping
     await sleep(1000 + Math.random() * 1000);
@@ -31,8 +41,11 @@ export async function scrapeGoodreadsRating(
 
     if (!res.ok) {
       console.warn(`Goodreads search returned ${res.status} for "${bookTitle}"`);
+      recordFailure();
       return null;
     }
+
+    recordSuccess();
 
     const html = await res.text();
     const $ = cheerio.load(html);
