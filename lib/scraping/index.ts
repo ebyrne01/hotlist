@@ -257,36 +257,3 @@ export async function enrichBookWithExternalData(
   return result;
 }
 
-/**
- * @deprecated Use queueEnrichmentJobs from "@/lib/enrichment/queue" instead.
- * This function runs enrichment synchronously with no retry or status tracking.
- * All callsites have been migrated — do not use in new code.
- */
-function scheduleEnrichment(
-  bookId: string,
-  title: string,
-  author: string,
-  isbn?: string | null
-): void {
-  console.log(`[enrichment] Starting for "${title}" (${bookId})`);
-
-  enrichBookWithExternalData(bookId, title, author, isbn)
-    .then((result) => {
-      const sources = [
-        result.goodreads ? "goodreads" : null,
-        result.amazon ? "amazon" : null,
-        result.spice.level
-          ? `spice:${result.spice.level}/5 via ${result.spice.source} (${result.spice.confidence}${result.spice.heatLabel ? `, ${result.spice.heatLabel}` : ""})`
-          : null,
-      ].filter(Boolean);
-
-      if (sources.length > 0) {
-        console.log(`[enrichment] Completed "${title}": ${sources.join(", ")}`);
-      } else {
-        console.log(`[enrichment] No new data for "${title}" (all cached or failed)`);
-      }
-    })
-    .catch((err) => {
-      console.warn(`[enrichment] Failed for "${title}":`, err);
-    });
-}
