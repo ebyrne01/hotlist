@@ -328,17 +328,17 @@ CRITICAL RULES:
 - ONLY submit books from the candidate list. Do NOT add books that were not in the candidates (no series companions, no sequels, no prequels).
 - NEVER swap a candidate for a different book in its series. If "Cinder Vale" is the candidate and it's Book 3, submit Book 3. Do NOT search for or submit Book 1 ("Never Keep"). If "Heart of Mischief" is the candidate and it's Book 2, submit Book 2. Do NOT submit Book 1 ("Soul of Shadow").
 - Do NOT search for "book one" or "book 1" of any series. You are verifying candidates, not finding starting points.
-- If you cannot find a Goodreads ID after 2 search attempts, submit with null goodreads_id. Do not keep retrying.
+- If you cannot find a Goodreads ID after 4 search attempts, submit with null goodreads_id. Do not keep retrying.
 
 SEARCH STRATEGY when a search returns 0 results:
 The preliminary scan often misreads book covers — titles and author names may be garbled. The search system tries fuzzy matching and query variations automatically, but if you get 0 results, try these strategies IN ORDER:
 1. Author name alone (e.g., "J.M. Grosvalet") — author names are often partially correct even when titles are mangled.
 2. Title alone without author — removes noise from garbled author names.
 3. The most distinctive word from the title — short common words fail, but distinctive words like "Quicksilver" or "Medusa" often work.
-4. Fix obvious OCR errors: missing spaces ("BloodSo" → "Blood So"), swapped letters, truncated words. Think about what the REAL title might be if the cover was partially obscured or blurry.
+4. Fix obvious OCR errors: missing spaces ("BloodSo" → "Blood So"), swapped letters, truncated words. Think about what the REAL title might be if the cover was partially obscured or blurry. Common misreads: "ea"↔"us" ("Heat"→"Hush"), "rn"↔"m", "cl"↔"d", stylized fonts causing letter confusion.
 - Do NOT add descriptive keywords like "dragon shifter", "fantasy romance" to searches.
 - Do NOT search for "book one", "book 1", or "series name book one" — you must find the CANDIDATE book, not Book 1.
-- Maximum 3 search attempts per candidate. After that, submit with null goodreads_id and include the original title/author from the scan as-is.
+- Maximum 4 search attempts per candidate. After that, submit with null goodreads_id and include the original title/author from the scan as-is.
 
 KNOWN WHISPER ERRORS — the preliminary scan should have corrected these, but double-check:
 - "Sara J. Mass" → Sarah J. Maas
