@@ -1,4 +1,4 @@
-export const revalidate = 300;
+export const dynamic = "force-dynamic";
 
 import { getAdminClient } from "@/lib/supabase/admin";
 import HeroSection from "@/components/home/HeroSection";
