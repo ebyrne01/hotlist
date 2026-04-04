@@ -196,6 +196,13 @@ export async function getBookDetail(identifier: string): Promise<BookDetail | nu
     }
   }
 
+  // Raw numeric ID (e.g., "225910699" from confirm_book / resolver) —
+  // try direct GR ID lookup before getBookFromCache, which has a freshness
+  // check that rejects un-enriched books and triggers unnecessary scrapes
+  if (!detail && /^\d+$/.test(identifier)) {
+    detail = await getBookByGoodreadsId(identifier);
+  }
+
   // Try other identifiers
   if (!detail) {
     detail = await getBookFromCache(identifier);

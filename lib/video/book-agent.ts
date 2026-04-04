@@ -95,6 +95,8 @@ CRITICAL RULES:
 - Do NOT extract planners, journals, non-book products.
 - If a cover is partially obscured, include your best reading with confidence "low".
 - NEVER guess a book based on the creator's handle or username.
+- NEVER invent a title. If the transcript describes a book without naming it (e.g., "this dark romance series", "this book"), you MUST read the title from the visible cover. If no cover is readable, report with confidence "low" and note "title not explicitly stated — read from cover" or "title unclear." Do NOT fabricate a plausible-sounding title.
+- When the source is "transcript", the title MUST appear verbatim in the transcript text. If you cannot find the exact title words in the transcript, use source "cover" instead.
 
 COMPARISON FILTERING — these are NOT recommendations:
 - "if you liked X" → do NOT extract X (it's a comparison, not a rec)
@@ -339,6 +341,7 @@ The preliminary scan often misreads book covers — titles and author names may 
 - Do NOT add descriptive keywords like "dragon shifter", "fantasy romance" to searches.
 - Do NOT search for "book one", "book 1", or "series name book one" — you must find the CANDIDATE book, not Book 1.
 - Maximum 4 search attempts per candidate. After that, submit with null goodreads_id and include the original title/author from the scan as-is.
+- RECURRING RESULT OVERRIDE: If you search for a candidate 3+ times and the SAME book by the SAME AUTHOR keeps appearing (e.g., searching "Prepped Penelope Douglas" keeps returning "Corrupt" by Penelope Douglas), the candidate title may be a hallucination from Phase 1. In this case, use confirm_book on the recurring result — if it matches the transcript description (genre, plot, series context), submit THAT book instead of the hallucinated title.
 
 KNOWN WHISPER ERRORS — the preliminary scan should have corrected these, but double-check:
 - "Sara J. Mass" → Sarah J. Maas

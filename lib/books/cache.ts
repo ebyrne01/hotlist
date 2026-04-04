@@ -390,6 +390,29 @@ export async function saveGoodreadsBookToCache(bookData: BookData): Promise<Book
     for (const row of existing) {
       const rowNorm = normalizeTitle((row.title as string) || "");
       if (rowNorm === incomingNorm && row.goodreads_id !== bookData.goodreadsId) {
+        // Existing entry is a provisional (no GR ID) — upgrade it with Goodreads data
+        // instead of skipping. This absorbs Google Books dupes into the canonical entry.
+        if (!row.goodreads_id && bookData.goodreadsId) {
+          const incomingCover = cleanCoverUrl(bookData.coverUrl);
+          const slug = generateBookSlug(bookData.title, bookData.goodreadsId);
+          await supabase.from("books").update({
+            goodreads_id: bookData.goodreadsId,
+            goodreads_url: bookData.goodreadsUrl ?? null,
+            title: stripSeriesSuffix(cleanText(bookData.title)),
+            description: bookData.description ?? null,
+            cover_url: incomingCover ?? row.cover_url ?? null,
+            series_name: bookData.seriesName ?? null,
+            series_position: bookData.seriesPosition ?? null,
+            genres: bookData.genres ?? [],
+            metadata_source: "goodreads",
+            slug,
+            data_refreshed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }).eq("id", row.id);
+          console.log(`[cache] Upgraded provisional "${row.title}" with Goodreads ID ${bookData.goodreadsId}`);
+          const { data: fullRow } = await supabase.from("books").select("*").eq("id", row.id).single();
+          return fullRow ? mapDbBook(fullRow as Record<string, unknown>) : null;
+        }
         // Same book, different Goodreads ID — don't create a duplicate.
         // If incoming edition has a cover and existing doesn't, upgrade the existing entry.
         const incomingCover = cleanCoverUrl(bookData.coverUrl);
