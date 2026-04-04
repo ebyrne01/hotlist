@@ -82,14 +82,12 @@ export async function registerCreatorMentions(input: RegisterInput): Promise<voi
     );
   }
 
-  // Update book_count
-  const { count } = await supabase
-    .from("creator_book_mentions")
-    .select("book_id", { count: "exact", head: true })
-    .eq("creator_handle_id", creatorId);
+  // Update book_count — count UNIQUE books, not total mention rows
+  const { data: uniqueCount } = await supabase
+    .rpc("count_distinct_creator_books", { cid: creatorId });
 
   await supabase
     .from("creator_handles")
-    .update({ book_count: count || 0 })
+    .update({ book_count: uniqueCount ?? 0 })
     .eq("id", creatorId);
 }
