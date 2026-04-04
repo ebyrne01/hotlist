@@ -19,14 +19,17 @@ const DEFAULT_DAILY_LIMIT = 25;
 async function getDailyUsage(): Promise<number> {
   const supabase = getAdminClient();
   const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
+  todayStart.setUTCHours(0, 0, 0, 0);
 
-  const { count } = await supabase
-    .from("enrichment_queue")
+  const { count, error } = await supabase
+    .from("book_recommendations")
     .select("*", { count: "exact", head: true })
-    .eq("job_type", "ai_recommendations")
-    .eq("status", "completed")
-    .gte("completed_at", todayStart.toISOString());
+    .gte("created_at", todayStart.toISOString());
+
+  if (error) {
+    console.error("[ai-recommendations] Daily usage count failed, refusing to proceed:", error.message);
+    return Infinity;
+  }
 
   return count ?? 0;
 }

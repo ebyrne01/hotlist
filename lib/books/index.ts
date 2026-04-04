@@ -12,7 +12,7 @@
  * 1. Look up by goodreads_id (or slug, which embeds goodreads_id)
  * 2. Return full record including ratings, spice, tropes
  * 3. If ratings are stale (>24h): trigger background re-scrape
- * 4. If ai_synopsis is null: trigger background synopsis generation
+ * 4. ai_synopsis is generated on-demand from the book detail page (client-side)
  *
  * DATA FLOW FOR HOMEPAGE ROWS:
  * - "What's Hot": NYT API → resolve each title to Goodreads ID → return Supabase records
@@ -40,7 +40,6 @@ import {
   mapDbBook,
   hydrateBookDetail,
 } from "./cache";
-import { generateSynopsis } from "./ai-synopsis";
 import { isJunkTitle } from "./romance-filter";
 import { deduplicateBooks, isCompilationTitle } from "./utils";
 import { scheduleAuthorCrawl } from "./author-crawl";
@@ -236,21 +235,8 @@ export async function getBookDetail(identifier: string): Promise<BookDetail | nu
 
   if (!detail) return null;
 
-  // Generate AI synopsis if we have a real description but no synopsis
-  // Skip junk descriptions (e.g. "1" from bad Goodreads editions)
-  if (detail.description && detail.description.length >= 20 && !detail.aiSynopsis) {
-    const synopsis = await generateSynopsis({
-      id: detail.id,
-      title: detail.title,
-      author: detail.author,
-      description: detail.description,
-      aiSynopsis: detail.aiSynopsis,
-      tropes: detail.tropes.map((t) => t.name),
-    });
-    if (synopsis) {
-      detail.aiSynopsis = synopsis;
-    }
-  }
+  // AI synopsis is now generated on-demand from the book detail page (client-side)
+  // via POST /api/books/synopsis — no longer called server-side here.
 
   // Check if romance.io spice is missing (only Goodreads inference exists)
   const hasRomanceIoSpice = detail.spice.some((s) => s.source === "romance_io");

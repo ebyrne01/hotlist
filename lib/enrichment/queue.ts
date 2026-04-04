@@ -64,10 +64,11 @@ export async function queueEnrichmentJobs(
   // Always include goodreads_detail — even if we have a goodreads_id, the book
   // may have been saved from search results with minimal data (no description,
   // cover, genres). The worker re-scrapes when goodreads_id exists.
+  // LLM-heavy jobs paused from batch: ai_synopsis (on-demand), ai_recommendations (on-demand),
+  // trope_inference, review_classifier, llm_spice, booktrack_prompt (high coverage, not needed for new books)
   const allJobs: JobType[] = [
     "goodreads_detail", "goodreads_rating", "amazon_rating", "romance_io_spice",
-    "metadata", "ai_synopsis", "trope_inference", "review_classifier", "llm_spice",
-    "booktrack_prompt", "spotify_playlists", "ai_recommendations",
+    "metadata", "spotify_playlists",
   ];
 
   const jobs = skipJobTypes
@@ -103,11 +104,11 @@ export async function queueEnrichmentJobs(
  */
 export const JOB_TYPE_PRIORITY: JobType[][] = [
   // Tier 1: Ratings + spice — what users see immediately
-  ["goodreads_rating", "amazon_rating", "romance_io_spice", "llm_spice"],
-  // Tier 2: Core data + tropes — covers, descriptions, ISBNs, trope tags
-  ["goodreads_detail", "metadata", "trope_inference", "review_classifier"],
+  ["goodreads_rating", "amazon_rating", "romance_io_spice"],
+  // Tier 2: Core data — covers, descriptions, ISBNs
+  ["goodreads_detail", "metadata"],
   // Tier 3: Nice-to-have enrichments
-  ["ai_synopsis", "author_crawl", "booktrack_prompt", "spotify_playlists", "ai_recommendations"],
+  ["author_crawl", "spotify_playlists"],
 ];
 
 /**
@@ -223,7 +224,7 @@ export async function markJobFailed(
  * These are nice-to-have enrichments — if they fail or are pending,
  * the book should still be marked "complete" once core jobs finish.
  */
-const BONUS_JOB_TYPES: JobType[] = ["spotify_playlists", "booktrack_prompt", "ai_synopsis", "ai_recommendations"];
+const BONUS_JOB_TYPES: JobType[] = ["spotify_playlists"];
 
 /**
  * Update a book's enrichment_status based on its completed jobs.

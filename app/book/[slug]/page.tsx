@@ -25,6 +25,7 @@ import ExpandableText from "@/components/ui/ExpandableText";
 import BooktrackSection from "@/components/books/BooktrackSection";
 import AdminBookFlag from "@/components/books/AdminBookFlag";
 import SpotifyTrigger from "./SpotifyTrigger";
+import OnDemandSynopsis from "./OnDemandSynopsis";
 import { PepperRow } from "@/components/ui/PepperIcon";
 
 // ── Helpers ──────────────────────────────────────────
@@ -718,21 +719,13 @@ export default async function BookPage({ params }: PageProps) {
                   </span>
                 </div>
               ) : hasDescription ? (
-                <div>
-                  <p className="font-body text-ink/80 text-sm leading-relaxed">
-                    {book.description}
-                  </p>
-                  {book.goodreadsId && (
-                    <a
-                      href={`https://www.goodreads.com/book/show/${book.goodreadsId}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-block mt-2 text-xs font-mono text-muted-a11y hover:text-fire transition-colors"
-                    >
-                      Description from Goodreads {"\u2197"}
-                    </a>
-                  )}
-                </div>
+                <OnDemandSynopsis
+                  bookId={book.id}
+                  bookTitle={book.title}
+                  bookAuthor={book.author}
+                  description={book.description!}
+                  goodreadsId={book.goodreadsId}
+                />
               ) : (
                 <p className="font-body text-muted-a11y text-sm italic">
                   No synopsis available yet.

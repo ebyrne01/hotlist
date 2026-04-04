@@ -20,19 +20,12 @@ import { getAmazonRatingViaSerper } from "@/lib/scraping/amazon-search";
 import { getRomanceIoSpice } from "@/lib/scraping/romance-io-search";
 import { classifyRomanceIoTags } from "@/lib/scraping/romance-io-tags";
 import { enrichBookMetadata } from "@/lib/books/metadata-enrichment";
-import { generateSynopsis } from "@/lib/books/ai-synopsis";
 import { getGoodreadsBookById, resolveToGoodreadsId, generateBookSlug } from "@/lib/books/goodreads-search";
 import { saveGoodreadsBookToCache, cleanCoverUrl, stripSeriesSuffix, resolveExistingBook } from "@/lib/books/cache";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { computeGenreBucketing } from "@/lib/spice/genre-bucketing";
-import { inferAndUpsertSpice } from "@/lib/spice/llm-inference";
-import { classifyReviews } from "@/lib/spice/review-classifier";
-import { inferAndUpsertTropes } from "@/lib/spice/trope-inference";
-import { fetchAllReviews } from "@/lib/spice/review-fetcher";
 import { runAuthorCrawl } from "@/lib/books/author-crawl";
-import { generateReadingVibes } from "@/lib/books/reading-vibes";
 import { searchBookPlaylists } from "@/lib/spotify/search";
-import { generateRecommendations } from "@/lib/books/ai-recommendations";
 import { detectAndSaveAudiobookStatus } from "@/lib/books/audiobook-detect";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -85,13 +78,9 @@ async function mergeProvisionalIntoExisting(
 }
 
 const JOB_DELAY_MS = 300; // Delay between scraping jobs to respect rate limits
-const AI_JOB_DELAY_MS = 100; // AI-tier jobs (Anthropic API) can handle faster throughput
 const CONCURRENCY = 5; // Max parallel jobs within a tier
 
 // AI-based job types that don't risk IP blocking — safe for faster throughput
-const AI_JOB_TYPES = new Set<string>([
-  "ai_synopsis", "trope_inference", "llm_spice", "ai_recommendations", "booktrack_prompt",
-]);
 const STUCK_JOB_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes — reset jobs stuck in "running"
 
 // Spotify gets its own cap: max 3 books per cron tick.
@@ -240,9 +229,8 @@ export async function processEnrichmentQueue(
           }
         }
 
-        // Use faster delay for AI-only batches, slower for scraping
-        const isAiBatch = nonSpotifyTypes.every((t) => AI_JOB_TYPES.has(t));
-        await new Promise((r) => setTimeout(r, isAiBatch ? AI_JOB_DELAY_MS : JOB_DELAY_MS));
+        // Delay between batches to respect external rate limits
+        await new Promise((r) => setTimeout(r, JOB_DELAY_MS));
       }
     }
 
@@ -281,10 +269,8 @@ async function processJob(job: QueuedJob): Promise<"data" | "no-data"> {
   const supabase = getAdminClient();
   const { book_id, job_type, book_title, book_author, book_isbn, book_goodreads_id } = job;
 
-  // Canon gate: skip expensive AI jobs for non-canon books.
-  // Scraping/metadata jobs still run (they help determine if a book should become canon).
-  const AI_JOB_TYPES: string[] = ["ai_synopsis", "trope_inference", "llm_spice", "ai_recommendations", "review_classifier", "booktrack_prompt", "spotify_playlists"];
-  if (AI_JOB_TYPES.includes(job_type)) {
+  // Canon gate for Spotify: skip for non-canon books
+  if (job_type === "spotify_playlists") {
     const { data: bookRow } = await supabase
       .from("books")
       .select("is_canon")
@@ -541,179 +527,10 @@ async function processJob(job: QueuedJob): Promise<"data" | "no-data"> {
       break;
     }
 
-    case "ai_synopsis": {
-      const { data: bookRow } = await supabase
-        .from("books")
-        .select("description, ai_synopsis")
-        .eq("id", book_id)
-        .single();
-
-      if (bookRow?.description && !bookRow.ai_synopsis && bookRow.description.length >= 20) {
-        await generateSynopsis({
-          id: book_id,
-          title: book_title ?? "",
-          author: book_author ?? "",
-          description: bookRow.description,
-          aiSynopsis: null,
-          tropes: [],
-        });
-        // Synopsis is saved inside generateSynopsis
-      }
-      break;
-    }
-
-    case "trope_inference": {
-      // Run genre bucketing as a spice signal
-      await upsertGenreBucketing(supabase, book_id);
-
-      // Run LLM-based trope inference from description
-      const { data: bookForTropes } = await supabase
-        .from("books")
-        .select("description, genres")
-        .eq("id", book_id)
-        .single();
-
-      if (bookForTropes?.description) {
-        await inferAndUpsertTropes(book_id, {
-          title: book_title ?? "",
-          author: book_author ?? "",
-          description: bookForTropes.description,
-          genres: bookForTropes.genres ?? [],
-        });
-      }
-      break;
-    }
-
-    case "review_classifier": {
-      // Classify spice from review text (Goodreads + Amazon snippets)
-      const { data: bookRow } = await supabase
-        .from("books")
-        .select("goodreads_url, amazon_asin")
-        .eq("id", book_id)
-        .single();
-
-      const reviews = await fetchAllReviews({
-        goodreadsUrl: bookRow?.goodreads_url,
-        title: book_title ?? "",
-        author: book_author ?? "",
-        amazonAsin: bookRow?.amazon_asin,
-      });
-
-      if (reviews.length >= 2) {
-        const result = await classifyReviews(
-          reviews,
-          book_title ?? "",
-          book_author ?? ""
-        );
-        if (result) {
-          await supabase.from("spice_signals").upsert(
-            {
-              book_id,
-              source: "review_classifier",
-              spice_value: result.spice,
-              confidence: result.confidence,
-              evidence: {
-                method: result.method,
-                reviews_analyzed: result.reviewsAnalyzed,
-                keyword_hits: result.keywordHits,
-                per_review_scores: result.perReviewScores,
-                reasoning: result.reasoning ?? null,
-                classified_at: new Date().toISOString(),
-              },
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: "book_id,source" }
-          );
-        }
-      }
-      break;
-    }
-
-    case "llm_spice": {
-      // LLM inference — only runs if no higher-confidence signal exists
-      const { data: bookRow } = await supabase
-        .from("books")
-        .select("description, genres")
-        .eq("id", book_id)
-        .single();
-
-      if (bookRow?.description) {
-        await inferAndUpsertSpice(book_id, {
-          title: book_title ?? "",
-          author: book_author ?? "",
-          description: bookRow.description,
-          genres: bookRow.genres ?? [],
-        });
-      }
-      break;
-    }
-
     case "author_crawl": {
       // Crawl author's bibliography to discover more books
       if (book_goodreads_id) {
         await runAuthorCrawl(book_goodreads_id, book_author ?? "");
-      }
-      break;
-    }
-
-    case "booktrack_prompt": {
-      // Generate AI reading vibes prompt — needs tropes + synopsis for context
-      const { data: bookRow } = await supabase
-        .from("books")
-        .select("description, ai_synopsis, genres, booktrack_prompt")
-        .eq("id", book_id)
-        .single();
-
-      // Skip if already generated
-      if (bookRow?.booktrack_prompt) break;
-
-      // Get tropes for this book
-      const { data: bookTropes } = await supabase
-        .from("book_tropes")
-        .select("tropes(name)")
-        .eq("book_id", book_id);
-
-      const tropes = (bookTropes ?? [])
-        .map((bt: Record<string, unknown>) =>
-          ((bt.tropes as Record<string, unknown>)?.name as string) ?? ""
-        )
-        .filter(Boolean);
-
-      // Get best available spice signal
-      const { data: spiceSignal } = await supabase
-        .from("spice_signals")
-        .select("spice_value")
-        .eq("book_id", book_id)
-        .in("source", ["community", "romance_io", "llm_inference"])
-        .order("confidence", { ascending: false })
-        .limit(1)
-        .single();
-
-      const synopsis =
-        (bookRow?.ai_synopsis as string) ?? (bookRow?.description as string) ?? null;
-
-      // Not enough context yet — throw so the job retries after synopsis/tropes populate
-      if (!synopsis && tropes.length === 0) {
-        throw new Error("No synopsis or tropes yet — will retry after enrichment progresses");
-      }
-
-      const result = await generateReadingVibes({
-        title: book_title ?? "",
-        author: book_author ?? "",
-        tropes,
-        spiceLevel: (spiceSignal?.spice_value as number) ?? null,
-        synopsis,
-        genres: (bookRow?.genres as string[]) ?? [],
-      });
-
-      if (result) {
-        await supabase
-          .from("books")
-          .update({
-            booktrack_prompt: result.prompt,
-            booktrack_moods: result.moodTags,
-          })
-          .eq("id", book_id);
       }
       break;
     }
@@ -732,51 +549,6 @@ async function processJob(job: QueuedJob): Promise<"data" | "no-data"> {
           spotify_fetched_at: new Date().toISOString(),
         })
         .eq("id", book_id);
-      break;
-    }
-
-    case "ai_recommendations": {
-      if (!book_title || !book_author) break;
-
-      const { data: recBook } = await supabase
-        .from("books")
-        .select("id, title, author, description, genres, series_name")
-        .eq("id", book_id)
-        .single();
-
-      if (recBook) {
-        // Fetch tropes and spice for context
-        const [{ data: tropeRows }, { data: spiceRows }] = await Promise.all([
-          supabase
-            .from("book_tropes")
-            .select("tropes(name)")
-            .eq("book_id", book_id),
-          supabase
-            .from("spice_signals")
-            .select("spice_value, confidence")
-            .eq("book_id", book_id)
-            .in("source", ["community", "romance_io"])
-            .order("confidence", { ascending: false })
-            .limit(1),
-        ]);
-
-        const tropes = (tropeRows
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          ?.map((r: any) => r.tropes?.name as string | undefined)
-          .filter(Boolean) ?? []) as string[];
-        const spiceLevel = spiceRows?.[0]?.spice_value ?? null;
-
-        await generateRecommendations({
-          id: recBook.id,
-          title: recBook.title,
-          author: recBook.author,
-          description: recBook.description,
-          genres: recBook.genres ?? [],
-          seriesName: recBook.series_name,
-          tropes,
-          spiceLevel,
-        });
-      }
       break;
     }
 

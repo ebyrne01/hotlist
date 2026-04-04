@@ -57,6 +57,14 @@ function EnrichmentPoller({
   const router = useRouter();
 
   useEffect(() => {
+    // Fire-and-forget: trigger AI recommendations if not cached yet.
+    // Current visit uses trope/author fallback; next visit gets AI recs.
+    fetch("/api/books/recommendations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bookId }),
+    }).catch(() => {});
+
     if (enrichmentStatus === "complete") return;
 
     // Trigger enrichment

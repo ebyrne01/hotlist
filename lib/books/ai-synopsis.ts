@@ -7,18 +7,24 @@ const DEFAULT_DAILY_LIMIT = 50;
 
 /**
  * Check how many AI synopses have been generated today.
+ * Counts books whose ai_synopsis was updated today (not enrichment_queue,
+ * since ai_synopsis is now on-demand only).
  */
 async function getDailySynopsisUsage(): Promise<number> {
   const supabase = getAdminClient();
   const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
+  todayStart.setUTCHours(0, 0, 0, 0);
 
-  const { count } = await supabase
-    .from("enrichment_queue")
+  const { count, error } = await supabase
+    .from("books")
     .select("*", { count: "exact", head: true })
-    .eq("job_type", "ai_synopsis")
-    .eq("status", "completed")
-    .gte("completed_at", todayStart.toISOString());
+    .not("ai_synopsis", "is", null)
+    .gte("updated_at", todayStart.toISOString());
+
+  if (error) {
+    console.error("[ai-synopsis] Daily usage count failed, refusing to proceed:", error.message);
+    return Infinity;
+  }
 
   return count ?? 0;
 }
