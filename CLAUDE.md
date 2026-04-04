@@ -44,10 +44,8 @@ RAPIDAPI_VIDEO_HOST=           # specific host for chosen downloader API
 RAPIDAPI_TIKTOK_HOST=          # optional — specialized TikTok downloader API host (e.g. tiktok-downloader...p.rapidapi.com)
 OPENAI_API_KEY=                # from platform.openai.com — Whisper transcription
 CRON_SECRET=                   # shared secret for Vercel cron job auth
-SPICE_LLM_DAILY_LIMIT=        # optional, default 25 — max LLM spice inferences per day
-AI_SYNOPSIS_DAILY_LIMIT=      # optional, default 50 — max AI synopsis generations per day
-TROPE_INFERENCE_DAILY_LIMIT=  # optional, default 50 — max trope inferences per day
-REVIEW_CLASSIFIER_DAILY_LIMIT= # optional, default 50 — max review classifier LLM fallbacks per day
+AI_SYNOPSIS_DAILY_LIMIT=      # optional, default 50 — max on-demand AI synopsis generations per day
+AI_RECOMMENDATIONS_DAILY_LIMIT= # optional, default 25 — max on-demand AI recommendation generations per day
 APIFY_API_TOKEN=              # from apify.com — Amazon product scraping for bulk enrichment
 ```
 
@@ -109,7 +107,7 @@ All tables in the public schema:
 | Table | Purpose |
 |-------|---------|
 | `books` | Canonical book records. `goodreads_id` is UNIQUE but nullable (provisional entries). `enrichment_status`: pending → partial → complete. `is_canon`: only canon books appear on public surfaces. Canon gate auto-promotes when enrichment completes + passes quality checks. |
-| `enrichment_queue` | Async enrichment jobs with retry logic. Job types: goodreads_detail, goodreads_rating, amazon_rating, romance_io_spice, metadata, ai_synopsis, trope_inference, review_classifier, llm_spice, ai_recommendations |
+| `enrichment_queue` | Async enrichment jobs with retry logic. Job types: goodreads_detail, goodreads_rating, amazon_rating, romance_io_spice, metadata, spotify_playlists. LLM jobs (ai_synopsis, ai_recommendations) moved to on-demand; others (trope_inference, review_classifier, llm_spice, booktrack_prompt) paused. |
 | `book_ratings` | Per-source star ratings (goodreads, amazon, romance_io) |
 | `book_spice` | Legacy spice table (romance_io, hotlist_community, goodreads_inference). Being superseded by `spice_signals`. |
 | `spice_signals` | New multi-signal spice table. One row per book per source. Columns: book_id, source, spice_value, confidence (0–1), evidence (JSONB). |
@@ -150,7 +148,7 @@ All tables in the public schema:
 /app                          — Next.js App Router pages
 /app/api                      — API routes (keep thin — logic in /lib)
 /app/api/cron/                — Vercel cron endpoints (see Cron Jobs below)
-/app/api/books/               — Book operations (search, enrich, refresh-spice)
+/app/api/books/               — Book operations (search, enrich, refresh-spice, on-demand synopsis + recommendations)
 /app/api/grab/                — BookTok video grab (streaming)
 /app/api/admin/quality/       — Quality flag CRUD, scorecard, health, scan APIs
 /app/api/admin/creators/      — Creator application list + review (approve/reject) APIs
@@ -159,7 +157,7 @@ All tables in the public schema:
 /app/admin/quality/           — Admin quality dashboard (triage + monitoring widgets)
 /app/admin/harvest/           — Admin harvest dashboard (recent uploads, stats, source frequency)
 /app/admin/creators/          — Admin creator application dashboard (approve/reject with notes)
-/app/book/[slug]/             — Book detail page + SpiceSection
+/app/book/[slug]/             — Book detail page + SpiceSection + OnDemandSynopsis
 /app/booktok/                 — BookTok UI
 /app/discover/                — Creator discovery index (trending + all creators)
 /app/discover/[handle]/       — Auto-generated creator page (books, follow, claim)
@@ -179,8 +177,8 @@ All tables in the public schema:
   new-releases.ts             — Google Books new releases in romance
   metadata-enrichment.ts      — supplementary metadata from Google/OL
   romance-filter.ts           — romance genre guard + junk title filter
-  ai-synopsis.ts              — Claude-generated synopses (daily cap via AI_SYNOPSIS_DAILY_LIMIT)
-  ai-recommendations.ts      — AI-powered "Readers Also Loved" via Haiku (cached in book_recommendations)
+  ai-synopsis.ts              — Claude-generated synopses, triggered on-demand from book detail page (daily cap via AI_SYNOPSIS_DAILY_LIMIT)
+  ai-recommendations.ts      — AI-powered "Readers Also Loved" via Haiku, triggered on-demand from book detail page (cached in book_recommendations, daily cap via AI_RECOMMENDATIONS_DAILY_LIMIT)
   author-crawl.ts             — Crawl author's full bibliography (romance genre guard filters non-romance)
   buzz-signals.ts             — Record buzz events (reddit, amazon, booktok, nyt) to book_buzz_signals table
   buzz-score.ts               — Composite buzz scoring: time-decayed weighted signals, used by "What's Hot"
@@ -259,9 +257,10 @@ All tables in the public schema:
 4. **Phase 1 — Haiku observation** (single turn, vision + transcript, no tools): Reads ALL frames + full transcript. Returns structured candidate list with title, author, source, confidence, sentiment, and creator quote. Filters out comparison books ("if you loved X") and series predecessors.
 5. **Phase 2 — Sonnet verification** (multi-turn, text-only, tool use): Takes candidate list (NO images), searches Goodreads via tiered search (local DB → Google Books → Goodreads scraping), confirms book identities, submits final verified list. Max 7 turns, 3-min time budget. Critical rule: never swaps candidates for Book 1 of their series. Retry strategy: author alone → title alone → distinctive word → OCR error correction.
 6. **Caption validation** (backup check): Cross-references the TikTok caption (`video_title`) against agent results. If caption names a book the agent missed → search and add it. If agent returned 1 book but caption names a different one → prepend caption's pick (likely the featured book, agent matched a visible-but-not-featured cover). Skips comparison captions ("if you loved X"). Module: `caption-validator.ts`.
-7. Queue enrichment for all matched books + **kick off enrichment worker immediately** (fire-and-forget, no 5-min wait)
-8. Cache result in `video_grabs` table (includes `video_title` from RapidAPI)
-9. Register creator handle + book mentions in `creator_handles` / `creator_book_mentions` (fire-and-forget)
+7. **Series expansion** (post-resolution): When `isSeriesVideo: true` and Haiku flagged candidates with `seriesRecommendation: true`, queries the DB for sibling books in the same series and adds them. Guards against foreign editions via duplicate series-position check. Only adds canon books with covers already in the DB.
+8. Queue enrichment for all matched books (awaited) + **kick off enrichment worker immediately** (fire-and-forget, no 5-min wait)
+9. Cache result in `video_grabs` table (includes `video_title` from RapidAPI)
+10. Register creator handle + book mentions in `creator_handles` / `creator_book_mentions` (awaited — must complete before streaming response closes)
 
 ### Hotlist creation from grabs
 - Hotlist name uses the **video title/caption** (hashtags stripped), e.g. "All the books we gave 5 stars in 2025"
@@ -342,30 +341,40 @@ Book data flows through two independent systems:
 
 ### Enrichment Queue (async, resilient)
 - `enrichment_queue` table tracks jobs per book per source
-- Job types: goodreads_detail, goodreads_rating, amazon_rating, romance_io_spice, metadata, ai_synopsis, trope_inference, review_classifier, llm_spice, ai_recommendations
+- **Active job types**: goodreads_detail, goodreads_rating, amazon_rating, romance_io_spice, metadata, spotify_playlists
+- **Paused LLM jobs** (removed from batch, high coverage already achieved): trope_inference, review_classifier, llm_spice, booktrack_prompt
+- **On-demand LLM jobs** (triggered by user visiting book detail page): ai_synopsis, ai_recommendations
 - Each job retries up to 3 times with exponential backoff (30s, 2min, 10min)
-- **Priority tiers**: Tier 1 (goodreads_rating, amazon_rating, romance_io_spice, llm_spice) → Tier 2 (goodreads_detail, metadata, trope_inference, review_classifier) → Tier 3 (ai_synopsis, author_crawl). Newest jobs first within each tier.
-- Cron worker runs every 5 minutes (`/api/cron/enrichment-worker`)
+- **Priority tiers**: Tier 1 (goodreads_rating, amazon_rating, romance_io_spice) → Tier 2 (goodreads_detail, metadata) → Tier 3 (spotify_playlists). Newest jobs first within each tier.
+- Cron worker runs every 10 minutes (`/api/cron/enrichment-worker`)
 - `enrichment_status` on books table: "pending" → "partial" → "complete"
 - Book detail pages poll for updates when enrichment is incomplete
-- **Grab pipeline queues enrichment at grab time AND kicks off the worker immediately** (fire-and-forget `processEnrichmentQueue(30_000)`) so data is ready within seconds, not at the next 5-min cron tick
+- **Grab pipeline queues enrichment at grab time (awaited) AND kicks off the worker immediately** (fire-and-forget `processEnrichmentQueue(30_000)`) so data is ready within seconds, not at the next 10-min cron tick
 - **Hotlist pages poll** `/api/books/refresh-batch` every 8s when `enrichment_status` is not "complete" (and not null), auto-stopping when all books reach "complete"
 - Enrichment banner shows above the hotlist table while books are being enriched
-- **Daily caps**: `ai_synopsis` and `trope_inference` jobs check daily completion counts before calling LLM APIs (prevents runaway costs). Configurable via env vars.
+- **Daily caps**: on-demand `ai_synopsis` and `ai_recommendations` check daily completion counts before calling LLM APIs (prevents runaway costs). Counts actual data rows, not queue entries. Configurable via env vars. Fails safe (returns Infinity on count error).
 - **Author crawl guard**: `author_crawl` jobs filter out non-romance books using `isRomanceByGenres()` before ingestion
+
+### On-demand AI enrichment
+- **AI synopsis**: `POST /api/books/synopsis` — triggered client-side from `OnDemandSynopsis` component on book detail page when book has description but no `ai_synopsis`. Shows skeleton loading state. Falls back to Goodreads description on failure.
+- **AI recommendations**: `POST /api/books/recommendations` — triggered fire-and-forget from `BookDetailClient` enrichment poller. Current visit uses trope/author fallback; next visit gets cached AI recs.
+- Both use Haiku with daily limits (default 50 synopsis, 25 recommendations). Limits count actual rows in `books` (synopsis) and `book_recommendations` tables using UTC day boundary.
 
 ### Files
 - `/lib/enrichment/queue.ts` — queue management (add, fetch, complete, fail)
 - `/lib/enrichment/worker.ts` — job processor (dispatches to appropriate enrichment function)
 - `/app/api/cron/enrichment-worker/route.ts` — cron endpoint
 - `/app/api/books/refresh-batch/route.ts` — batch book hydration endpoint (used by hotlist polling)
+- `/app/api/books/synopsis/route.ts` — on-demand AI synopsis generation
+- `/app/api/books/recommendations/route.ts` — on-demand AI recommendations generation
+- `/app/book/[slug]/OnDemandSynopsis.tsx` — client component for on-demand synopsis with loading state
 
 ## Cron Jobs (vercel.json)
 
 | Path | Schedule | Purpose |
 |------|----------|---------|
 | `/api/cron/enrichment-worker` | Every 10 min | Process pending enrichment queue jobs |
-| `/api/cron/spice-backfill` | Every 6 hours | LLM inference + review classifier backfill |
+| `/api/cron/spice-backfill` | Every 6 hours | **PAUSED** — returns stub response. LLM spice inference + review classifier moved to on-demand/paused. |
 | `/api/cron/refresh-spice` | Daily 4 AM UTC | Re-aggregate community signals, queue stale romance_io re-scrapes, recompute genre bucketing |
 | `/api/cron/new-releases-discovery` | Daily 5 AM UTC | Google Books new romance releases |
 | `/api/cron/seed-lists` | Daily 6 AM UTC | Seed/refresh curated book lists |
@@ -409,15 +418,17 @@ Hotlist acquires books through **multiple automated discovery channels** that ru
 
 ### Enrichment pipeline (how books get data)
 
-Every discovered book enters the `enrichment_queue`. The enrichment worker (every 2 min) processes jobs in priority order:
+Every discovered book enters the `enrichment_queue`. The enrichment worker (every 10 min) processes jobs in priority order:
 
-- **Tier 1** (ratings + spice): goodreads_rating, amazon_rating, romance_io_spice, llm_spice
-- **Tier 2** (metadata): goodreads_detail, metadata (Google Books + Open Library), trope_inference, review_classifier
-- **Tier 3** (AI-generated): ai_synopsis, author_crawl
+- **Tier 1** (ratings + spice): goodreads_rating, amazon_rating, romance_io_spice
+- **Tier 2** (metadata): goodreads_detail, metadata (Google Books + Open Library)
+- **Tier 3** (bonus): spotify_playlists
+
+LLM-based jobs (ai_synopsis, ai_recommendations) are now **on-demand** — triggered when a user visits a book detail page. Other LLM jobs (trope_inference, review_classifier, llm_spice, booktrack_prompt) are **paused** (high coverage already achieved: synopsis 98%, review_classifier 96%, booktrack_prompt 83%).
 
 Each job retries up to 3× with exponential backoff. Books progress through `enrichment_status`: pending → partial → complete.
 
-**Canon gate:** When a book reaches `enrichment_status = 'complete'`, the canon gate (`/lib/books/canon-gate.ts`) evaluates whether it should be promoted to `is_canon = true`. Requirements: passes romance check OR adjacent-genre check (fantasy, gothic, dark academia, vampires, mythology, etc. with GR rating count >= 500), has cover + GR ID, no open P0 quality flags. The adjacent-genre gate allows popular crossover titles (Legendborn, Babel, A Dowry of Blood) that BookTok romance readers commonly read. Non-canon books are invisible on public surfaces. The enrichment worker skips expensive AI jobs (ai_synopsis, trope_inference, llm_spice, ai_recommendations, review_classifier, booktrack_prompt, spotify_playlists) for non-canon books to prevent wasted spend — scraping/metadata jobs still run since they help determine canon eligibility.
+**Canon gate:** When a book reaches `enrichment_status = 'complete'`, the canon gate (`/lib/books/canon-gate.ts`) evaluates whether it should be promoted to `is_canon = true`. Requirements: passes romance check OR adjacent-genre check (fantasy, gothic, dark academia, vampires, mythology, etc. with GR rating count >= 500), has cover + GR ID, no open P0 quality flags. The adjacent-genre gate allows popular crossover titles (Legendborn, Babel, A Dowry of Blood) that BookTok romance readers commonly read. Non-canon books are invisible on public surfaces. The enrichment worker skips `spotify_playlists` for non-canon books to prevent wasted spend — scraping/metadata jobs still run since they help determine canon eligibility.
 
 ### Spice quality assurance
 
@@ -444,7 +455,7 @@ Quality runs as a **Sunday pipeline** of 4 sequential crons (2-5 AM UTC), plus a
 - `isCompilationTitle()` in `utils.ts` filters box sets before they enter curated rows
 - `resolveExistingBook()` in `cache.ts` — shared dedup resolver checks GR ID, ISBN, Google Books ID, then normalized title+author before any insert
 - Canon gate (`/lib/books/canon-gate.ts`) — books must pass romance check OR adjacent-genre check (fantasy, gothic, dark academia, etc. with GR rating count >= 500), have cover + GR ID, no open P0 flags before `is_canon = true`
-- Enrichment worker skips AI jobs (ai_synopsis, trope_inference, llm_spice, ai_recommendations, etc.) for non-canon books to prevent wasted spend
+- Enrichment worker skips `spotify_playlists` for non-canon books to prevent wasted spend (LLM jobs now on-demand/paused)
 
 #### Layer 2: Data hygiene (weekly cleanup)
 
