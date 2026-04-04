@@ -968,12 +968,19 @@ async function expandSeriesBooks(
 
   if (!seriesBooks || seriesBooks.length === 0) return resolved;
 
-  // Collect IDs already in the resolved set
+  // Collect IDs and series positions already in the resolved set
   const existingIds = new Set(
     resolved
       .filter((r): r is ResolvedBookMatched => r.matched)
       .map((r) => r.book.id)
   );
+  // Track occupied series positions to skip foreign editions / duplicates
+  const occupiedPositions = new Set<string>();
+  for (const r of resolved) {
+    if (r.matched && r.book.seriesName && r.book.seriesPosition) {
+      occupiedPositions.add(`${r.book.seriesName}:${r.book.seriesPosition}`);
+    }
+  }
 
   let added = 0;
   const expanded = [...resolved];
@@ -983,8 +990,16 @@ async function expandSeriesBooks(
     if (existingIds.has(bookId)) continue;
 
     const sn = row.series_name as string;
+    const pos = row.series_position as number | null;
     const rep = seriesRepresentatives.get(sn);
     if (!rep) continue;
+
+    // Skip if this series position is already filled (catches foreign editions)
+    if (pos) {
+      const posKey = `${sn}:${pos}`;
+      if (occupiedPositions.has(posKey)) continue;
+      occupiedPositions.add(posKey);
+    }
 
     const mapped = mapDbBookInline(row as Record<string, unknown>);
     expanded.push({
