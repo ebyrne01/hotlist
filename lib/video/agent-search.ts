@@ -59,24 +59,28 @@ export async function searchBooksForAgent(query: string): Promise<AgentSearchRes
 
   // Tier 1c: Fuzzy trigram search — catches misspellings in local DB
   // e.g. "Ayan Bray" → "Ayana Gray" if the book exists locally
+  // Only trust fuzzy results if at least one shares a title word with the query
+  // (prevents author-only matches like "Alexis Calder" for "Hush Clinic Alexis B. Georgiou")
   const fuzzyResults = await searchLocalDbFuzzy(query);
-  if (fuzzyResults.length > 0) {
+  if (fuzzyResults.length > 0 && hasTitleWordOverlap(query, fuzzyResults)) {
     return fuzzyResults.slice(0, 5);
   }
 
   // Tier 2: Google Books API (200-500ms)
   const googleResults = await searchGoogleBooksForAgent(query);
-  if (googleResults.length > 0) {
+  if (googleResults.length > 0 && hasTitleWordOverlap(query, googleResults)) {
     return googleResults.slice(0, 5);
   }
 
   // Tier 2b: Try query variations on Google Books
   // Garbled cover reads often have the right words in the wrong order,
-  // or extra/missing words. Try smart permutations.
+  // or extra/missing words. Try smart permutations + OCR corrections.
   const variations = generateQueryVariations(query);
   for (const variation of variations) {
+    // Skip single-word variations on Google Books — too noisy
+    if (variation.split(/\s+/).length < 2) continue;
     const varResults = await searchGoogleBooksForAgent(variation);
-    if (varResults.length > 0) {
+    if (varResults.length > 0 && hasTitleWordOverlap(variation, varResults)) {
       return varResults.slice(0, 5);
     }
   }
@@ -87,8 +91,8 @@ export async function searchBooksForAgent(query: string): Promise<AgentSearchRes
     return goodreadsResults.slice(0, 5);
   }
 
-  // Tier 3b: Try variations on Goodreads too
-  for (const variation of variations.slice(0, 2)) {
+  // Tier 3b: Try variations on Goodreads too (including OCR corrections)
+  for (const variation of variations.slice(0, 4)) {
     const varResults = await searchGoodreadsForAgent(variation);
     if (varResults.length > 0) {
       return varResults.slice(0, 5);
@@ -320,14 +324,100 @@ function generateQueryVariations(query: string): string[] {
     addVariation(`${words[0]} ${words[words.length - 1]}`);
   }
 
-  // Variation 5: Each individual word >= 5 chars (distinctive words)
+  // Variation 5: OCR corrections — common letter misreads from stylized fonts
+  // Prioritized before individual words because OCR fixes are higher-value guesses
+  const ocrVars = generateOcrVariations(trimmed);
+  for (const v of ocrVars) {
+    addVariation(v);
+  }
+
+  // Variation 6: Each individual word >= 5 chars (distinctive words)
   for (const word of words) {
-    if (word.length >= 5 && variations.length < 5) {
+    if (word.length >= 5 && variations.length < 8) {
       addVariation(word);
     }
   }
 
-  return variations.slice(0, 4); // Cap at 4 variations to limit API calls
+  return variations.slice(0, 6); // Cap at 6 variations to limit API calls
+}
+
+/**
+ * Check if any fuzzy result shares at least one significant title word with the query.
+ * Prevents false positives where fuzzy matched on author name alone.
+ */
+function hasTitleWordOverlap(query: string, results: AgentSearchResult[]): boolean {
+  // Extract just the title portion (not author) from the query
+  const queryWords = new Set(
+    query.toLowerCase().split(/\s+/).filter(w => w.length >= 3)
+  );
+  if (queryWords.size === 0) return false;
+  // At least one result must share a meaningful word with the query
+  // For single-word queries, the match must be in the title (not subtitle/junk)
+  return results.some(r => {
+    const titleWords = r.title.toLowerCase().split(/[\s:,—]+/).filter(w => w.length >= 3);
+    const matchCount = titleWords.filter(w => queryWords.has(w)).length;
+    // Require at least 1 matching word, but for very short queries require the match
+    // to be a significant portion of the result title
+    if (queryWords.size === 1) {
+      // Single word query: the word must be in the first 3 words of the title
+      const firstWords = titleWords.slice(0, 3);
+      return firstWords.some(w => queryWords.has(w));
+    }
+    return matchCount >= 1;
+  });
+}
+
+/**
+ * Generate OCR-corrected query variations.
+ *
+ * Haiku vision misreads stylized book cover fonts. Common confusions:
+ * - "ea"↔"us" (Heat → Hush), "rn"↔"m", "cl"↔"d", "li"↔"h"
+ * - Single letter swaps in short words
+ *
+ * Extracts the title portion and tries word-level replacements,
+ * keeping the most distinctive word from the original query for context.
+ */
+function generateOcrVariations(query: string): string[] {
+  const { title } = splitTitleAuthor(query);
+  if (!title) return [];
+
+  const titleWords = title.split(/\s+/);
+  if (titleWords.length === 0) return [];
+
+  // Common OCR confusions: map of substrings that get misread
+  const ocrSwaps: [string, string][] = [
+    ["ush", "eat"],  // Hush → Heat
+    ["eat", "ush"],  // Heat → Hush
+    ["rn", "m"],     // burn → bum, torn → tom
+    ["m", "rn"],
+    ["cl", "d"],     // clue → due
+    ["d", "cl"],
+    ["li", "h"],     // light → hight
+    ["vv", "w"],     // vvild → wild
+    ["w", "vv"],
+  ];
+
+  const variations: string[] = [];
+  const seen = new Set<string>();
+
+  for (const word of titleWords) {
+    if (word.length < 3) continue;
+    const lower = word.toLowerCase();
+    for (const [from, to] of ocrSwaps) {
+      if (lower.includes(from)) {
+        const corrected = word.replace(new RegExp(from, "i"), to);
+        // Rebuild the title with the corrected word
+        const newTitle = titleWords.map(w => w === word ? corrected : w).join(" ");
+        const key = newTitle.toLowerCase();
+        if (!seen.has(key)) {
+          seen.add(key);
+          variations.push(newTitle);
+        }
+      }
+    }
+  }
+
+  return variations.slice(0, 3); // Cap at 3 to limit API calls
 }
 
 /**
