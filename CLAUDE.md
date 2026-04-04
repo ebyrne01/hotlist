@@ -213,9 +213,9 @@ All tables in the public schema:
   downloader.ts               — RapidAPI video downloader (with TikTok-specific fallback)
   transcription.ts            — OpenAI Whisper
   transcript-preprocessor.ts  — Whisper error correction, noise removal
-  frame-extractor.ts          — ffmpeg frame extraction (adaptive density)
-  book-agent.ts               — Two-phase pipeline: Haiku observe + Sonnet verify
-  agent-search.ts             — Tiered search for agent (local DB → fuzzy trigram → Google Books → Goodreads, with smart query variations)
+  frame-extractor.ts          — ffmpeg frame extraction (duration probe + adaptive density, 30 frames max)
+  book-agent.ts               — Two-phase pipeline: Haiku observe + Sonnet verify (anti-hallucination + recurring result override)
+  agent-search.ts             — Tiered search for agent (local DB → fuzzy trigram → Google Books → Goodreads, with smart query variations + OCR correction)
   book-resolver.ts            — Types only (ResolvedBook, etc.)
   caption-validator.ts        — Backup caption check: cross-references video title against agent results
   index.ts                    — Pipeline orchestrator
@@ -241,9 +241,9 @@ All tables in the public schema:
 - Video download: RapidAPI (third-party TikTok/Instagram/YouTube downloader, with specialized TikTok fallback)
 - **Supports videos AND photo/carousel posts** (TikTok `/photo/` URLs with multiple slide images)
 - Transcription: OpenAI Whisper API (model: whisper-1) — NOT Claude. Skipped for carousel posts.
-- Frame extraction: ffmpeg for videos (adaptive density: 24 frames for fast haul videos, 16 for normal, subsampled to 8). Carousel posts use slide image URLs directly. First frame captured at t=0.
+- Frame extraction: ffmpeg for videos. Duration probe via `ffmpeg -i -t 0` reads video length from header (~350ms), then spaces up to 30 frames evenly across the full duration. First frame captured at t=0. Carousel posts use slide image URLs directly.
 - **Book identification: Two-phase pipeline (Haiku observe + Sonnet verify) — see below**
-- **Anti-hallucination rules**: Agent never guesses books from creator handles, partial/blurry covers, or music lyrics
+- **Anti-hallucination rules**: Agent never guesses books from creator handles, partial/blurry covers, or music lyrics. Haiku must read titles from covers — cannot invent titles when transcript doesn't name one. Sonnet uses "recurring result override" when search consistently returns the same book by the same author (catches hallucinated titles).
 - Cache: `video_grabs` Supabase table — never process the same URL twice
 - UI: `/app/booktok/page.tsx` (old `/app/grab/page.tsx` redirects here)
 - API: `/app/api/grab/route.ts` (streaming)
@@ -255,7 +255,7 @@ All tables in the public schema:
 2. Download video/audio via RapidAPI (detects carousel vs video posts)
 3. Transcribe audio via Whisper + extract frames via ffmpeg (parallel). Carousel posts skip Whisper, use slide images directly.
 4. **Phase 1 — Haiku observation** (single turn, vision + transcript, no tools): Reads ALL frames + full transcript. Returns structured candidate list with title, author, source, confidence, sentiment, and creator quote. Filters out comparison books ("if you loved X") and series predecessors.
-5. **Phase 2 — Sonnet verification** (multi-turn, text-only, tool use): Takes candidate list (NO images), searches Goodreads via tiered search (local DB → Google Books → Goodreads scraping), confirms book identities, submits final verified list. Max 7 turns, 3-min time budget. Critical rule: never swaps candidates for Book 1 of their series. Retry strategy: author alone → title alone → distinctive word → OCR error correction.
+5. **Phase 2 — Sonnet verification** (multi-turn, text-only, tool use): Takes candidate list (NO images), searches Goodreads via tiered search (local DB → fuzzy trigram → Google Books → Goodreads scraping), confirms book identities, submits final verified list. Max 7 turns, 3-min time budget. Critical rule: never swaps candidates for Book 1 of their series. Retry strategy: author alone → title alone → distinctive word → OCR error correction. Recurring result override: if search keeps returning the same book by the same author, swap to it. Search includes code-level OCR correction (`generateOcrVariations`) for stylized font misreads (e.g., "Hush"→"Heat") and `hasTitleWordOverlap` guards against false-positive fuzzy/Google Books results.
 6. **Caption validation** (backup check): Cross-references the TikTok caption (`video_title`) against agent results. If caption names a book the agent missed → search and add it. If agent returned 1 book but caption names a different one → prepend caption's pick (likely the featured book, agent matched a visible-but-not-featured cover). Skips comparison captions ("if you loved X"). Module: `caption-validator.ts`.
 7. **Series expansion** (post-resolution): When `isSeriesVideo: true` and Haiku flagged candidates with `seriesRecommendation: true`, queries the DB for sibling books in the same series and adds them. Guards against foreign editions via duplicate series-position check. Only adds canon books with covers already in the DB.
 8. Queue enrichment for all matched books (awaited) + **kick off enrichment worker immediately** (fire-and-forget, no 5-min wait)
@@ -451,8 +451,9 @@ Quality runs as a **Sunday pipeline** of 4 sequential crons (2-5 AM UTC), plus a
 
 #### Layer 1: Write-time prevention
 
-- `saveGoodreadsBookToCache()` and `saveProvisionalBook()` in `cache.ts` use `normalizeTitle()` to deduplicate at write time
+- `saveGoodreadsBookToCache()` and `saveProvisionalBook()` in `cache.ts` use `normalizeTitle()` to deduplicate at write time. When dedup finds a provisional entry (`goodreads_id: null`) matching the incoming Goodreads data, it upgrades the provisional with the GR ID, description, series info, and cover — preventing Google Books dupes from persisting alongside canonical Goodreads entries.
 - `isCompilationTitle()` in `utils.ts` filters box sets before they enter curated rows
+- `isJunkTitle()` in `romance-filter.ts` catches box sets with embedded book lists (e.g., "1 To 6 Book series Title1, Title2... by Author")
 - `resolveExistingBook()` in `cache.ts` — shared dedup resolver checks GR ID, ISBN, Google Books ID, then normalized title+author before any insert
 - Canon gate (`/lib/books/canon-gate.ts`) — books must pass romance check OR adjacent-genre check (fantasy, gothic, dark academia, etc. with GR rating count >= 500), have cover + GR ID, no open P0 flags before `is_canon = true`
 - Enrichment worker skips `spotify_playlists` for non-canon books to prevent wasted spend (LLM jobs now on-demand/paused)
