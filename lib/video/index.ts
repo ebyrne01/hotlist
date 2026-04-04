@@ -413,7 +413,7 @@ async function grabPipeline(
 
   // Step 6: Queue enrichment for all matched books, then kick off the worker immediately
   const tEnrich = Date.now();
-  queueEnrichmentForResolved(resolved);
+  await queueEnrichmentForResolved(resolved);
   timing.enrichmentMs = Date.now() - tEnrich;
 
   // Kick off enrichment worker immediately so ratings appear within seconds, not 5 minutes
@@ -467,17 +467,20 @@ async function grabPipeline(
   // Step 7: Cache result
   const grabId = await cacheGrabResult(url, result, userId);
 
-  // Step 8: Register creator handle and book mentions (fire-and-forget)
+  // Step 8: Register creator handle and book mentions
+  // Must await — fire-and-forget gets killed when the streaming response closes
   if (result.creatorHandle && grabId) {
-    registerCreatorMentions({
-      handle: result.creatorHandle,
-      platform,
-      videoUrl: url,
-      videoGrabId: grabId,
-      books: resolved,
-    }).catch((err) => {
+    try {
+      await registerCreatorMentions({
+        handle: result.creatorHandle,
+        platform,
+        videoUrl: url,
+        videoGrabId: grabId,
+        books: resolved,
+      });
+    } catch (err) {
       console.warn("[grab] Failed to register creator mentions:", err);
-    });
+    }
   }
 
   onStatus?.("done");
@@ -489,12 +492,13 @@ async function grabPipeline(
  * Uses the user's wait time productively — enrichment starts immediately
  * so data is ready (or nearly ready) when books land in a hotlist.
  */
-function queueEnrichmentForResolved(resolved: ResolvedBook[]) {
-  for (const book of resolved) {
-    if (book.matched) {
+async function queueEnrichmentForResolved(resolved: ResolvedBook[]) {
+  const matched = resolved.filter((b): b is ResolvedBook & { matched: true } => b.matched);
+  await Promise.all(
+    matched.map((book) =>
       queueEnrichmentJobs(book.book.id, book.book.title, book.book.author).catch((err) =>
         console.warn(`[grab] Failed to queue enrichment for "${book.book.title}":`, err)
-      );
-    }
-  }
+      )
+    )
+  );
 }
