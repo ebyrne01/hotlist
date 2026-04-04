@@ -26,7 +26,7 @@ export async function POST(
   // Fetch the application
   const { data: application, error: fetchError } = await supabase
     .from("creator_applications")
-    .select("id, user_id, status, platform, handle_url, claim_handle_id")
+    .select("id, user_id, status, platform, handle, claim_handle_id")
     .eq("id", id)
     .single();
 
@@ -60,12 +60,12 @@ export async function POST(
     };
 
     // Pre-fill the social handle based on platform
-    if (app.handle_url) {
-      const handle = app.handle_url.replace(/^@/, "");
+    if (app.handle) {
+      const handle = (app.handle as string).replace(/^@/, "");
       if (app.platform === "tiktok") profileUpdate.tiktok_handle = handle;
       else if (app.platform === "instagram") profileUpdate.instagram_handle = handle;
       else if (app.platform === "youtube") profileUpdate.youtube_handle = handle;
-      else if (app.platform === "blog") profileUpdate.blog_url = app.handle_url;
+      else if (app.platform === "blog") profileUpdate.blog_url = app.handle;
     }
 
     await supabase

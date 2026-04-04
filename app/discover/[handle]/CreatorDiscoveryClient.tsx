@@ -20,14 +20,6 @@ interface Props {
   books: BookWithMention[];
 }
 
-const SENTIMENT_LABELS: Record<string, string> = {
-  loved: "loved it",
-  liked: "liked it",
-  mixed: "mixed feelings",
-  disliked: "didn't love it",
-  neutral: "mentioned",
-};
-
 export default function CreatorDiscoveryClient({ creator, books }: Props) {
   const { user } = useAuth();
   const { openSignIn } = useSignInModal();
@@ -279,11 +271,6 @@ export default function CreatorDiscoveryClient({ creator, books }: Props) {
                   {book.creatorQuote && (
                     <p className="text-xs font-body text-muted/70 italic mt-1.5 line-clamp-2">
                       &ldquo;{book.creatorQuote}&rdquo;
-                      {book.creatorSentiment && (
-                        <span className="not-italic text-muted/70 ml-1">
-                          — {SENTIMENT_LABELS[book.creatorSentiment] || book.creatorSentiment}
-                        </span>
-                      )}
                     </p>
                   )}
 

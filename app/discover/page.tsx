@@ -18,6 +18,7 @@ export default async function DiscoverPage() {
     .from("creator_handles")
     .select("*")
     .gte("last_grabbed_at", thirtyDaysAgo)
+    .gt("book_count", 0)
     .order("grab_count", { ascending: false })
     .limit(10);
 
@@ -28,6 +29,30 @@ export default async function DiscoverPage() {
     .gte("grab_count", 1)
     .order("book_count", { ascending: false })
     .limit(50);
+
+  // Aggregate follower counts from user_follows for all displayed creators
+  const allIds = [
+    ...(trending || []).map((c: Record<string, unknown>) => c.id as string),
+    ...(allCreators || []).map((c: Record<string, unknown>) => c.id as string),
+  ];
+  const uniqueIds = Array.from(new Set(allIds));
+  if (uniqueIds.length > 0) {
+    const { data: followCounts } = await supabase.rpc("count_followers_batch", {
+      handle_ids: uniqueIds,
+    });
+    // Fallback: if RPC doesn't exist, use individual counts (already 0 from column)
+    if (followCounts) {
+      const countMap = new Map(
+        (followCounts as { creator_handle_id: string; count: number }[]).map(
+          (r) => [r.creator_handle_id, r.count]
+        )
+      );
+      for (const c of [...(trending || []), ...(allCreators || [])]) {
+        const row = c as Record<string, unknown>;
+        row.follower_count = countMap.get(row.id as string) ?? 0;
+      }
+    }
+  }
 
   const hasTrending = trending && trending.length > 0;
   const hasCreators = allCreators && allCreators.length > 0;

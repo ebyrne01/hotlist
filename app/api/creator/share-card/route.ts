@@ -61,18 +61,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Book not found" }, { status: 404 });
     }
 
-    // Validate tropes are a subset of the book's actual tropes
+    // Validate tropes exist in the canonical tropes table
     if (parsed.tropesSelected.length > 0) {
-      const { data: bookTropes } = await admin
-        .from("book_tropes")
-        .select("tropes(name)")
-        .eq("book_id", parsed.bookId);
+      const { data: canonicalTropes } = await admin
+        .from("tropes")
+        .select("name")
+        .in("name", parsed.tropesSelected);
 
       const validTropes = new Set(
-        (bookTropes ?? []).map(
-          (bt: Record<string, unknown>) =>
-            (bt.tropes as Record<string, unknown>)?.name as string
-        )
+        (canonicalTropes ?? []).map((t: Record<string, unknown>) => t.name as string)
       );
 
       const invalidTropes = parsed.tropesSelected.filter((t) => !validTropes.has(t));

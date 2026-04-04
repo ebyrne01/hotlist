@@ -9,7 +9,7 @@ interface CreatorApplication {
   id: string;
   user_id: string;
   platform: string;
-  handle_url: string;
+  handle: string;
   follower_count: number;
   content_description: string;
   status: string;
@@ -128,7 +128,7 @@ export default function CreatorSettingsPage() {
     const { error } = await supabase.from("creator_applications").insert({
       user_id: user.id,
       platform,
-      handle_url: handleUrl,
+      handle: handleUrl,
       follower_count: parseInt(followerCount) || 0,
       content_description: contentDescription,
       status: "pending",

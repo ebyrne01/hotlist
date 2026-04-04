@@ -190,6 +190,12 @@ export async function GET(
                 color: C.warmWhite,
                 lineHeight: 1.2,
                 marginBottom: "8px",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                display: "-webkit-box",
+                WebkitLineClamp: 3,
+                WebkitBoxOrient: "vertical",
+                wordBreak: "break-word",
               }}
             >
               {data.book.title}
@@ -334,17 +340,21 @@ export async function GET(
                 marginBottom: `${Math.round(24 * scale)}px`,
               }}
             />
-            <span
+            <div
               style={{
+                display: "flex",
                 fontSize: `${Math.round(26 * scale)}px`,
                 fontStyle: "italic",
                 color: C.amber,
                 lineHeight: 1.5,
                 marginBottom: `${Math.round(24 * scale)}px`,
+                overflow: "hidden",
+                maxHeight: `${Math.round(130 * scale)}px`,
+                wordBreak: "break-word",
               }}
             >
               &ldquo;{data.card.creatorQuote}&rdquo;
-            </span>
+            </div>
           </>
         )}
 

@@ -47,6 +47,13 @@ export default async function CreatorDiscoveryPage({ params }: PageProps) {
 
   if (!creator) notFound();
 
+  // Aggregate follower count from user_follows (creator_handles.follower_count is not synced)
+  const { count: followerCount } = await supabase
+    .from("user_follows")
+    .select("*", { count: "exact", head: true })
+    .eq("creator_handle_id", creator.id as string);
+  creator.follower_count = followerCount ?? 0;
+
   // If claimed, fetch the claiming creator's vanity slug
   if (creator.claimed_by) {
     const { data: claimerProfile } = await supabase

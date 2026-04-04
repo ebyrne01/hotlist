@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
   const { data, count, error } = await supabase
     .from("creator_applications")
     .select(
-      `id, user_id, status, platform, handle_url, follower_count,
+      `id, user_id, status, platform, handle, follower_count,
        content_description, created_at, reviewer_note, reviewed_at,
        claim_handle_id,
        profiles!inner(display_name, avatar_url, username)`,
@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
     userId: row.user_id,
     status: row.status,
     platform: row.platform,
-    handleUrl: row.handle_url,
+    handleUrl: row.handle,
     followerCount: row.follower_count,
     contentDescription: row.content_description,
     createdAt: row.created_at,

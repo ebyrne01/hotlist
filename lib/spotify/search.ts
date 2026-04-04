@@ -99,7 +99,17 @@ export async function searchBookPlaylists(
         const matchingWords = titleWords.filter((w) => searchText.includes(w));
         const matchesTitleWords = titleWords.length > 0 && matchingWords.length >= Math.min(titleWords.length, 2);
         const matchesAuthor = authorLastName.length > 2 && searchText.includes(authorLastName);
-        if (!matchesFullTitle && !matchesTitleWords && !matchesAuthor) continue;
+
+        // For short titles (1-2 significant words), require full title match in the
+        // playlist NAME (not description) to avoid false positives. Common words like
+        // "Radiance" or "Wild" match too many unrelated playlists otherwise.
+        if (titleWords.length <= 2) {
+          const nameMatchesTitle = playlistName.includes(lowerTitle);
+          const nameMatchesAuthor = authorLastName.length > 2 && playlistName.includes(authorLastName);
+          if (!nameMatchesTitle && !nameMatchesAuthor) continue;
+        } else {
+          if (!matchesFullTitle && !matchesTitleWords && !matchesAuthor) continue;
+        }
 
         results.set(item.id, {
           id: item.id,

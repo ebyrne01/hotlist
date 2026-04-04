@@ -28,6 +28,7 @@ interface Props {
   book: BookData;
   creatorHandle: string;
   existingCard: ExistingCard | null;
+  allTropes: string[];
 }
 
 const HEAT_LABELS: Record<number, string> = {
@@ -39,20 +40,19 @@ const HEAT_LABELS: Record<number, string> = {
   5: "Scorching",
 };
 
-function PepperSvg({ filled, size = 28 }: { filled: boolean; size?: number }) {
-  const color = filled ? "#D85A30" : undefined;
-  const emptyProps = filled
-    ? {}
-    : { className: "fill-border-tertiary opacity-50", style: { fill: "#c4b5a4", opacity: 0.35 } };
+function PepperEmoji({ filled, size = 28 }: { filled: boolean; size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24">
-      <path d="M12 2C12 2 11 4 11 5C11 5.5 11.5 6 12 6C12.5 6 13 5.5 13 5C13 4 12 2 12 2Z" fill={color} {...emptyProps} />
-      <path d="M8 7C6 8 5 11 5 14C5 18 8 22 10 22C11 22 11.5 21 12 21C12.5 21 13 22 14 22C16 22 19 18 19 14C19 11 18 8 16 7C14.5 6 9.5 6 8 7Z" fill={color} {...emptyProps} />
-    </svg>
+    <span
+      style={{ fontSize: size, lineHeight: 1 }}
+      className={`shrink-0 select-none ${filled ? "opacity-100" : "opacity-20 grayscale"}`}
+      aria-hidden="true"
+    >
+      🌶️
+    </span>
   );
 }
 
-export default function CardEditorClient({ book, creatorHandle, existingCard }: Props) {
+export default function CardEditorClient({ book, creatorHandle, existingCard, allTropes }: Props) {
   const originalSpice = book.spiceLevel;
   const [spiceLevel, setSpiceLevel] = useState(
     existingCard?.spiceOverride ?? book.spiceLevel
@@ -75,6 +75,7 @@ export default function CardEditorClient({ book, creatorHandle, existingCard }: 
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [cardId, setCardId] = useState<string | null>(existingCard?.id ?? null);
   const [error, setError] = useState<string | null>(null);
+  const [tropeSearch, setTropeSearch] = useState("");
 
   function handleSpiceTap(level: number) {
     setSpiceLevel(level);
@@ -222,7 +223,7 @@ export default function CardEditorClient({ book, creatorHandle, existingCard }: 
               className="p-1 rounded-md hover:bg-[#FFF5EE] transition-colors"
               aria-label={`Set spice to ${n}`}
             >
-              <PepperSvg filled={n <= spiceLevel} />
+              <PepperEmoji filled={n <= spiceLevel} />
             </button>
           ))}
           <span className="ml-3 text-sm font-body text-[#C88A5A]">
@@ -246,35 +247,81 @@ export default function CardEditorClient({ book, creatorHandle, existingCard }: 
       </div>
 
       {/* Trope selector */}
-      {book.tropes.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <span className="font-mono text-sm font-medium text-ink">
-              Tropes shown on card
-            </span>
-            <span className="font-mono text-xs text-muted">tap to toggle</span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {book.tropes.map((trope) => {
-              const active = selectedTropes.includes(trope);
-              return (
-                <button
-                  key={trope}
-                  type="button"
-                  onClick={() => handleTropeToggle(trope)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-mono transition-colors border ${
-                    active
-                      ? "bg-[#F5EFE0] border-[#D4B87A] text-[#6B5A2E]"
-                      : "bg-cream border-border text-muted hover:border-muted/40"
-                  }`}
-                >
-                  {trope}
-                </button>
-              );
-            })}
-          </div>
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <span className="font-mono text-sm font-medium text-ink">
+            Tropes shown on card
+          </span>
+          <span className="font-mono text-xs text-muted">
+            {selectedTropes.length}/4 · tap to toggle
+          </span>
         </div>
-      )}
+        {/* Selected + book tropes */}
+        <div className="flex flex-wrap gap-2 mb-3">
+          {Array.from(new Set([...selectedTropes, ...book.tropes])).map((trope) => {
+            const active = selectedTropes.includes(trope);
+            return (
+              <button
+                key={trope}
+                type="button"
+                onClick={() => handleTropeToggle(trope)}
+                className={`px-3 py-1.5 rounded-full text-xs font-mono transition-colors border ${
+                  active
+                    ? "bg-[#F5EFE0] border-[#D4B87A] text-[#6B5A2E]"
+                    : "bg-cream border-border text-muted hover:border-muted/40"
+                }`}
+              >
+                {trope}
+              </button>
+            );
+          })}
+        </div>
+        {/* Add trope search */}
+        {selectedTropes.length < 4 && (
+          <div className="relative">
+            <input
+              type="text"
+              value={tropeSearch}
+              onChange={(e) => setTropeSearch(e.target.value)}
+              placeholder="Search tropes to add..."
+              className="w-full px-3 py-2 rounded-lg border border-border bg-white font-mono text-xs text-ink placeholder:text-muted/40 focus:outline-none focus:ring-2 focus:ring-fire/20 focus:border-fire/40"
+            />
+            {tropeSearch.length >= 2 && (
+              <div className="absolute z-10 mt-1 w-full max-h-40 overflow-y-auto bg-white border border-border rounded-lg shadow-lg">
+                {allTropes
+                  .filter(
+                    (t) =>
+                      t.toLowerCase().includes(tropeSearch.toLowerCase()) &&
+                      !selectedTropes.includes(t)
+                  )
+                  .slice(0, 8)
+                  .map((trope) => (
+                    <button
+                      key={trope}
+                      type="button"
+                      onClick={() => {
+                        handleTropeToggle(trope);
+                        setTropeSearch("");
+                      }}
+                      className="w-full text-left px-3 py-2 text-xs font-mono text-ink hover:bg-cream/80 transition-colors"
+                    >
+                      {trope}
+                    </button>
+                  ))}
+                {allTropes.filter(
+                  (t) =>
+                    t.toLowerCase().includes(tropeSearch.toLowerCase()) &&
+                    !selectedTropes.includes(t)
+                ).length === 0 && (
+                  <div className="px-3 py-2 text-xs font-mono text-muted">
+                    No matching tropes
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Creator quote */}
       <div>

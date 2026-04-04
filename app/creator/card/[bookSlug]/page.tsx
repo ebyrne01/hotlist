@@ -73,6 +73,13 @@ export default async function CardEditorPage({ params }: PageProps) {
     tropes: book.tropes.map((t) => t.name),
   };
 
+  // Load all canonical tropes for the "add trope" search
+  const { data: allTropesRaw } = await admin
+    .from("tropes")
+    .select("name")
+    .order("name");
+  const allTropes = (allTropesRaw ?? []).map((t: Record<string, unknown>) => t.name as string);
+
   const existingCardData = existingCard
     ? {
         id: existingCard.id as string,
@@ -89,6 +96,7 @@ export default async function CardEditorPage({ params }: PageProps) {
         book={bookData}
         creatorHandle={profile.vanity_slug ?? profile.display_name ?? ""}
         existingCard={existingCardData}
+        allTropes={allTropes}
       />
     </div>
   );

@@ -11,6 +11,7 @@ import { notFound } from "next/navigation";
 import Image from "next/image";
 import { fetchShareCardData } from "@/lib/share-card/fetch-card-data";
 import { getAdminClient } from "@/lib/supabase/admin";
+import ShareCardActions from "./ShareCardActions";
 
 interface PageProps {
   params: { cardId: string };
@@ -131,14 +132,15 @@ export default async function ShareCardPage({ params }: PageProps) {
         {/* Spice */}
         {data.spiceLevel > 0 && (
           <div className="flex flex-col items-center mb-6">
-            <div className="flex items-center gap-1 mb-1">
+            <div className="flex items-center gap-0.5 mb-1">
               {[1, 2, 3, 4, 5].map((n) => (
-                <svg key={n} width="24" height="24" viewBox="0 0 16 16">
-                  <path
-                    d="M8 1c1.5 2.5 4 4 4 7.5a4 4 0 0 1-8 0C4 5 6.5 3.5 8 1z"
-                    fill={n <= data.spiceLevel ? "#D85A30" : "#4A3828"}
-                  />
-                </svg>
+                <span
+                  key={n}
+                  className={`select-none ${n <= data.spiceLevel ? "opacity-100" : "opacity-20 grayscale"}`}
+                  style={{ fontSize: 24, lineHeight: 1 }}
+                >
+                  🌶️
+                </span>
               ))}
             </div>
             <span className="text-sm text-[#C88A5A]">
@@ -220,6 +222,9 @@ export default async function ShareCardPage({ params }: PageProps) {
             </a>
           )}
         </div>
+
+        {/* Share actions (copy URL) */}
+        <ShareCardActions cardId={params.cardId} />
 
         {/* Buy links */}
         {affiliateTag && (

@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
       user_id: user.id,
       status: "pending",
       platform: h.platform,
-      handle_url: h.handle,
+      handle: h.handle,
       follower_count: 0,
       content_description: `Claiming auto-generated profile @${h.handle}`,
       claim_handle_id: creator_handle_id,
