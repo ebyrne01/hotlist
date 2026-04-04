@@ -26,19 +26,33 @@ export async function GET() {
     }
 
     const admin = getAdminClient();
-    const { data: vectorRows } = await admin
-      .from("book_trope_vectors")
-      .select("book_id, vector")
-      .limit(200);
 
+    // Fetch full trope vector catalog + spice data in parallel
+    const [vectorResult, spiceResult] = await Promise.all([
+      admin.from("book_trope_vectors").select("book_id, vector"),
+      admin
+        .from("spice_signals")
+        .select("book_id, spice_value, source")
+        .in("source", ["community", "romance_io"])
+        .order("confidence", { ascending: false }),
+    ]);
+
+    const vectorRows = vectorResult.data;
     if (!vectorRows || vectorRows.length === 0) {
       return NextResponse.json({ books: [], hasDna: true });
+    }
+
+    // Build spice lookup (highest confidence signal per book)
+    const spiceMap = new Map<string, number>();
+    for (const row of spiceResult.data ?? []) {
+      const id = row.book_id as string;
+      if (!spiceMap.has(id)) spiceMap.set(id, row.spice_value as number);
     }
 
     const bookVectors: BookVector[] = vectorRows.map((v) => ({
       bookId: v.book_id as string,
       vector: v.vector as Record<string, number>,
-      spiceLevel: null,
+      spiceLevel: spiceMap.get(v.book_id as string) ?? null,
     }));
 
     const ranked = rankBooks(

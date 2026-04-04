@@ -5,6 +5,9 @@ import { classifyQuery } from "@/lib/search/classify-query";
 import { parseSearchIntent } from "@/lib/search/parse-intent";
 import type { SearchFilters } from "@/lib/search/parse-intent";
 import { executeFilteredSearch } from "@/lib/search/execute-filters";
+import { createClient } from "@/lib/supabase/server";
+import { getDna } from "@/lib/reading-dna";
+import { reRankByDna } from "@/lib/reading-dna/score";
 import { logSearchAnalytics } from "@/lib/search/analytics";
 import { Video } from "lucide-react";
 import BookCard from "@/components/books/BookCard";
@@ -60,6 +63,22 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           intentType = "title_author_fallback";
         } else {
           books = await executeFilteredSearch(filters);
+
+          // Optionally rerank by DNA for logged-in users (relevance sort only)
+          if (filters.sortBy === "relevance") {
+            try {
+              const supabaseAuth = createClient();
+              const { data: { user } } = await supabaseAuth.auth.getUser();
+              if (user) {
+                const dna = await getDna(user.id);
+                if (dna) {
+                  books = reRankByDna(books, dna);
+                }
+              }
+            } catch {
+              // DNA reranking is best-effort
+            }
+          }
         }
       } catch (err) {
         console.warn("[search] Smart search failed, falling back:", err);

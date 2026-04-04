@@ -11,6 +11,9 @@ import { findBook } from "@/lib/books";
 import { classifyQuery } from "@/lib/search/classify-query";
 import { parseSearchIntent } from "@/lib/search/parse-intent";
 import { executeFilteredSearch } from "@/lib/search/execute-filters";
+import { createClient } from "@/lib/supabase/server";
+import { getDna } from "@/lib/reading-dna";
+import { reRankByDna } from "@/lib/reading-dna/score";
 import type { BookDetail } from "@/lib/types";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -68,7 +71,23 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const results = await executeFilteredSearch(filters);
+    let results = await executeFilteredSearch(filters);
+
+    // Optionally rerank by DNA for logged-in users (relevance sort only)
+    if (filters.sortBy === "relevance") {
+      try {
+        const supabaseAuth = createClient();
+        const { data: { user } } = await supabaseAuth.auth.getUser();
+        if (user) {
+          const dna = await getDna(user.id);
+          if (dna) {
+            results = reRankByDna(results, dna);
+          }
+        }
+      } catch {
+        // DNA reranking is best-effort — don't break search if it fails
+      }
+    }
 
     return NextResponse.json({
       query,

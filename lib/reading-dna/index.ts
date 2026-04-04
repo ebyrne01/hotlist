@@ -185,4 +185,4 @@ export function weightForStarRating(rating: number): number {
 // Re-export types and computation functions
 export type { DnaProfile, DnaSignal } from "./compute";
 export { computeTropeAffinities, computeSpicePreference, SIGNAL_WEIGHTS } from "./compute";
-export { scoreBook, rankBooks, type BookVector, type ScoredBook } from "./score";
+export { scoreBook, rankBooks, reRankByDna, type BookVector, type ScoredBook } from "./score";

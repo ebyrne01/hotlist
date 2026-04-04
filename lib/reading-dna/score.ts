@@ -6,6 +6,7 @@
  */
 
 import type { DnaProfile } from "./compute";
+import type { BookDetail } from "@/lib/types";
 
 export interface BookVector {
   bookId: string;
@@ -63,4 +64,43 @@ export function rankBooks(
   const scored = books.map((book) => scoreBook(profile, book));
   scored.sort((a, b) => b.score - a.score);
   return scored.slice(0, limit);
+}
+
+/**
+ * Rerank hydrated BookDetail results by blending original order with DNA affinity.
+ *
+ * 30% DNA, 70% original ranking — conservative enough that a #1 result
+ * won't drop to #25, but strong enough to promote DNA-aligned books.
+ * Only useful for relevance sorts; callers should skip this for explicit
+ * sorts (rating, spice, newest, buzz).
+ */
+export function reRankByDna(
+  books: BookDetail[],
+  profile: DnaProfile,
+  dnaBlend: number = 0.3
+): BookDetail[] {
+  if (books.length <= 1) return books;
+
+  const reranked = books.map((book, originalIndex) => {
+    const vector: BookVector = {
+      bookId: book.id,
+      vector: Object.fromEntries(
+        book.tropes.map((t) => [t.slug, 1.0])
+      ),
+      spiceLevel: book.compositeSpice?.score ?? null,
+    };
+
+    const dnaResult = scoreBook(profile, vector);
+
+    // Normalize original position to 0–1 (first = 1.0, last = 0.0)
+    const positionScore = 1.0 - originalIndex / books.length;
+
+    return {
+      book,
+      blendedScore: (1 - dnaBlend) * positionScore + dnaBlend * dnaResult.score,
+    };
+  });
+
+  reranked.sort((a, b) => b.blendedScore - a.blendedScore);
+  return reranked.map((r) => r.book);
 }
