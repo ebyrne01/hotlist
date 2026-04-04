@@ -128,6 +128,8 @@ SERIES HANDLING:
 - Only mark isSeriesVideo: true when the creator's EXPLICIT THEME is recommending complete series/trilogies to binge (e.g., "completed series you need to read", "trilogies I devoured"). Do NOT set isSeriesVideo: true just because the video contains books that happen to be part of a series.
 - When a creator recommends a series by name ("you HAVE to read [series name]"), mark that candidate's seriesRecommendation: true.
 - A video like "books everyone needs to read" or "new releases this month" that features series books is NOT a series video — it's a general recommendation video.
+- IMPORTANT: When you can read INDIVIDUAL book covers from a series on screen, list each book as its own candidate (e.g., "Fourth Wing", "Iron Flame", "Onyx Storm" as 3 separate entries) rather than a single "The Empyrean Series" entry. Set seriesRecommendation: true on each one. Only use the series name as the candidate title if you cannot read individual titles.
+- When the transcript names individual books in a series, list each one as a separate candidate.
 
 KNOWN WHISPER ERRORS — the transcript may contain these garbled versions:
 - "Sara J. Mass" or "Sarah J. Moss" → Sarah J. Maas
@@ -754,8 +756,12 @@ async function _identifyBooksWithAgentInternal(
     }
 
     // ── Resolve submitted books ─────────────────────────────────────────
-    const resolved = await resolveSubmittedBooks(submittedBooks);
+    let resolved = await resolveSubmittedBooks(submittedBooks);
     dbg.log(`Resolved ${resolved.length} books: ${resolved.map(r => r.matched ? r.book.title : r.rawTitle).join(", ")}`);
+
+    // ── Series expansion ────────────────────────────────────────────────
+    resolved = await expandSeriesBooks(resolved, observation.candidates, dbg);
+
     await dbg.flush();
 
     if (input.captureToolCalls) {
@@ -898,6 +904,106 @@ async function resolveSubmittedBooks(
     seen.add(gid);
     return true;
   });
+}
+
+/**
+ * Expand series recommendations.
+ * When a creator recommends an entire series but the agent only identified
+ * one representative book, pull in the sibling books from our DB.
+ */
+async function expandSeriesBooks(
+  resolved: ResolvedBook[],
+  candidates: HaikuCandidate[],
+  dbg: AgentDebugLog
+): Promise<ResolvedBook[]> {
+  // Build a set of series-recommended titles (lowercased) from Haiku candidates
+  const seriesCandidateTitles = new Set(
+    candidates
+      .filter((c) => c.seriesRecommendation)
+      .map((c) => c.title.toLowerCase())
+  );
+
+  if (seriesCandidateTitles.size === 0) return resolved;
+
+  // Find resolved books whose candidate was a series recommendation
+  const seriesNames = new Set<string>();
+  const seriesRepresentatives = new Map<string, ResolvedBookMatched>(); // seriesName → representative book
+
+  for (const r of resolved) {
+    if (!r.matched) continue;
+    const sn = r.book.seriesName;
+    if (!sn) continue;
+
+    // Check if this book's title (or its candidate title) was a series rec
+    const titleLower = r.book.title.toLowerCase();
+    const isSeriesRec = seriesCandidateTitles.has(titleLower) ||
+      // Also match when Haiku used the series name as the candidate title
+      candidates.some((c) =>
+        c.seriesRecommendation &&
+        (sn.toLowerCase().includes(c.title.toLowerCase().replace(/ series$/i, "")) ||
+         c.title.toLowerCase().includes(sn.toLowerCase()))
+      );
+
+    if (isSeriesRec) {
+      seriesNames.add(sn);
+      if (!seriesRepresentatives.has(sn)) {
+        seriesRepresentatives.set(sn, r);
+      }
+    }
+  }
+
+  if (seriesNames.size === 0) return resolved;
+
+  dbg.log(`Series expansion: expanding ${seriesNames.size} series: ${Array.from(seriesNames).join(", ")}`);
+
+  const supabase = getAdminClient();
+  const { data: seriesBooks } = await supabase
+    .from("books")
+    .select("*")
+    .eq("is_canon", true)
+    .in("series_name", Array.from(seriesNames))
+    .not("series_position", "is", null)
+    .not("cover_url", "is", null)
+    .order("series_position", { ascending: true });
+
+  if (!seriesBooks || seriesBooks.length === 0) return resolved;
+
+  // Collect IDs already in the resolved set
+  const existingIds = new Set(
+    resolved
+      .filter((r): r is ResolvedBookMatched => r.matched)
+      .map((r) => r.book.id)
+  );
+
+  let added = 0;
+  const expanded = [...resolved];
+
+  for (const row of seriesBooks) {
+    const bookId = row.id as string;
+    if (existingIds.has(bookId)) continue;
+
+    const sn = row.series_name as string;
+    const rep = seriesRepresentatives.get(sn);
+    if (!rep) continue;
+
+    const mapped = mapDbBookInline(row as Record<string, unknown>);
+    expanded.push({
+      matched: true,
+      book: { ...mapped, ratings: [], spice: [], compositeSpice: null, tropes: [] },
+      creatorSentiment: rep.creatorSentiment,
+      creatorQuote: rep.creatorQuote,
+      confidence: "high",
+    } as ResolvedBookMatched);
+
+    existingIds.add(bookId);
+    added++;
+  }
+
+  if (added > 0) {
+    dbg.log(`Series expansion: added ${added} sibling books`);
+  }
+
+  return expanded;
 }
 
 /**
