@@ -6,9 +6,10 @@
  *
  * Design constraints:
  * - Vercel serverless: /tmp has 512MB (Pro) or 256MB (Hobby)
- * - TikTok videos are typically 15-60s, 5-20MB
- * - We extract 1 frame per 2 seconds, capped at MAX_FRAMES
- * - Frames are resized to 512px wide to keep Sonnet vision costs down
+ * - TikTok videos are typically 15-180s, 5-30MB
+ * - MAX_FRAMES frames evenly spaced across the full video duration
+ * - When duration is unknown from downloader, probes it via ffmpeg
+ * - Frames are resized to 512px wide to keep vision costs down
  */
 
 import { execFile } from "child_process";
@@ -44,7 +45,8 @@ const FRAME_WIDTH = 512;
  */
 export async function extractFrames(
   videoUrl: string,
-  durationSeconds?: number | null
+  durationSeconds?: number | null,
+  overrides?: { fpsOverride?: number; maxFramesOverride?: number }
 ): Promise<Buffer[]> {
   // Resolve ffmpeg binary path
   let ffmpegPath: string;
@@ -70,6 +72,26 @@ export async function extractFrames(
     }
   }
 
+  // If duration is unknown, probe it from the video stream so we can space frames across the full video
+  let effectiveDuration = durationSeconds;
+  if (!effectiveDuration && !overrides?.fpsOverride) {
+    try {
+      // Use -t 0 to read only the header (no decoding), ffmpeg prints duration to stderr then exits
+      const { stderr } = await execFileAsync(
+        ffmpegPath,
+        ["-i", videoUrl, "-t", "0", "-f", "null", "-"],
+        { timeout: 10_000, maxBuffer: 1 * 1024 * 1024 }
+      ).catch((err: { stderr?: string }) => ({ stderr: err.stderr || "" }));
+      const match = stderr?.match(/Duration:\s*(\d+):(\d+):(\d[\d.]*)/);
+      if (match) {
+        effectiveDuration = parseInt(match[1]) * 3600 + parseInt(match[2]) * 60 + parseFloat(match[3]);
+        console.log(`[frame-extractor] Probed video duration: ${effectiveDuration.toFixed(1)}s`);
+      }
+    } catch {
+      // Non-fatal — will fall back to default 1fps
+    }
+  }
+
   const jobId = crypto.randomBytes(4).toString("hex");
   const tmpDir = path.join(os.tmpdir(), `hotlist-frames-${jobId}`);
 
@@ -77,16 +99,20 @@ export async function extractFrames(
     await mkdir(tmpDir, { recursive: true });
 
     // Calculate frame interval based on duration
+    const maxFrames = overrides?.maxFramesOverride ?? MAX_FRAMES;
+    const frameInterval = overrides?.fpsOverride ? (1 / overrides.fpsOverride) : FRAME_INTERVAL_SECONDS;
     let fps: string;
-    if (durationSeconds && durationSeconds > 0) {
-      // Aim for MAX_FRAMES evenly spaced, but at least 1 frame per FRAME_INTERVAL_SECONDS
+    if (overrides?.fpsOverride) {
+      fps = String(overrides.fpsOverride);
+    } else if (effectiveDuration && effectiveDuration > 0) {
+      // Aim for maxFrames evenly spaced, but at least 1 frame per frameInterval
       const idealInterval = Math.max(
-        FRAME_INTERVAL_SECONDS,
-        durationSeconds / MAX_FRAMES
+        frameInterval,
+        effectiveDuration / maxFrames
       );
       fps = `1/${Math.round(idealInterval)}`;
     } else {
-      fps = `1/${FRAME_INTERVAL_SECONDS}`;
+      fps = `1/${frameInterval}`;
     }
 
     // Extract frames using ffmpeg
@@ -121,7 +147,7 @@ export async function extractFrames(
       [
         "-i", videoUrl,
         "-vf", `fps=${fps},scale=${FRAME_WIDTH}:-1`,
-        "-frames:v", String(MAX_FRAMES),
+        "-frames:v", String(maxFrames),
         "-q:v", "2",
         "-f", "image2",
         outputPattern,
