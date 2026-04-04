@@ -760,7 +760,7 @@ async function _identifyBooksWithAgentInternal(
     dbg.log(`Resolved ${resolved.length} books: ${resolved.map(r => r.matched ? r.book.title : r.rawTitle).join(", ")}`);
 
     // ── Series expansion ────────────────────────────────────────────────
-    resolved = await expandSeriesBooks(resolved, observation.candidates, dbg);
+    resolved = await expandSeriesBooks(resolved, observation.candidates, dbg, observation.isSeriesVideo);
 
     await dbg.flush();
 
@@ -910,12 +910,19 @@ async function resolveSubmittedBooks(
  * Expand series recommendations.
  * When a creator recommends an entire series but the agent only identified
  * one representative book, pull in the sibling books from our DB.
+ *
+ * Only expands when isSeriesVideo is true — a general recommendations video
+ * that happens to mention books in a series should NOT pull in every sibling.
  */
 async function expandSeriesBooks(
   resolved: ResolvedBook[],
   candidates: HaikuCandidate[],
-  dbg: AgentDebugLog
+  dbg: AgentDebugLog,
+  isSeriesVideo: boolean
 ): Promise<ResolvedBook[]> {
+  // Only expand series when the video's explicit theme is series recommendations
+  if (!isSeriesVideo) return resolved;
+
   // Build a set of series-recommended titles (lowercased) from Haiku candidates
   const seriesCandidateTitles = new Set(
     candidates
