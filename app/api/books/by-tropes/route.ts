@@ -1,12 +1,14 @@
 /**
  * GET /api/books/by-tropes?slugs=enemies-to-lovers,forced-proximity
  *
- * Returns books that match ALL of the specified tropes (intersection).
+ * Returns books that match the specified tropes (intersection when possible,
+ * falls back to any-match if strict intersection yields < 5 results).
  * Used by the multi-select trope filter on /tropes/[slug].
  */
 
 import { getAdminClient } from "@/lib/supabase/admin";
-import { hydrateBookDetail } from "@/lib/books/cache";
+import { getTropeFilterSet } from "@/lib/book-intelligence";
+import { hydrateBookDetailBatch } from "@/lib/books/cache";
 import { deduplicateBooks, isCompilationTitle } from "@/lib/books/utils";
 import { isJunkTitle } from "@/lib/books/romance-filter";
 import type { BookDetail } from "@/lib/types";
@@ -25,61 +27,18 @@ export async function GET(request: NextRequest) {
 
   const supabase = getAdminClient();
 
-  // Look up trope IDs from slugs
-  const { data: tropes } = await supabase
-    .from("tropes")
-    .select("id, slug")
-    .in("slug", slugList);
-
-  if (!tropes || tropes.length === 0) {
+  // Use shared filter utility — handles ALL-match vs ANY-match fallback
+  const tropeSet = await getTropeFilterSet(supabase, slugList);
+  if (!tropeSet || tropeSet.ids.size === 0) {
     return NextResponse.json({ books: [] });
   }
 
-  const tropeIds = tropes.map((t) => t.id as string);
+  const bookIds = Array.from(tropeSet.ids).slice(0, 50);
 
-  // For a single trope, fetch book_tropes directly with a limit.
-  // For multiple tropes, find the intersection (books matching ALL).
-  let matchingBookIds: string[] = [];
-
-  if (tropeIds.length === 1) {
-    // Single trope — simple query with limit
-    const { data: bookTropes } = await supabase
-      .from("book_tropes")
-      .select("book_id")
-      .eq("trope_id", tropeIds[0])
-      .limit(50);
-
-    matchingBookIds = (bookTropes ?? []).map((bt) => bt.book_id as string);
-  } else {
-    // Multiple tropes — intersection query
-    // Fetch book_tropes for each trope separately, then intersect in JS
-    const allSets: Set<string>[] = [];
-    for (const tropeId of tropeIds) {
-      const { data: bt } = await supabase
-        .from("book_tropes")
-        .select("book_id")
-        .eq("trope_id", tropeId);
-      allSets.push(new Set((bt ?? []).map((r) => r.book_id as string)));
-    }
-
-    // Intersect: keep only book IDs present in ALL sets
-    if (allSets.length > 0) {
-      const [first, ...rest] = allSets;
-      matchingBookIds = Array.from(first).filter((id) =>
-        rest.every((s) => s.has(id))
-      );
-    }
-  }
-
-  if (matchingBookIds.length === 0) {
-    return NextResponse.json({ books: [] });
-  }
-
-  // Fetch and hydrate matching books (limit to 50 for response size)
   const { data: dbBooks } = await supabase
     .from("books")
     .select("*")
-    .in("id", matchingBookIds.slice(0, 50))
+    .in("id", bookIds)
     .eq("is_canon", true)
     .order("updated_at", { ascending: false });
 
@@ -87,12 +46,33 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ books: [] });
   }
 
-  const rawBooks: BookDetail[] = await Promise.all(
-    (dbBooks as Record<string, unknown>[]).map((b) => hydrateBookDetail(supabase, b))
+  // Batch hydrate (replaces per-book hydrateBookDetail calls)
+  const hydratedMap = await hydrateBookDetailBatch(
+    supabase,
+    dbBooks as Record<string, unknown>[]
   );
 
+  const results: BookDetail[] = [];
+  for (const book of dbBooks) {
+    const hydrated = hydratedMap.get(book.id as string);
+    if (hydrated) results.push(hydrated);
+  }
+
+  // Sort by trope match count (most matching tropes first), then rating
+  if (tropeSet.tropeCounts) {
+    const tropeCounts = tropeSet.tropeCounts;
+    results.sort((a, b) => {
+      const aHits = tropeCounts.get(a.id) ?? 0;
+      const bHits = tropeCounts.get(b.id) ?? 0;
+      if (bHits !== aHits) return bHits - aHits;
+      const aR = a.ratings.find((r) => r.source === "goodreads")?.rating ?? 0;
+      const bR = b.ratings.find((r) => r.source === "goodreads")?.rating ?? 0;
+      return bR - aR;
+    });
+  }
+
   // Deduplicate and filter junk
-  const cleanBooks = deduplicateBooks(rawBooks).filter((book) => {
+  const cleanBooks = deduplicateBooks(results).filter((book) => {
     if (isJunkTitle(book.title)) return false;
     if (isCompilationTitle(book.title)) return false;
     if (/\[.*\]/.test(book.title) && book.title.includes("Author:")) return false;
