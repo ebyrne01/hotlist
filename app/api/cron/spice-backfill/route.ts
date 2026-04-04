@@ -37,7 +37,7 @@ export async function GET(request: Request) {
     // Check daily usage
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
-    const dailyLimit = Number(process.env.SPICE_LLM_DAILY_LIMIT) || 100;
+    const dailyLimit = Number(process.env.SPICE_LLM_DAILY_LIMIT) || 25;
 
     const { count: todayCount } = await supabase
       .from("spice_signals")

@@ -227,3 +227,9 @@ body {
   margin-bottom: 10px;
   text-align: center;
 }
+
+.btn-primary:disabled,
+.btn-secondary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

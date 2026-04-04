@@ -8,8 +8,9 @@ const PROD_ORIGIN = "https://myhotlist.app";
  */
 function isAllowedOrigin(origin: string | null): boolean {
   if (process.env.NODE_ENV === "development") return true;
-  if (!origin) return false;
+  if (!origin) return true; // same-origin requests may omit Origin header
   if (origin === PROD_ORIGIN) return true;
+  if (origin === "https://www.myhotlist.app") return true;
   if (origin.startsWith("chrome-extension://")) return true;
   return false;
 }

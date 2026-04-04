@@ -19,6 +19,7 @@ const STATUS_PROGRESS = {
 };
 
 let currentUrl = null;
+let currentTabId = null;
 
 // ── State management ──
 
@@ -53,7 +54,7 @@ function truncateUrl(url) {
 
 // ── Initialize popup ──
 
-chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
   const tab = tabs[0];
   if (!tab || !tab.url) {
     showState("state-default");
@@ -61,6 +62,7 @@ chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
   }
 
   currentUrl = tab.url;
+  currentTabId = tab.id;
   const lower = currentUrl.toLowerCase();
 
   if (isVideoUrl(currentUrl)) {
@@ -77,7 +79,7 @@ chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
   }
 });
 
-// ── Grab handler ──
+// ── Grab handler (existing video feature) ──
 
 document.getElementById("grabBtn")?.addEventListener("click", async () => {
   if (!currentUrl) return;
@@ -151,7 +153,7 @@ document.getElementById("retryBtn")?.addEventListener("click", () => {
   showState("state-ready");
 });
 
-// ── Render results ──
+// ── Render video results (existing) ──
 
 function renderResults(result) {
   if (!result.success) {
@@ -211,6 +213,8 @@ function renderResults(result) {
 
   showState("state-results");
 }
+
+// ── Utilities ──
 
 function escapeHtml(text) {
   const el = document.createElement("span");

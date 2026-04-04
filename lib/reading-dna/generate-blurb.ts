@@ -6,8 +6,10 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import { getAdminClient } from "@/lib/supabase/admin";
 
 const MODEL = "claude-haiku-4-5-20251001";
+const DEFAULT_DAILY_LIMIT = 50;
 
 const SYSTEM_PROMPT = `You write fun, warm, 2-3 sentence reading personality descriptions for romance and romantasy readers. \
 You're speaking directly to the reader ("You're the kind of reader who..."). \
@@ -32,6 +34,20 @@ export async function generateDnaBlurb(input: {
 }): Promise<string | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return null;
+
+  // Daily limit check
+  const supabase = getAdminClient();
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const { count } = await supabase
+    .from("reading_dna")
+    .select("*", { count: "exact", head: true })
+    .gte("updated_at", todayStart.toISOString());
+  const dailyLimit = Number(process.env.READING_DNA_DAILY_LIMIT) || DEFAULT_DAILY_LIMIT;
+  if ((count ?? 0) >= dailyLimit) {
+    console.log(`[generate-blurb] Daily limit reached (${count}/${dailyLimit}), skipping`);
+    return null;
+  }
 
   const client = new Anthropic({ apiKey });
 

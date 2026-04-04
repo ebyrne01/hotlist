@@ -1,7 +1,7 @@
-// Badge management for content scripts
+// Badge management for content scripts and popup
 chrome.runtime.onMessage.addListener((message, sender) => {
-  if (!sender.tab?.id) return;
-  const tabId = sender.tab.id;
+  const tabId = sender.tab?.id || message.tabId;
+  if (!tabId) return;
 
   switch (message.type) {
     case "VIDEO_PAGE_DETECTED":

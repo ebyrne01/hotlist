@@ -10,8 +10,28 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import { getAdminClient } from "@/lib/supabase/admin";
 
 const MODEL = "claude-haiku-4-5-20251001";
+const DEFAULT_DAILY_LIMIT = 50;
+
+/**
+ * Check how many review classifier LLM fallbacks have been run today.
+ */
+async function getDailyReviewClassifierUsage(): Promise<number> {
+  const supabase = getAdminClient();
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const { count } = await supabase
+    .from("enrichment_queue")
+    .select("*", { count: "exact", head: true })
+    .eq("job_type", "review_classifier")
+    .eq("status", "completed")
+    .gte("completed_at", todayStart.toISOString());
+
+  return count ?? 0;
+}
 
 const SPICE_KEYWORDS: { pattern: RegExp; spice: number; weight: number }[] = [
   // Strong high-spice indicators
@@ -251,23 +271,30 @@ export async function classifyReviews(
 
   // Phase B: LLM fallback for low-confidence or no keyword hits
   if (reviews.length >= 2) {
-    console.log(
-      `[review-classifier] Keyword inconclusive for "${title}" (confidence=${keywordResult?.confidence ?? 0}), trying LLM fallback`
-    );
-    const llmResult = await classifyReviewsLlm(reviews, title, author);
-    if (llmResult) {
+    // Check daily limit before calling LLM
+    const dailyLimit = Number(process.env.REVIEW_CLASSIFIER_DAILY_LIMIT) || DEFAULT_DAILY_LIMIT;
+    const usage = await getDailyReviewClassifierUsage();
+    if (usage >= dailyLimit) {
+      console.log(`[review-classifier] Daily limit reached (${usage}/${dailyLimit}), skipping LLM fallback for "${title}"`);
+    } else {
       console.log(
-        `[review-classifier] LLM fallback: "${title}" spice=${llmResult.spice}, confidence=${llmResult.confidence}`
+        `[review-classifier] Keyword inconclusive for "${title}" (confidence=${keywordResult?.confidence ?? 0}), trying LLM fallback`
       );
-      return {
-        spice: llmResult.spice,
-        confidence: llmResult.confidence,
-        method: "llm_fallback",
-        keywordHits: keywordResult?.keywordHits ?? [],
-        reviewsAnalyzed: reviews.length,
-        perReviewScores: keywordResult?.perReviewScores ?? [],
-        reasoning: llmResult.reasoning,
-      };
+      const llmResult = await classifyReviewsLlm(reviews, title, author);
+      if (llmResult) {
+        console.log(
+          `[review-classifier] LLM fallback: "${title}" spice=${llmResult.spice}, confidence=${llmResult.confidence}`
+        );
+        return {
+          spice: llmResult.spice,
+          confidence: llmResult.confidence,
+          method: "llm_fallback",
+          keywordHits: keywordResult?.keywordHits ?? [],
+          reviewsAnalyzed: reviews.length,
+          perReviewScores: keywordResult?.perReviewScores ?? [],
+          reasoning: llmResult.reasoning,
+        };
+      }
     }
   }
 

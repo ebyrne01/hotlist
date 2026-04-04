@@ -47,6 +47,7 @@ CRON_SECRET=                   # shared secret for Vercel cron job auth
 SPICE_LLM_DAILY_LIMIT=        # optional, default 25 — max LLM spice inferences per day
 AI_SYNOPSIS_DAILY_LIMIT=      # optional, default 50 — max AI synopsis generations per day
 TROPE_INFERENCE_DAILY_LIMIT=  # optional, default 50 — max trope inferences per day
+REVIEW_CLASSIFIER_DAILY_LIMIT= # optional, default 50 — max review classifier LLM fallbacks per day
 APIFY_API_TOKEN=              # from apify.com — Amazon product scraping for bulk enrichment
 ```
 
