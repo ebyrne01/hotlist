@@ -196,6 +196,14 @@ export async function getBookDetail(identifier: string): Promise<BookDetail | nu
     }
   }
 
+  // Slug-like identifier without a numeric GR ID suffix (e.g.,
+  // "you-and-me-on-vacation-unknown-etUa0QEACAAJ" from provisional books).
+  // Try direct slug lookup before getBookFromCache, which has a freshness
+  // check that rejects stale books and returns "not found".
+  if (!detail && identifier.includes("-") && !/^\d+$/.test(identifier)) {
+    detail = await getBookBySlug(identifier);
+  }
+
   // Raw numeric ID (e.g., "225910699" from confirm_book / resolver) —
   // try direct GR ID lookup before getBookFromCache, which has a freshness
   // check that rejects un-enriched books and triggers unnecessary scrapes
