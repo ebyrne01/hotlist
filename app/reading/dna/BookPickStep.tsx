@@ -170,7 +170,7 @@ export default function BookPickStep({
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search by title or author..."
+          placeholder={selected.size === 0 ? "Search by title or author..." : "Search for another favorite..."}
           className="w-full px-4 py-2.5 rounded-lg border border-border bg-white font-body text-sm text-ink placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-fire/30 focus:border-fire/40 transition-colors"
         />
         {searching && (
@@ -199,7 +199,11 @@ export default function BookPickStep({
                 key={book.id}
                 book={book}
                 isSelected={selected.has(book.id)}
-                onToggle={() => handleToggle(book)}
+                onToggle={() => {
+                  handleToggle(book);
+                  setSearchQuery("");
+                  setSearchResults([]);
+                }}
               />
             ))}
           </div>
@@ -237,8 +241,13 @@ export default function BookPickStep({
       )}
 
       {selected.size > 0 && selected.size < MIN_BOOKS && (
-        <p className="text-center text-xs text-muted font-body">
-          {MIN_BOOKS - selected.size} more to go
+        <p className="text-center text-sm text-muted font-body">
+          {MIN_BOOKS - selected.size} more to go — search for another favorite above
+        </p>
+      )}
+      {selected.size >= MIN_BOOKS && (
+        <p className="text-center text-sm text-muted font-body">
+          Keep adding books for better recommendations, or hit Next
         </p>
       )}
     </div>
