@@ -11,8 +11,8 @@ const ON_RAMPS = [
   {
     href: "/reading/dna",
     icon: "🎯",
-    title: "Take the Quiz",
-    subtitle: "30 seconds",
+    title: "Take the Reading DNA Test",
+    subtitle: "60 seconds",
     description: "Answer a few quick questions about your reading preferences.",
   },
 ];

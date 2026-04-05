@@ -1,8 +1,8 @@
 /**
  * POST /api/reading-dna
  *
- * Save quiz results and compute initial Reading DNA.
- * Body: { spiceLevel: number, tropeSelections: string[], bookSelections: string[] }
+ * Save DNA test results and compute initial Reading DNA.
+ * Body: { subgenrePreferences: string[], spiceLevel: number, tropeSelections: string[], bookSelections: string[] }
  */
 
 import { createClient } from "@/lib/supabase/server";
@@ -27,7 +27,8 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { spiceLevel, tropeSelections, bookSelections, dislikedBooks, cwPreferences } = body as {
+  const { subgenrePreferences, spiceLevel, tropeSelections, bookSelections, dislikedBooks, cwPreferences } = body as {
+    subgenrePreferences?: string[];
     spiceLevel: number;
     tropeSelections: string[];
     bookSelections: string[];
@@ -46,7 +47,17 @@ export async function POST(request: NextRequest) {
     bookSelections.length < 3
   ) {
     return NextResponse.json(
-      { error: "Invalid quiz data. Need spice (1-5), 3+ tropes, 3+ books." },
+      { error: "Invalid test data. Need spice (1-5), 3+ tropes, 3+ books." },
+      { status: 400 }
+    );
+  }
+
+  if (
+    subgenrePreferences &&
+    (!Array.isArray(subgenrePreferences) || subgenrePreferences.length < 1)
+  ) {
+    return NextResponse.json(
+      { error: "Need at least 1 subgenre preference." },
       { status: 400 }
     );
   }
@@ -132,6 +143,17 @@ export async function POST(request: NextRequest) {
 
   const profile = buildDnaProfile(dnaSignals, spiceLevel, []);
   await saveDna(user.id, profile, "quiz");
+
+  // Save subgenre preferences
+  if (subgenrePreferences && subgenrePreferences.length > 0) {
+    await admin
+      .from("reading_dna")
+      .update({
+        subgenre_preferences: subgenrePreferences,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("user_id", user.id);
+  }
 
   // Generate AI blurb (non-blocking to DNA save — if this fails, DNA is still saved)
   try {

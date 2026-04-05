@@ -11,10 +11,10 @@ export default function DnaCtaBanner() {
           <span className="text-2xl" aria-hidden="true">🧬</span>
           <div className="flex-1 min-w-0">
             <p className="font-display text-base font-semibold text-ink">
-              Discover your Reading DNA
+              Take the Reading DNA Test
             </p>
             <p className="text-xs font-body text-muted mt-0.5">
-              Take a 30-second quiz or import your library for personalized recommendations.
+              60 seconds to personalized recommendations.
             </p>
           </div>
           <svg

@@ -21,6 +21,7 @@ export interface ReadingDnaRow {
   signalCount: number;
   lastComputedAt: string;
   dnaDescription: string | null;
+  subgenrePreferences: string[];
 }
 
 // ── Read ─────────────────────────────────────────────
@@ -48,6 +49,7 @@ export async function getDna(userId: string): Promise<ReadingDnaRow | null> {
     signalCount: data.signal_count,
     lastComputedAt: data.last_computed_at,
     dnaDescription: (data.dna_description as string) ?? null,
+    subgenrePreferences: (data.subgenre_preferences as string[]) ?? [],
   };
 }
 

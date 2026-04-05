@@ -5,45 +5,48 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useSignInModal } from "@/lib/auth/useSignInModal";
 import Button from "@/components/ui/Button";
+import SubgenreStep from "./SubgenreStep";
 import SpiceStep from "./SpiceStep";
 import TropeStep from "./TropeStep";
-import BookPickStep from "./BookPickStep";
+import BookPickStep, { type CandidateBook } from "./BookPickStep";
 import DislikedBooksStep from "./DislikedBooksStep";
 import ContentWarningStep from "./ContentWarningStep";
 
-interface CandidateBook {
-  id: string;
-  title: string;
-  author: string;
-  coverUrl: string | null;
-  tropes: string[]; // trope slugs
-}
-
-interface QuizWizardProps {
+interface DnaTestProps {
   tropes: { slug: string; name: string }[];
-  candidateBooks: CandidateBook[];
 }
 
-type Step = "spice" | "tropes" | "books" | "disliked" | "warnings";
-const STEPS: Step[] = ["spice", "tropes", "books", "disliked", "warnings"];
+type Step = "subgenre" | "spice" | "tropes" | "books" | "disliked" | "warnings";
+const STEPS: Step[] = ["subgenre", "spice", "tropes", "books", "disliked", "warnings"];
 const MIN_TROPES = 3;
 const MIN_BOOKS = 3;
 
-export default function QuizWizard({ tropes, candidateBooks }: QuizWizardProps) {
+export default function DnaTest({ tropes }: DnaTestProps) {
   const router = useRouter();
   const { user } = useAuth();
   const { openSignIn } = useSignInModal();
 
-  const [step, setStep] = useState<Step>("spice");
+  const [step, setStep] = useState<Step>("subgenre");
+  const [selectedSubgenres, setSelectedSubgenres] = useState<Set<string>>(new Set());
   const [spiceLevel, setSpiceLevel] = useState<number | null>(null);
   const [selectedTropes, setSelectedTropes] = useState<Set<string>>(new Set());
   const [selectedBooks, setSelectedBooks] = useState<Set<string>>(new Set());
   const [dislikedBooks, setDislikedBooks] = useState<Set<string>>(new Set());
   const [selectedWarnings, setSelectedWarnings] = useState<Set<string>>(new Set());
+  const [pickedBookData, setPickedBookData] = useState<CandidateBook[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const stepIndex = STEPS.indexOf(step);
+
+  const toggleSubgenre = useCallback((slug: string) => {
+    setSelectedSubgenres((prev) => {
+      const next = new Set(prev);
+      if (next.has(slug)) next.delete(slug);
+      else next.add(slug);
+      return next;
+    });
+  }, []);
 
   const toggleTrope = useCallback((slug: string) => {
     setSelectedTropes((prev) => {
@@ -81,38 +84,31 @@ export default function QuizWizard({ tropes, candidateBooks }: QuizWizardProps) 
     });
   }, []);
 
-  // Filter candidate books by selected tropes
-  const filteredBooks = candidateBooks.filter((book) =>
-    book.tropes.some((t) => selectedTropes.has(t))
-  );
-
   const canAdvance = () => {
+    if (step === "subgenre") return selectedSubgenres.size >= 1;
     if (step === "spice") return spiceLevel !== null;
     if (step === "tropes") return selectedTropes.size >= MIN_TROPES;
     if (step === "books") return selectedBooks.size >= MIN_BOOKS;
-    if (step === "disliked") return true; // Optional step
-    if (step === "warnings") return true; // Optional step
+    if (step === "disliked") return true;
+    if (step === "warnings") return true;
     return false;
   };
 
   const handleNext = () => {
-    if (step === "spice") {
-      setStep("tropes");
-    } else if (step === "tropes") {
-      setSelectedBooks(new Set());
-      setStep("books");
-    } else if (step === "books") {
-      setStep("disliked");
-    } else if (step === "disliked") {
-      setStep("warnings");
+    const idx = STEPS.indexOf(step);
+    if (idx < STEPS.length - 1) {
+      if (step === "tropes") {
+        setSelectedBooks(new Set());
+      }
+      setStep(STEPS[idx + 1]);
     }
   };
 
   const handleBack = () => {
-    if (step === "tropes") setStep("spice");
-    else if (step === "books") setStep("tropes");
-    else if (step === "disliked") setStep("books");
-    else if (step === "warnings") setStep("disliked");
+    const idx = STEPS.indexOf(step);
+    if (idx > 0) {
+      setStep(STEPS[idx - 1]);
+    }
   };
 
   const handleSave = async () => {
@@ -129,6 +125,7 @@ export default function QuizWizard({ tropes, candidateBooks }: QuizWizardProps) 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          subgenrePreferences: Array.from(selectedSubgenres),
           spiceLevel,
           tropeSelections: Array.from(selectedTropes),
           bookSelections: Array.from(selectedBooks),
@@ -168,6 +165,12 @@ export default function QuizWizard({ tropes, candidateBooks }: QuizWizardProps) 
       </div>
 
       {/* Step content */}
+      {step === "subgenre" && (
+        <SubgenreStep
+          selected={selectedSubgenres}
+          onToggle={toggleSubgenre}
+        />
+      )}
       {step === "spice" && (
         <SpiceStep selected={spiceLevel} onSelect={setSpiceLevel} />
       )}
@@ -176,21 +179,23 @@ export default function QuizWizard({ tropes, candidateBooks }: QuizWizardProps) 
           tropes={tropes}
           selected={selectedTropes}
           onToggle={toggleTrope}
+          subgenres={selectedSubgenres}
         />
       )}
       {step === "books" && (
         <BookPickStep
-          books={filteredBooks}
           selected={selectedBooks}
           onToggle={toggleBook}
+          subgenres={selectedSubgenres}
+          onPickedBooksChange={setPickedBookData}
         />
       )}
       {step === "disliked" && (
         <DislikedBooksStep
-          books={candidateBooks}
           lovedIds={selectedBooks}
           selected={dislikedBooks}
           onToggle={toggleDisliked}
+          subgenres={selectedSubgenres}
         />
       )}
       {step === "warnings" && (

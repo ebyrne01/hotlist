@@ -2,11 +2,17 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { CANONICAL_SUBGENRES } from "@/lib/books/subgenre-classifier";
+
+const SUBGENRE_LABEL_MAP: Record<string, string> = Object.fromEntries(
+  CANONICAL_SUBGENRES.map((sg) => [sg.slug, sg.label])
+);
 
 interface DnaData {
   tropeAffinities: Record<string, number>;
   spicePreferred: number;
   dnaDescription: string | null;
+  subgenrePreferences?: string[];
 }
 
 const SPICE_LABELS: Record<number, string> = {
@@ -84,6 +90,25 @@ export default function DnaResults() {
               <p className="font-body text-ink text-sm leading-relaxed">
                 {dna.dnaDescription}
               </p>
+            </div>
+          )}
+
+          {/* Subgenre preferences */}
+          {dna?.subgenrePreferences && dna.subgenrePreferences.length > 0 && (
+            <div className="mt-6">
+              <p className="text-xs font-mono text-muted uppercase tracking-wide mb-3">
+                Your subgenres
+              </p>
+              <div className="flex flex-wrap gap-2 justify-center">
+                {dna.subgenrePreferences.map((slug) => (
+                  <span
+                    key={slug}
+                    className="inline-flex items-center text-xs font-mono px-2.5 py-1.5 rounded-lg bg-fire/10 text-fire/90 border border-fire/15"
+                  >
+                    {SUBGENRE_LABEL_MAP[slug] ?? slug}
+                  </span>
+                ))}
+              </div>
             </div>
           )}
 

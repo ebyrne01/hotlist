@@ -2,6 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { CANONICAL_SUBGENRES } from "@/lib/books/subgenre-classifier";
+
+const SUBGENRE_LABEL_MAP: Record<string, string> = Object.fromEntries(
+  CANONICAL_SUBGENRES.map((sg) => [sg.slug, sg.label])
+);
 
 interface DnaData {
   tropeAffinities: Record<string, number>;
@@ -9,6 +14,7 @@ interface DnaData {
   signalCount: number;
   source: string;
   dnaDescription: string | null;
+  subgenrePreferences?: string[];
 }
 
 const SPICE_LABELS: Record<number, string> = {
@@ -60,7 +66,7 @@ export default function ReadingDnaCard() {
           </h2>
         </div>
         <p className="text-sm font-body text-muted mb-4">
-          Take a 30-second quiz to get personalized book recommendations.
+          Take a 60-second test to get personalized book recommendations.
         </p>
         <Link
           href="/get-started"
@@ -82,9 +88,9 @@ export default function ReadingDnaCard() {
   // Context line based on signal count
   let contextLine: string;
   if (dna.source === "quiz" && dna.signalCount <= 5) {
-    contextLine = "Based on your quiz answers";
+    contextLine = "Based on your test answers";
   } else if (dna.signalCount <= 15) {
-    contextLine = `Based on your quiz + ${Math.max(0, dna.signalCount - 3)} rated books`;
+    contextLine = `Based on your test + ${Math.max(0, dna.signalCount - 3)} rated books`;
   } else {
     contextLine = `Built from ${dna.signalCount} books you've rated and read`;
   }
@@ -102,11 +108,30 @@ export default function ReadingDnaCard() {
           href="/reading/dna"
           className="text-xs font-mono text-muted hover:text-fire transition-colors"
         >
-          Retake Quiz
+          Retake Test
         </Link>
       </div>
 
       <p className="text-xs font-mono text-muted/70 mb-4">{contextLine}</p>
+
+      {/* Subgenre preferences */}
+      {dna.subgenrePreferences && dna.subgenrePreferences.length > 0 && (
+        <div className="mb-4">
+          <p className="text-xs font-mono text-muted uppercase tracking-wide mb-2">
+            Subgenres
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {dna.subgenrePreferences.map((slug) => (
+              <span
+                key={slug}
+                className="inline-flex items-center text-xs font-mono px-2 py-1 rounded-lg bg-fire/10 text-fire/90 border border-fire/15"
+              >
+                {SUBGENRE_LABEL_MAP[slug] ?? slug}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Top tropes */}
       {topTropes.length > 0 && (
