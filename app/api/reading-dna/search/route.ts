@@ -17,13 +17,13 @@ export async function GET(request: NextRequest) {
 
   const supabase = getAdminClient();
 
-  // Search by title OR author (case-insensitive)
+  // Search by title, author, or series name (case-insensitive)
   const { data: bookRows } = await supabase
     .from("books")
     .select("id, title, author, cover_url")
     .eq("is_canon", true)
     .not("cover_url", "is", null)
-    .or(`title.ilike.%${q}%,author.ilike.%${q}%`)
+    .or(`title.ilike.%${q}%,author.ilike.%${q}%,series_name.ilike.%${q}%`)
     .order("updated_at", { ascending: false })
     .limit(15);
 
