@@ -137,7 +137,8 @@ All tables in the public schema:
 | `serper_query_cache` | Caches Serper search results (query_hash PK, result_status, miss_count). 30-day TTL. Prevents re-querying known misses. |
 | `search_analytics` | Search feedback (thumbs up/down on results). |
 | `search_intent_cache` | Cached NL search intent classifications. |
-| `reading_dna` | Per-user reading preference profile (trope affinities, spice preference, subgenre weights). |
+| `reading_dna` | Per-user reading preference profile (trope affinities, spice preference, subgenre_preferences text[], DNA blurb). |
+| `user_cw_preferences` | Per-user content warning preferences (user_id, cw_category). |
 | `reading_dna_signals` | Individual signals that feed into reading DNA computation. |
 | `book_trope_vectors` | Precomputed trope similarity vectors for recommendation engine. |
 | `harvest_log` | Logs each harvest upload: user_id, books_submitted/added/updated/skipped, sources array. |
@@ -153,6 +154,7 @@ All tables in the public schema:
 /app/api/admin/quality/       — Quality flag CRUD, scorecard, health, scan APIs
 /app/api/admin/creators/      — Creator application list + review (approve/reject) APIs
 /app/api/creators/claim/      — Claim request API for auto-generated creator handles
+/app/api/reading-dna/          — Reading DNA test: save results, search books, get suggestions, user profile
 /app/api/seed/harvest/        — Harvest API: receives book batches from Chrome extension harvester
 /app/admin/quality/           — Admin quality dashboard (triage + monitoring widgets)
 /app/admin/harvest/           — Admin harvest dashboard (recent uploads, stats, source frequency)
@@ -165,6 +167,7 @@ All tables in the public schema:
 /app/[vanitySlug]/            — Public creator profile (vanity URL, reserved word guard)
 /app/api/analytics/event/     — Analytics event tracking endpoint
 /app/api/books/lookup/        — Book lookup for Chrome extension (multi-identifier, CORS)
+/app/reading/dna/             — Reading DNA test: 6-step flow (subgenre → spice → tropes → books → disliked → warnings)
 /app/search/                  — Search results page
 
 /lib/books/                   — Book service modules
@@ -184,6 +187,7 @@ All tables in the public schema:
   buzz-score.ts               — Composite buzz scoring: time-decayed weighted signals, used by "What's Hot"
   reddit-discovery.ts         — Reddit romance community discovery via Serper + Haiku
   amazon-bestseller-discovery.ts — Amazon bestseller discovery via Serper
+  subgenre-classifier.ts      — Rules-based classifier: maps genre tags to 8 canonical subgenres (romantasy, paranormal, sci-fi-romance, historical, romantic-suspense, dark-romance, erotic-romance, contemporary)
   spice-gap-monitor.ts        — Monthly audit of spice coverage gaps
 
 /lib/creators/                — Creator discovery system
