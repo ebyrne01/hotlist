@@ -3,6 +3,7 @@
  *
  * Smart suggestion grid for the DNA test. Finds books sharing tropes with
  * the user's picked books, optionally filtered by subgenre.
+ * Ranks by trope overlap, then by Goodreads popularity as tiebreaker.
  */
 
 import { getAdminClient } from "@/lib/supabase/admin";
@@ -60,10 +61,10 @@ export async function GET(request: NextRequest) {
     overlapCounts.set(bookId, (overlapCounts.get(bookId) ?? 0) + 1);
   }
 
-  // Sort by overlap count, take top candidates
+  // Take top candidates by overlap (generous pool for popularity ranking)
   const ranked = Array.from(overlapCounts.entries())
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 50)
+    .slice(0, 80)
     .map(([id]) => id);
 
   if (ranked.length === 0) {
@@ -87,8 +88,25 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ books: [] });
   }
 
-  // Get trope slugs for returned books
+  // Fetch Goodreads rating counts as popularity signal
   const returnedIds = bookRows.map((b) => b.id as string);
+  const { data: ratingRows } = await supabase
+    .from("book_ratings")
+    .select("book_id, rating_count")
+    .eq("source", "goodreads")
+    .in("book_id", returnedIds);
+
+  const popularityMap = new Map<string, number>();
+  for (const r of ratingRows ?? []) {
+    const bookId = r.book_id as string;
+    const count = (r.rating_count as number) ?? 0;
+    // Keep the highest count per book (in case of dupes)
+    if (count > (popularityMap.get(bookId) ?? 0)) {
+      popularityMap.set(bookId, count);
+    }
+  }
+
+  // Get trope slugs for returned books
   const { data: btRows } = await supabase
     .from("book_tropes")
     .select("book_id, tropes(slug)")
@@ -104,18 +122,21 @@ export async function GET(request: NextRequest) {
     bookTropeMap.set(bookId, list);
   }
 
-  // Only include books with tropes, sort by overlap
-  const overlapOrder = new Map(ranked.map((id, i) => [id, i]));
+  // Sort by overlap (primary), then popularity (tiebreaker)
   const books = bookRows
     .filter((b) => {
       const tropes = bookTropeMap.get(b.id as string);
       return tropes && tropes.length > 0;
     })
-    .sort(
-      (a, b) =>
-        (overlapOrder.get(a.id as string) ?? 999) -
-        (overlapOrder.get(b.id as string) ?? 999)
-    )
+    .sort((a, b) => {
+      const overlapA = overlapCounts.get(a.id as string) ?? 0;
+      const overlapB = overlapCounts.get(b.id as string) ?? 0;
+      if (overlapB !== overlapA) return overlapB - overlapA;
+      // Tiebreaker: more popular books first
+      const popA = popularityMap.get(a.id as string) ?? 0;
+      const popB = popularityMap.get(b.id as string) ?? 0;
+      return popB - popA;
+    })
     .slice(0, 12)
     .map((b) => ({
       id: b.id as string,
