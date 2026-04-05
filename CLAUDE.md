@@ -167,7 +167,7 @@ All tables in the public schema:
 /app/[vanitySlug]/            — Public creator profile (vanity URL, reserved word guard)
 /app/api/analytics/event/     — Analytics event tracking endpoint
 /app/api/books/lookup/        — Book lookup for Chrome extension (multi-identifier, CORS)
-/app/reading/dna/             — Reading DNA test: 6-step flow (subgenre → spice → tropes → books → disliked → warnings)
+/app/reading/dna/             — Reading DNA test: 6-step flow (subgenre → spice → tropes → books → disliked → warnings). Results page shows DNA profile + "Does this sound like you?" with For You preview.
 /app/search/                  — Search results page
 
 /lib/books/                   — Book service modules
@@ -192,6 +192,12 @@ All tables in the public schema:
 
 /lib/creators/                — Creator discovery system
   register.ts                 — Upsert creator handle + book mentions after each grab
+
+/lib/reading-dna/             — Reading DNA preference engine
+  compute.ts                  — buildDnaProfile(): aggregates quiz + rating signals into trope affinities + spice preference
+  score.ts                    — scoreBook(), rankBooks(), reRankByDna(): dot-product trope scoring with multiplicative spice penalty (0.3–1.0 Gaussian)
+  index.ts                    — getDna(), saveDna(): Supabase CRUD for reading_dna table
+  generate-blurb.ts           — Haiku-generated personality blurb from DNA profile
 
 /lib/enrichment/              — Async enrichment queue
   queue.ts                    — job queueing, fetching, status, retry with exponential backoff
@@ -235,10 +241,13 @@ All tables in the public schema:
   parsers/romanceio.js         — Romance.io list parser
   parsers/generic-links.js     — Blog/generic fallback parser
 
-/components/books/            — Book-specific components (BookCard, SpiceDisplay, SpiceAttribution)
+/components/books/            — Book-specific components (BookCard, BookRow, SpiceDisplay, SpiceAttribution)
 /components/ui/               — Base UI primitives (Badge, BookCover, SpiceIndicator)
 /components/hotlists/         — Hotlist table + detail components
 /components/layout/           — Navbar, layout shell
+/components/homepage/         — PersonalizedShell (client: For You row + hotlist bar)
+/components/home/             — ForYouRow, DnaCtaBanner, UserHotlistBar
+/components/profile/          — ReadingDnaCard (DNA summary on profile page)
 ```
 
 ## BookTok feature (formerly "Grab from Video")
@@ -603,6 +612,28 @@ Books are ranked for the "What's Hot" carousel using a composite buzz score comp
 ### Files
 - `/lib/books/buzz-signals.ts` — `recordBuzzSignal()`, `recordBuzzSignalsBatch()` — write helpers
 - `/lib/books/buzz-score.ts` — `getTopBuzzBooks()`, `getBuzzScoresForBooks()` — scoring engine
+
+## Reading DNA & For You Pipeline
+
+The Reading DNA system lets users take a 60-second test to build a preference profile, which powers personalized recommendations.
+
+### DNA Test Flow (`/reading/dna`)
+6-step wizard: subgenre → spice (multi-select) → tropes → books (search-first) → disliked books → content warnings. Spice supports multiple selections (e.g., levels 3 and 4), producing a preferred level + tolerance range. Book pick step uses search + smart suggestions (series > author > trope overlap + popularity tiebreaker). Suggestion grid stays stable when picking from it (only refreshes on search picks). Optional steps show "Skip" when empty, "Next" when selections made. Draft persists to `sessionStorage` for OAuth redirect survival.
+
+### DNA Scoring (`/lib/reading-dna/score.ts`)
+- **Trope score**: dot product of user's `tropeAffinities` × book's trope vector
+- **Spice multiplier**: Gaussian penalty (0.3–1.0) based on distance from preferred spice, shaped by tolerance. Books with wrong spice keep at most 30% of their trope score. Books without spice data scored neutrally (1.0).
+- **Final score**: `tropeOverlap × spiceMultiplier`
+- `reRankByDna()`: blends DNA score (30%) with original ranking (70%) for search results
+
+### For You Homepage (`/api/homepage/for-you`)
+- Fetches user's DNA via `getDna()`
+- Scores ALL `book_trope_vectors` against DNA profile using `rankBooks()`
+- Hydrates top 20, filters to canon books with covers + tropes, returns top 10
+- `PersonalizedShell` renders `ForYouRow` (if DNA exists) or `DnaCtaBanner` (if not)
+
+### Results Page (`/reading/dna/results`)
+After test completion, shows DNA profile (AI blurb, subgenres, tropes, spice) + "Does this sound like you?" with a preview of For You recommendations. "Yes! Show me more" → homepage. "Not quite — retake" → restart test.
 
 ## Source Attribution Standard
 
