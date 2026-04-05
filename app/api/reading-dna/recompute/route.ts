@@ -3,6 +3,7 @@
  *
  * Triggers DNA recomputation after a rating or reading status change.
  * Body: { bookId: string, signalType: string, weight: number }
+ *   OR: { recomputeOnly: true } — just recompute from existing signals (no new signal saved)
  *
  * Fire-and-forget from client — saves signal, recomputes DNA if user has one.
  */
@@ -22,11 +23,22 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { bookId, signalType, weight } = body as {
-    bookId: string;
-    signalType: string;
-    weight: number;
+  const { bookId, signalType, weight, recomputeOnly } = body as {
+    bookId?: string;
+    signalType?: string;
+    weight?: number;
+    recomputeOnly?: boolean;
   };
+
+  // Recompute-only mode: just rebuild DNA from existing signals, no new signal saved.
+  // Used by spice ratings which are content contributions, not preference signals.
+  if (recomputeOnly) {
+    const existing = await getDna(user.id);
+    if (existing) {
+      await recomputeDna(user.id);
+    }
+    return NextResponse.json({ ok: true });
+  }
 
   if (!bookId || !signalType || typeof weight !== "number") {
     return NextResponse.json({ ok: false }, { status: 400 });

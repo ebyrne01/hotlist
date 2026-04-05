@@ -27,10 +27,12 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { spiceLevel, tropeSelections, bookSelections } = body as {
+  const { spiceLevel, tropeSelections, bookSelections, dislikedBooks, cwPreferences } = body as {
     spiceLevel: number;
     tropeSelections: string[];
     bookSelections: string[];
+    dislikedBooks?: string[];
+    cwPreferences?: string[];
   };
 
   // Validate
@@ -50,6 +52,14 @@ export async function POST(request: NextRequest) {
   }
 
   const admin = getAdminClient();
+
+  // Clear previous quiz picks so retake is a clean slate for quiz signals.
+  // Organic signals (rating, reading_status) are preserved.
+  await admin
+    .from("reading_dna_signals")
+    .delete()
+    .eq("user_id", user.id)
+    .eq("signal_type", "quiz_pick");
 
   // Get trope vectors for selected books
   const { data: vectorRows } = await admin
@@ -90,13 +100,23 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Build signals
+  // Build signals — positive picks + disliked books (zero weight)
   const signals: { bookId: string; signalType: string; weight: number }[] =
     bookSelections.map((bookId) => ({
       bookId,
       signalType: "quiz_pick",
       weight: SIGNAL_WEIGHTS.quiz_pick,
     }));
+
+  if (dislikedBooks && dislikedBooks.length > 0) {
+    for (const bookId of dislikedBooks) {
+      signals.push({
+        bookId,
+        signalType: "quiz_pick",
+        weight: 0.0,
+      });
+    }
+  }
 
   // Save signals
   await saveSignals(user.id, signals);
@@ -160,6 +180,27 @@ export async function POST(request: NextRequest) {
     }
   } catch (err) {
     console.error("[reading-dna] Blurb generation failed (DNA still saved):", err);
+  }
+
+  // Save content warning preferences (clear previous on retake)
+  if (cwPreferences && cwPreferences.length > 0) {
+    await admin
+      .from("user_cw_preferences")
+      .delete()
+      .eq("user_id", user.id);
+
+    await admin.from("user_cw_preferences").insert(
+      cwPreferences.map((cw: string) => ({
+        user_id: user.id,
+        cw_category: cw,
+      }))
+    );
+  } else {
+    // Clear on retake if user skipped/deselected all
+    await admin
+      .from("user_cw_preferences")
+      .delete()
+      .eq("user_id", user.id);
   }
 
   return NextResponse.json({ success: true, signalCount: profile.signalCount });

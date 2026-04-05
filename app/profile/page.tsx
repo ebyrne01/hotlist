@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import ReadingDnaCard from "@/components/profile/ReadingDnaCard";
 
 interface UserStats {
   booksRead: number;
@@ -167,6 +168,9 @@ export default function ProfilePage() {
           </div>
         ))}
       </div>
+
+      {/* Reading DNA */}
+      <ReadingDnaCard />
 
       {/* Quick links */}
       <div className="space-y-3 mb-8">

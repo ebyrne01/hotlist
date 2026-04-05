@@ -8,6 +8,8 @@ import Button from "@/components/ui/Button";
 import SpiceStep from "./SpiceStep";
 import TropeStep from "./TropeStep";
 import BookPickStep from "./BookPickStep";
+import DislikedBooksStep from "./DislikedBooksStep";
+import ContentWarningStep from "./ContentWarningStep";
 
 interface CandidateBook {
   id: string;
@@ -22,8 +24,8 @@ interface QuizWizardProps {
   candidateBooks: CandidateBook[];
 }
 
-type Step = "spice" | "tropes" | "books";
-const STEPS: Step[] = ["spice", "tropes", "books"];
+type Step = "spice" | "tropes" | "books" | "disliked" | "warnings";
+const STEPS: Step[] = ["spice", "tropes", "books", "disliked", "warnings"];
 const MIN_TROPES = 3;
 const MIN_BOOKS = 3;
 
@@ -36,6 +38,8 @@ export default function QuizWizard({ tropes, candidateBooks }: QuizWizardProps) 
   const [spiceLevel, setSpiceLevel] = useState<number | null>(null);
   const [selectedTropes, setSelectedTropes] = useState<Set<string>>(new Set());
   const [selectedBooks, setSelectedBooks] = useState<Set<string>>(new Set());
+  const [dislikedBooks, setDislikedBooks] = useState<Set<string>>(new Set());
+  const [selectedWarnings, setSelectedWarnings] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,6 +63,24 @@ export default function QuizWizard({ tropes, candidateBooks }: QuizWizardProps) 
     });
   }, []);
 
+  const toggleDisliked = useCallback((bookId: string) => {
+    setDislikedBooks((prev) => {
+      const next = new Set(prev);
+      if (next.has(bookId)) next.delete(bookId);
+      else next.add(bookId);
+      return next;
+    });
+  }, []);
+
+  const toggleWarning = useCallback((cw: string) => {
+    setSelectedWarnings((prev) => {
+      const next = new Set(prev);
+      if (next.has(cw)) next.delete(cw);
+      else next.add(cw);
+      return next;
+    });
+  }, []);
+
   // Filter candidate books by selected tropes
   const filteredBooks = candidateBooks.filter((book) =>
     book.tropes.some((t) => selectedTropes.has(t))
@@ -68,6 +90,8 @@ export default function QuizWizard({ tropes, candidateBooks }: QuizWizardProps) 
     if (step === "spice") return spiceLevel !== null;
     if (step === "tropes") return selectedTropes.size >= MIN_TROPES;
     if (step === "books") return selectedBooks.size >= MIN_BOOKS;
+    if (step === "disliked") return true; // Optional step
+    if (step === "warnings") return true; // Optional step
     return false;
   };
 
@@ -75,15 +99,20 @@ export default function QuizWizard({ tropes, candidateBooks }: QuizWizardProps) 
     if (step === "spice") {
       setStep("tropes");
     } else if (step === "tropes") {
-      // Reset book selection when tropes change
       setSelectedBooks(new Set());
       setStep("books");
+    } else if (step === "books") {
+      setStep("disliked");
+    } else if (step === "disliked") {
+      setStep("warnings");
     }
   };
 
   const handleBack = () => {
     if (step === "tropes") setStep("spice");
     else if (step === "books") setStep("tropes");
+    else if (step === "disliked") setStep("books");
+    else if (step === "warnings") setStep("disliked");
   };
 
   const handleSave = async () => {
@@ -103,6 +132,8 @@ export default function QuizWizard({ tropes, candidateBooks }: QuizWizardProps) 
           spiceLevel,
           tropeSelections: Array.from(selectedTropes),
           bookSelections: Array.from(selectedBooks),
+          dislikedBooks: Array.from(dislikedBooks),
+          cwPreferences: Array.from(selectedWarnings),
         }),
       });
 
@@ -118,6 +149,9 @@ export default function QuizWizard({ tropes, candidateBooks }: QuizWizardProps) 
       setSaving(false);
     }
   };
+
+  const isOptionalStep = step === "disliked" || step === "warnings";
+  const isFinalStep = step === "warnings";
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8 sm:py-12">
@@ -151,6 +185,20 @@ export default function QuizWizard({ tropes, candidateBooks }: QuizWizardProps) 
           onToggle={toggleBook}
         />
       )}
+      {step === "disliked" && (
+        <DislikedBooksStep
+          books={candidateBooks}
+          lovedIds={selectedBooks}
+          selected={dislikedBooks}
+          onToggle={toggleDisliked}
+        />
+      )}
+      {step === "warnings" && (
+        <ContentWarningStep
+          selected={selectedWarnings}
+          onToggle={toggleWarning}
+        />
+      )}
 
       {/* Error */}
       {error && (
@@ -169,25 +217,39 @@ export default function QuizWizard({ tropes, candidateBooks }: QuizWizardProps) 
           <div />
         )}
 
-        {step === "books" ? (
-          <Button
-            variant="primary"
-            size="md"
-            onClick={handleSave}
-            disabled={!canAdvance() || saving}
-          >
-            {saving ? "Building your DNA..." : "Build My Reading DNA"}
-          </Button>
-        ) : (
-          <Button
-            variant="primary"
-            size="md"
-            onClick={handleNext}
-            disabled={!canAdvance()}
-          >
-            Next
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {/* Skip button for optional steps */}
+          {isOptionalStep && !isFinalStep && (
+            <Button variant="ghost" size="sm" onClick={handleNext}>
+              Skip
+            </Button>
+          )}
+          {isFinalStep && (
+            <Button variant="ghost" size="sm" onClick={handleSave} disabled={saving}>
+              Skip
+            </Button>
+          )}
+
+          {isFinalStep ? (
+            <Button
+              variant="primary"
+              size="md"
+              onClick={handleSave}
+              disabled={saving}
+            >
+              {saving ? "Building your DNA..." : "Build My Reading DNA"}
+            </Button>
+          ) : (
+            <Button
+              variant="primary"
+              size="md"
+              onClick={handleNext}
+              disabled={!canAdvance()}
+            >
+              Next
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );

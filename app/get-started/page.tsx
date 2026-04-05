@@ -13,21 +13,7 @@ const ON_RAMPS = [
     icon: "🎯",
     title: "Take the Quiz",
     subtitle: "30 seconds",
-    description: "Answer 3 quick questions about your reading preferences.",
-  },
-  {
-    href: "/reading/import/goodreads",
-    icon: "📚",
-    title: "Import Library",
-    subtitle: "Goodreads / StoryGraph",
-    description: "Upload your export file to bring in your full reading history.",
-  },
-  {
-    href: "/reading/scan",
-    icon: "📷",
-    title: "Scan Barcodes",
-    subtitle: "Physical books",
-    description: "Use your phone camera to scan books on your shelf.",
+    description: "Answer a few quick questions about your reading preferences.",
   },
 ];
 
@@ -45,7 +31,7 @@ export default function GetStartedPage() {
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="max-w-sm mx-auto">
         {ON_RAMPS.map((ramp) => (
           <Link
             key={ramp.href}

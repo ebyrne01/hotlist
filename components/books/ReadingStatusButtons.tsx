@@ -82,6 +82,22 @@ export default function ReadingStatusButtons({
         if (newStatus === "read" && prevStatus !== "read" && onMarkedRead) {
           onMarkedRead();
         }
+
+        // Update Reading DNA signal (fire-and-forget)
+        const statusWeights: Record<string, number> = {
+          want_to_read: 0.3,
+          reading: 0.5,
+          read: 0.7,
+        };
+        fetch("/api/reading-dna/recompute", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            bookId,
+            signalType: "reading_status",
+            weight: statusWeights[newStatus] ?? 0.5,
+          }),
+        }).catch(() => {});
       }
     } catch (err) {
       console.error("[handleStatusChange] failed:", err);

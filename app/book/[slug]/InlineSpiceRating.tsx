@@ -86,15 +86,13 @@ export default function InlineSpiceRating({ bookId }: { bookId: string }) {
           body: JSON.stringify({ bookId }),
         }).catch(() => {});
 
-        // Update Reading DNA signal (fire-and-forget)
+        // Trigger DNA recompute for spice preference update (no signal saved).
+        // Spice is a content rating, not a preference signal — recomputeDna()
+        // reads spice_rating directly from user_ratings.
         fetch("/api/reading-dna/recompute", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            bookId,
-            signalType: "rating",
-            weight: value >= 5 ? 1.0 : value >= 4 ? 0.8 : value >= 3 ? 0.6 : 0.3,
-          }),
+          body: JSON.stringify({ recomputeOnly: true }),
         }).catch(() => {});
 
         setJustSaved(true);
