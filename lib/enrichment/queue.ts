@@ -18,9 +18,11 @@
  */
 
 import { getAdminClient } from "@/lib/supabase/admin";
-import { scanBook, isUnderDailyLimit } from "@/lib/quality/haiku-scanner";
+import { scanBook } from "@/lib/quality/haiku-scanner";
 import { tryPromoteToCanon } from "@/lib/books/canon-gate";
 import Anthropic from "@anthropic-ai/sdk";
+
+const POST_ENRICHMENT_SCAN_DAILY_CAP = 50;
 
 export type JobType =
   | "goodreads_detail"
@@ -264,9 +266,23 @@ export async function updateBookEnrichmentStatus(bookId: string): Promise<void> 
   // Post-enrichment hooks when a book reaches "complete"
   if (status === "complete") {
     try {
-      if (await isUnderDailyLimit()) {
+      // Cap post-enrichment scans by counting books that completed today
+      // (isUnderDailyLimit counted flags, not API calls — clean books were uncapped)
+      const todayStart = new Date();
+      todayStart.setUTCHours(0, 0, 0, 0);
+      const { count } = await supabase
+        .from("books")
+        .select("*", { count: "exact", head: true })
+        .eq("enrichment_status", "complete")
+        .gte("updated_at", todayStart.toISOString());
+
+      if ((count ?? 0) <= POST_ENRICHMENT_SCAN_DAILY_CAP) {
         const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
         await scanBook(client, bookId);
+      } else {
+        console.log(
+          `[post-enrichment] Haiku scan skipped — ${count} books completed today (cap: ${POST_ENRICHMENT_SCAN_DAILY_CAP})`
+        );
       }
     } catch (err) {
       console.warn("[post-enrichment] Haiku scan failed:", err);

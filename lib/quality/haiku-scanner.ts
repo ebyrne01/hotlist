@@ -53,26 +53,29 @@ interface BookForScanner {
 }
 
 // ── Daily limit guard ─────────────────────────────────
+// Counts books that completed enrichment today as a proxy for scan volume.
+// Old approach counted quality_flags rows, which missed clean books (no flags
+// written = no increment), leaving API calls effectively uncapped.
 
-async function getDailyUsage(): Promise<number> {
+async function getDailyScannedCount(): Promise<number> {
   const supabase = getAdminClient();
   const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
+  todayStart.setUTCHours(0, 0, 0, 0);
 
   const { count } = await supabase
-    .from("quality_flags")
+    .from("books")
     .select("*", { count: "exact", head: true })
-    .eq("source", "haiku_scanner")
-    .gte("created_at", todayStart.toISOString());
+    .eq("enrichment_status", "complete")
+    .gte("updated_at", todayStart.toISOString());
 
   return count ?? 0;
 }
 
 export async function isUnderDailyLimit(): Promise<boolean> {
   const limit = Number(process.env.QUALITY_SCANNER_DAILY_LIMIT) || DEFAULT_DAILY_LIMIT;
-  const usage = await getDailyUsage();
+  const usage = await getDailyScannedCount();
   if (usage >= limit) {
-    console.log(`[haiku-scanner] Daily limit reached (${usage}/${limit})`);
+    console.log(`[haiku-scanner] Daily limit reached (${usage} books completed today, cap: ${limit})`);
     return false;
   }
   return true;
