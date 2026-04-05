@@ -131,7 +131,7 @@ export async function GET(request: NextRequest) {
   }
 
   // ── 5. Fetch full book details for merged set ──
-  let query = supabase
+  const query = supabase
     .from("books")
     .select("id, title, author, cover_url, subgenre")
     .eq("is_canon", true)
