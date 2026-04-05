@@ -33,6 +33,7 @@ export default function DnaTest({ tropes }: DnaTestProps) {
   const [selectedBooks, setSelectedBooks] = useState<Set<string>>(new Set());
   const [dislikedBooks, setDislikedBooks] = useState<Set<string>>(new Set());
   const [selectedWarnings, setSelectedWarnings] = useState<Set<string>>(new Set());
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [pickedBookData, setPickedBookData] = useState<CandidateBook[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
