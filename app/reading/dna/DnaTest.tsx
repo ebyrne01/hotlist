@@ -306,27 +306,20 @@ export default function DnaTest({ tropes }: DnaTestProps) {
         )}
 
         <div className="flex items-center gap-2">
-          {/* Skip button for optional steps */}
-          {isOptionalStep && !isFinalStep && (
-            <Button variant="ghost" size="sm" onClick={handleNext}>
-              Skip
-            </Button>
-          )}
-          {isFinalStep && (
-            <Button variant="ghost" size="sm" onClick={handleSave} disabled={saving}>
-              Skip
-            </Button>
-          )}
-
           {isFinalStep ? (
-            <Button
-              variant="primary"
-              size="md"
-              onClick={handleSave}
-              disabled={saving}
-            >
-              {saving ? "Building your DNA..." : "Build My Reading DNA"}
-            </Button>
+            <>
+              <Button variant="ghost" size="sm" onClick={handleSave} disabled={saving}>
+                Skip
+              </Button>
+              <Button
+                variant="primary"
+                size="md"
+                onClick={handleSave}
+                disabled={saving}
+              >
+                {saving ? "Building your DNA..." : "Build My Reading DNA"}
+              </Button>
+            </>
           ) : (
             <Button
               variant="primary"
@@ -334,7 +327,9 @@ export default function DnaTest({ tropes }: DnaTestProps) {
               onClick={handleNext}
               disabled={!canAdvance()}
             >
-              Next
+              {isOptionalStep && step === "disliked" && dislikedBooks.size === 0
+                ? "Skip"
+                : "Next"}
             </Button>
           )}
         </div>
