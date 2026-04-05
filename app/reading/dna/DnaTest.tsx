@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useSignInModal } from "@/lib/auth/useSignInModal";
@@ -20,23 +20,85 @@ type Step = "subgenre" | "spice" | "tropes" | "books" | "disliked" | "warnings";
 const STEPS: Step[] = ["subgenre", "spice", "tropes", "books", "disliked", "warnings"];
 const MIN_TROPES = 3;
 const MIN_BOOKS = 3;
+const STORAGE_KEY = "dna_test_draft";
+
+interface DraftState {
+  step: Step;
+  subgenres: string[];
+  spiceLevels: number[];
+  tropes: string[];
+  books: string[];
+  dislikedBooks: string[];
+  warnings: string[];
+}
+
+function saveDraft(state: DraftState) {
+  try {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // sessionStorage unavailable (SSR, private browsing quota)
+  }
+}
+
+function loadDraft(): DraftState | null {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as DraftState;
+  } catch {
+    return null;
+  }
+}
+
+function clearDraft() {
+  try {
+    sessionStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+}
 
 export default function DnaTest({ tropes }: DnaTestProps) {
   const router = useRouter();
   const { user } = useAuth();
   const { openSignIn } = useSignInModal();
 
-  const [step, setStep] = useState<Step>("subgenre");
-  const [selectedSubgenres, setSelectedSubgenres] = useState<Set<string>>(new Set());
-  const [spiceLevels, setSpiceLevels] = useState<Set<number>>(new Set());
-  const [selectedTropes, setSelectedTropes] = useState<Set<string>>(new Set());
-  const [selectedBooks, setSelectedBooks] = useState<Set<string>>(new Set());
-  const [dislikedBooks, setDislikedBooks] = useState<Set<string>>(new Set());
-  const [selectedWarnings, setSelectedWarnings] = useState<Set<string>>(new Set());
+  // Restore draft from sessionStorage (survives OAuth redirect)
+  const draft = useRef(loadDraft());
+  const [step, setStep] = useState<Step>(draft.current?.step ?? "subgenre");
+  const [selectedSubgenres, setSelectedSubgenres] = useState<Set<string>>(
+    new Set(draft.current?.subgenres)
+  );
+  const [spiceLevels, setSpiceLevels] = useState<Set<number>>(
+    new Set(draft.current?.spiceLevels)
+  );
+  const [selectedTropes, setSelectedTropes] = useState<Set<string>>(
+    new Set(draft.current?.tropes)
+  );
+  const [selectedBooks, setSelectedBooks] = useState<Set<string>>(
+    new Set(draft.current?.books)
+  );
+  const [dislikedBooks, setDislikedBooks] = useState<Set<string>>(
+    new Set(draft.current?.dislikedBooks)
+  );
+  const [selectedWarnings, setSelectedWarnings] = useState<Set<string>>(
+    new Set(draft.current?.warnings)
+  );
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [pickedBookData, setPickedBookData] = useState<CandidateBook[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Auto-save after returning from OAuth if user is now signed in and draft exists
+  const autoSaveTriggered = useRef(false);
+  useEffect(() => {
+    if (user && draft.current && !autoSaveTriggered.current) {
+      autoSaveTriggered.current = true;
+      // User just signed in and we have a draft — auto-submit
+      handleSave();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   const stepIndex = STEPS.indexOf(step);
 
@@ -123,7 +185,17 @@ export default function DnaTest({ tropes }: DnaTestProps) {
 
   const handleSave = async () => {
     if (!user) {
-      openSignIn(() => handleSave());
+      // Persist state before OAuth redirect
+      saveDraft({
+        step,
+        subgenres: Array.from(selectedSubgenres),
+        spiceLevels: Array.from(spiceLevels),
+        tropes: Array.from(selectedTropes),
+        books: Array.from(selectedBooks),
+        dislikedBooks: Array.from(dislikedBooks),
+        warnings: Array.from(selectedWarnings),
+      });
+      openSignIn();
       return;
     }
 
@@ -149,6 +221,7 @@ export default function DnaTest({ tropes }: DnaTestProps) {
         throw new Error(data.error ?? "Failed to save your Reading DNA");
       }
 
+      clearDraft();
       router.push("/reading/dna/results");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
