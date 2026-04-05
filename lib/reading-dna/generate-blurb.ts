@@ -31,6 +31,7 @@ export async function generateDnaBlurb(input: {
   topTropes: { name: string; score: number }[];
   spicePreferred: number;
   bookTitles: string[];
+  subgenres?: string[];
 }): Promise<string | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return null;
@@ -60,7 +61,13 @@ export async function generateDnaBlurb(input: {
 
   const bookList = input.bookTitles.join(", ");
 
+  const subgenreLine =
+    input.subgenres && input.subgenres.length > 0
+      ? `Preferred subgenres: ${input.subgenres.join(", ")}`
+      : null;
+
   const userPrompt = [
+    ...(subgenreLine ? [subgenreLine] : []),
     `This reader's top trope affinities: ${tropeList}`,
     `Spice preference: ${spiceLabel}`,
     `Books they loved: ${bookList}`,
@@ -88,7 +95,8 @@ export async function generateDnaBlurb(input: {
       .replace(/\*(.*?)\*/g, "$1")
       .trim();
   } catch (err) {
-    console.error("[generate-blurb] Failed to generate DNA blurb:", err);
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[generate-blurb] Failed to generate DNA blurb: ${msg}`);
     return null;
   }
 }

@@ -16,6 +16,8 @@ import { buildDnaProfile, type DnaSignal } from "@/lib/reading-dna/compute";
 import { generateDnaBlurb } from "@/lib/reading-dna/generate-blurb";
 import { NextRequest, NextResponse } from "next/server";
 
+export const maxDuration = 30;
+
 export async function POST(request: NextRequest) {
   const supabase = createClient();
   const {
@@ -192,6 +194,7 @@ export async function POST(request: NextRequest) {
       })),
       spicePreferred: profile.spicePreferred,
       bookTitles,
+      subgenres: subgenrePreferences,
     });
 
     if (blurb) {
