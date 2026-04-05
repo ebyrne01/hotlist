@@ -48,12 +48,9 @@ export async function GET(request: NextRequest) {
     bookTropeMap.set(bookId, list);
   }
 
-  // Only return books with at least one trope (needed for DNA computation)
+  // Return all matching books — tropes are optional (books without tropes
+  // still contribute author/series signal to suggestions)
   const books = bookRows
-    .filter((b) => {
-      const tropes = bookTropeMap.get(b.id as string);
-      return tropes && tropes.length > 0;
-    })
     .map((b) => ({
       id: b.id as string,
       title: b.title as string,
