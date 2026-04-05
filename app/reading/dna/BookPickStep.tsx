@@ -93,32 +93,42 @@ export default function BookPickStep({
     };
   }, [searchQuery]);
 
-  // Fetch suggestions when picks change
+  // Fetch suggestions when picks change (debounced to avoid grid churn on rapid picks)
+  const suggestDebounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const suggestAbortRef = useRef<AbortController>();
   useEffect(() => {
     if (selected.size === 0) {
       setSuggestions([]);
       return;
     }
 
-    const controller = new AbortController();
-    setLoadingSuggestions(true);
+    // Debounce: wait 600ms after last pick before re-fetching
+    if (suggestDebounceRef.current) clearTimeout(suggestDebounceRef.current);
 
-    const pickedParam = Array.from(selected).join(",");
-    const subgenreParam = Array.from(subgenres).join(",");
-    const url = `/api/reading-dna/suggestions?picked=${encodeURIComponent(pickedParam)}${subgenreParam ? `&subgenres=${encodeURIComponent(subgenreParam)}` : ""}`;
+    suggestDebounceRef.current = setTimeout(() => {
+      if (suggestAbortRef.current) suggestAbortRef.current.abort();
+      const controller = new AbortController();
+      suggestAbortRef.current = controller;
+      setLoadingSuggestions(true);
 
-    fetch(url, { signal: controller.signal })
-      .then((res) => (res.ok ? res.json() : { books: [] }))
-      .then((data) => setSuggestions(data.books ?? []))
-      .catch(() => {})
-      .finally(() => setLoadingSuggestions(false));
+      const pickedParam = Array.from(selected).join(",");
+      const subgenreParam = Array.from(subgenres).join(",");
+      const url = `/api/reading-dna/suggestions?picked=${encodeURIComponent(pickedParam)}${subgenreParam ? `&subgenres=${encodeURIComponent(subgenreParam)}` : ""}`;
 
-    return () => controller.abort();
+      fetch(url, { signal: controller.signal })
+        .then((res) => (res.ok ? res.json() : { books: [] }))
+        .then((data) => setSuggestions(data.books ?? []))
+        .catch(() => {})
+        .finally(() => setLoadingSuggestions(false));
+    }, 600);
+
+    return () => {
+      if (suggestDebounceRef.current) clearTimeout(suggestDebounceRef.current);
+    };
   }, [selected, subgenres]);
 
-  // Filter search results to exclude already-picked
+  // Filter search results to exclude already-picked (search clears on pick anyway)
   const filteredSearch = searchResults.filter((b) => !selected.has(b.id));
-  const filteredSuggestions = suggestions.filter((b) => !selected.has(b.id));
   const pickedList = Array.from(pickedBooks.values()).filter((b) =>
     selected.has(b.id)
   );
@@ -211,12 +221,12 @@ export default function BookPickStep({
       )}
 
       {/* Suggestions grid */}
-      {(filteredSuggestions.length > 0 || loadingSuggestions) && (
+      {(suggestions.length > 0 || loadingSuggestions) && (
         <div>
           <p className="text-xs font-mono text-muted uppercase tracking-wide mb-2 px-1">
             You might also love...
           </p>
-          {loadingSuggestions && filteredSuggestions.length === 0 ? (
+          {loadingSuggestions && suggestions.length === 0 ? (
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 max-w-3xl mx-auto">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div
@@ -227,7 +237,7 @@ export default function BookPickStep({
             </div>
           ) : (
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 max-w-3xl mx-auto">
-              {filteredSuggestions.map((book) => (
+              {suggestions.map((book) => (
                 <BookButton
                   key={book.id}
                   book={book}
