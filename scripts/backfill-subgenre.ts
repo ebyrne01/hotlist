@@ -7,6 +7,9 @@
  * Safe to run multiple times — idempotent updates.
  */
 
+import { config } from "dotenv";
+config({ path: ".env.local" });
+
 import { createClient } from "@supabase/supabase-js";
 import { classifySubgenre } from "../lib/books/subgenre-classifier";
 
