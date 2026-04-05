@@ -24,6 +24,7 @@ import { getGoodreadsBookById, resolveToGoodreadsId, generateBookSlug } from "@/
 import { saveGoodreadsBookToCache, cleanCoverUrl, stripSeriesSuffix, resolveExistingBook } from "@/lib/books/cache";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { computeGenreBucketing } from "@/lib/spice/genre-bucketing";
+import { classifySubgenre } from "@/lib/books/subgenre-classifier";
 import { runAuthorCrawl } from "@/lib/books/author-crawl";
 import { searchBookPlaylists } from "@/lib/spotify/search";
 import { detectAndSaveAudiobookStatus } from "@/lib/books/audiobook-detect";
@@ -124,6 +125,31 @@ async function upsertGenreBucketing(supabase: SupabaseClient, bookId: string) {
   console.log(
     `[enrichment-worker] Genre bucketing for book ${bookId}: spice=${result.spice}, confidence=${result.confidence}, tags=${result.matchedTags.join(", ")}`
   );
+}
+
+/**
+ * Classify and save subgenre for a book based on its genres.
+ * Called after genre bucketing — they share the same trigger (genres becoming available).
+ */
+async function upsertSubgenre(supabase: SupabaseClient, bookId: string) {
+  const { data: bookRow } = await supabase
+    .from("books")
+    .select("genres")
+    .eq("id", bookId)
+    .single();
+
+  const genres: string[] = bookRow?.genres ?? [];
+  if (genres.length === 0) return;
+
+  const subgenre = classifySubgenre(genres);
+  if (!subgenre) return;
+
+  await supabase
+    .from("books")
+    .update({ subgenre, updated_at: new Date().toISOString() })
+    .eq("id", bookId);
+
+  console.log(`[enrichment-worker] Subgenre for book ${bookId}: ${subgenre}`);
 }
 
 /**
@@ -392,8 +418,9 @@ async function processJob(job: QueuedJob): Promise<"data" | "no-data"> {
           await detectAndSaveAudiobookStatus(book_id, detail.coverUrl ?? null);
         }
       }
-      // Run genre bucketing after Goodreads genres are saved
+      // Run genre bucketing + subgenre classification after Goodreads genres are saved
       await upsertGenreBucketing(supabase, book_id);
+      await upsertSubgenre(supabase, book_id);
       break;
     }
 
@@ -444,6 +471,7 @@ async function processJob(job: QueuedJob): Promise<"data" | "no-data"> {
         // Serper returned nothing or low-confidence match — run genre bucketing
         // as fallback, then signal no-data so the job retries
         await upsertGenreBucketing(supabase, book_id);
+        await upsertSubgenre(supabase, book_id);
         return "no-data";
       }
       const signalConfidence = spiceData.confidence === "high" ? 0.85 : 0.7;
@@ -516,8 +544,9 @@ async function processJob(job: QueuedJob): Promise<"data" | "no-data"> {
           }
         }
       }
-      // Always run genre bucketing as a fallback signal
+      // Always run genre bucketing + subgenre classification as a fallback signal
       await upsertGenreBucketing(supabase, book_id);
+      await upsertSubgenre(supabase, book_id);
       break;
     }
 

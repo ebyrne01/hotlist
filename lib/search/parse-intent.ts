@@ -9,6 +9,9 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createHash } from "crypto";
 import { getAdminClient } from "@/lib/supabase/admin";
+import { CANONICAL_SUBGENRES } from "@/lib/books/subgenre-classifier";
+
+const VALID_SUBGENRES = new Set(CANONICAL_SUBGENRES.map((s) => s.slug));
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
@@ -120,7 +123,7 @@ ${tropeSlugs.join(", ")}
 
 Spice scale: 1 = clean/sweet, 2 = mild/closed-door, 3 = steamy/moderate, 4 = spicy/explicit, 5 = scorching
 
-Subgenres: contemporary, historical, paranormal, romantasy, sci-fi-romance, romantic-suspense, erotic-romance
+Subgenres: contemporary, historical, paranormal, romantasy, sci-fi-romance, romantic-suspense, dark-romance, erotic-romance
 
 Respond with ONLY a JSON object, no markdown, no explanation:
 {
@@ -179,7 +182,7 @@ Rules:
       ratingMin: parsed.ratingMin ?? null,
       seriesComplete: parsed.seriesComplete ?? null,
       standalone: parsed.standalone ?? null,
-      subgenre: parsed.subgenre ?? null,
+      subgenre: VALID_SUBGENRES.has(parsed.subgenre) ? parsed.subgenre : null,
       sortBy: parsed.sortBy ?? "relevance",
       trending: parsed.trending ?? false,
       similarTo: parsed.similarTo ?? null,

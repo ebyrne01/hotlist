@@ -10,7 +10,8 @@
  *   3. Similar-to
  *   4. Rating minimum
  *
- * Subgenre is IGNORED as a hard filter (column is unpopulated) — used only for sort boost.
+ * Subgenre is used as a sort boost in relevance ranking, not a hard filter —
+ * ensures books with unclassified subgenre still appear in results.
  */
 
 import { getAdminClient } from "@/lib/supabase/admin";
@@ -239,8 +240,8 @@ export async function executeFilteredSearch(
   }
 
   // ── Fetch candidate books ──────────────────────
-  // Note: subgenre is NOT used as a hard filter (column unpopulated).
-  // It's used as a sort boost in relevance ranking instead.
+  // Subgenre: populated via genre classifier. Used as a sort boost
+  // in relevance ranking, not a hard filter.
   let query = supabase
     .from("books")
     .select("*")
@@ -368,6 +369,13 @@ function sortResults(
             requestedSlugs.has(t.slug)
           ).length;
           if (bTropeHits !== aTropeHits) return bTropeHits - aTropeHits;
+        }
+
+        // Subgenre boost: if a subgenre was requested, prefer matching books
+        if (filters.subgenre) {
+          const aMatch = a.subgenre === filters.subgenre ? 1 : 0;
+          const bMatch = b.subgenre === filters.subgenre ? 1 : 0;
+          if (bMatch !== aMatch) return bMatch - aMatch;
         }
 
         // Tiebreak by Goodreads rating
