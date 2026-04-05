@@ -106,6 +106,13 @@ const SUBGENRE_RULES: SubgenreRule[] = [
       "sword-and-sorcery",
     ],
     requiresAlso: ["romance", "love", "romantic", "fantasy-romance"],
+    excludeIf: [
+      "dark-romance", "dark",
+      "historical-fiction", "historical-romance", "historical",
+      "regency", "regency-romance", "victorian-romance", "medieval-romance",
+      "thriller", "suspense", "romantic-suspense",
+      "time-travel",
+    ],
   },
 
   // 2. PARANORMAL — supernatural beings, not epic fantasy
@@ -192,6 +199,7 @@ const SUBGENRE_RULES: SubgenreRule[] = [
     subgenre: "romantic-suspense",
     primaryTags: ["suspense", "thriller", "mystery"],
     requiresAlso: ["romance", "romantic", "love"],
+    excludeIf: ["dark-romance", "dark"],
   },
 
   // 6. DARK ROMANCE — tone modifier, lower priority than setting-based subgenres
