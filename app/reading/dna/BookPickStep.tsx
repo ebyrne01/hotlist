@@ -37,6 +37,8 @@ export default function BookPickStep({
     new Map()
   );
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  // When true, the next `selected` change won't re-fetch suggestions
+  const skipSuggestionRefetch = useRef(false);
 
   // Wrap onToggle to also track book data
   const handleToggle = useCallback(
@@ -93,12 +95,18 @@ export default function BookPickStep({
     };
   }, [searchQuery]);
 
-  // Fetch suggestions when picks change (debounced to avoid grid churn on rapid picks)
+  // Fetch suggestions when picks change — but NOT when picking from the suggestion grid
   const suggestDebounceRef = useRef<ReturnType<typeof setTimeout>>();
   const suggestAbortRef = useRef<AbortController>();
   useEffect(() => {
     if (selected.size === 0) {
       setSuggestions([]);
+      return;
+    }
+
+    // Skip re-fetch when the pick came from the suggestion grid
+    if (skipSuggestionRefetch.current) {
+      skipSuggestionRefetch.current = false;
       return;
     }
 
@@ -127,8 +135,7 @@ export default function BookPickStep({
     };
   }, [selected, subgenres]);
 
-  // Filter search results to exclude already-picked (search clears on pick anyway)
-  const filteredSearch = searchResults.filter((b) => !selected.has(b.id));
+  const filteredSearch = searchResults;
   const pickedList = Array.from(pickedBooks.values()).filter((b) =>
     selected.has(b.id)
   );
@@ -209,11 +216,7 @@ export default function BookPickStep({
                 key={book.id}
                 book={book}
                 isSelected={selected.has(book.id)}
-                onToggle={() => {
-                  handleToggle(book);
-                  setSearchQuery("");
-                  setSearchResults([]);
-                }}
+                onToggle={() => handleToggle(book)}
               />
             ))}
           </div>
@@ -242,7 +245,10 @@ export default function BookPickStep({
                   key={book.id}
                   book={book}
                   isSelected={selected.has(book.id)}
-                  onToggle={() => handleToggle(book)}
+                  onToggle={() => {
+                    skipSuggestionRefetch.current = true;
+                    handleToggle(book);
+                  }}
                 />
               ))}
             </div>

@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { CANONICAL_SUBGENRES } from "@/lib/books/subgenre-classifier";
+import BookRow from "@/components/books/BookRow";
+import type { BookDetail } from "@/lib/types";
 
 const SUBGENRE_LABEL_MAP: Record<string, string> = Object.fromEntries(
   CANONICAL_SUBGENRES.map((sg) => [sg.slug, sg.label])
@@ -28,6 +30,8 @@ export default function DnaResults() {
   const [dna, setDna] = useState<DnaData | null>(null);
   const [tropeNames, setTropeNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [forYouBooks, setForYouBooks] = useState<BookDetail[]>([]);
+  const [forYouLoading, setForYouLoading] = useState(false);
 
   useEffect(() => {
     async function fetchDna() {
@@ -54,6 +58,14 @@ export default function DnaResults() {
               }
             }
           }
+
+          // Fetch For You recommendations (async, non-blocking)
+          setForYouLoading(true);
+          fetch("/api/homepage/for-you")
+            .then((r) => (r.ok ? r.json() : { books: [] }))
+            .then((d) => setForYouBooks(d.books ?? []))
+            .catch(() => {})
+            .finally(() => setForYouLoading(false));
         }
       } catch {
         // Fail gracefully — show static fallback
@@ -82,7 +94,7 @@ export default function DnaResults() {
     : SPICE_LABELS[Math.round(spicePref)] ?? "Medium";
 
   return (
-    <div className="max-w-lg mx-auto px-4 py-16 text-center">
+    <div className="max-w-2xl mx-auto px-4 py-16 text-center">
       <div className="text-5xl mb-4">🧬</div>
       <h1 className="font-display text-3xl font-bold text-ink">
         Your Reading DNA is ready!
@@ -156,6 +168,31 @@ export default function DnaResults() {
             </div>
           )}
 
+          {/* Recommendation preview */}
+          {dna && (
+            <>
+              <div className="mt-10 mb-6 border-t border-fire/10" />
+              <h2 className="font-display text-xl font-bold text-ink">
+                Does this sound like you?
+              </h2>
+              <p className="text-sm font-body text-muted mt-1">
+                Here are some books we think you&apos;ll love
+              </p>
+              <div className="text-left mt-4">
+                {forYouLoading ? (
+                  <BookRow books={[]} loading />
+                ) : forYouBooks.length > 0 ? (
+                  <BookRow books={forYouBooks} />
+                ) : (
+                  <p className="text-sm font-body text-muted/70 py-4 text-center">
+                    We&apos;re still building your recommendations — check the
+                    homepage soon!
+                  </p>
+                )}
+              </div>
+            </>
+          )}
+
           {/* Fallback when no DNA loaded */}
           {!dna && (
             <p className="text-sm font-body text-muted mt-3 max-w-sm mx-auto">
@@ -171,13 +208,13 @@ export default function DnaResults() {
           href="/"
           className="inline-flex items-center justify-center rounded-lg font-body font-medium bg-fire text-white hover:bg-fire/90 px-6 min-h-[44px] transition-colors"
         >
-          See your recommendations
+          Yes! Show me more
         </Link>
         <Link
-          href="/reading"
+          href="/reading/dna"
           className="inline-flex items-center justify-center rounded-lg font-body font-medium text-muted hover:text-ink hover:bg-ink/5 px-4 min-h-[44px] transition-colors"
         >
-          Import more books
+          Not quite — retake
         </Link>
       </div>
     </div>
