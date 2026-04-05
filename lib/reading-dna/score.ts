@@ -24,8 +24,14 @@ export interface ScoredBook {
 /**
  * Score a single book against a user's DNA profile.
  *
- * score = dotProduct(user.tropeAffinities, book.tropeVector)
- *       + spiceBonus(user.spicePreferred, book.spiceLevel, user.spiceTolerance)
+ * score = tropeOverlap * spiceMultiplier
+ *
+ * Spice multiplier ranges from 0.3 (very far from preferred) to 1.0 (perfect
+ * match), using a Gaussian shaped by the user's tolerance. This means a book
+ * with wrong spice keeps at most 30% of its trope score — spice mismatches
+ * are real penalties, not ignorable rounding errors.
+ *
+ * Books without spice data are scored neutrally (multiplier = 1.0).
  */
 export function scoreBook(profile: DnaProfile, book: BookVector): ScoredBook {
   // Trope dot product
@@ -35,18 +41,21 @@ export function scoreBook(profile: DnaProfile, book: BookVector): ScoredBook {
     tropeOverlap += userAffinity * bookWeight;
   }
 
-  // Spice bonus: gaussian-shaped bonus centered on preferred spice
+  // Spice multiplier: gaussian that compresses score for spice mismatches
   let spiceBonus = 0;
+  let spiceMultiplier = 1.0;
   if (book.spiceLevel !== null) {
     const diff = Math.abs(book.spiceLevel - profile.spicePreferred);
     const tolerance = Math.max(profile.spiceTolerance, 0.5);
-    // Gaussian: peaks at 0.2 when diff=0, drops off with tolerance
-    spiceBonus = 0.2 * Math.exp(-(diff * diff) / (2 * tolerance * tolerance));
+    const gaussian = Math.exp(-(diff * diff) / (2 * tolerance * tolerance));
+    // Ranges from 0.3 (far off) to 1.0 (perfect match)
+    spiceMultiplier = 0.3 + 0.7 * gaussian;
+    spiceBonus = spiceMultiplier - 1.0; // negative when penalized, for reporting
   }
 
   return {
     bookId: book.bookId,
-    score: tropeOverlap + spiceBonus,
+    score: tropeOverlap * spiceMultiplier,
     tropeOverlap,
     spiceBonus,
   };
