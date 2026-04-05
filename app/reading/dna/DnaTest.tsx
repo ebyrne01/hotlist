@@ -19,7 +19,7 @@ interface DnaTestProps {
 type Step = "subgenre" | "spice" | "tropes" | "books" | "disliked" | "warnings";
 const STEPS: Step[] = ["subgenre", "spice", "tropes", "books", "disliked", "warnings"];
 const MIN_TROPES = 3;
-const MIN_BOOKS = 3;
+const MIN_BOOKS = 5;
 const STORAGE_KEY = "dna_test_draft";
 
 interface DraftState {

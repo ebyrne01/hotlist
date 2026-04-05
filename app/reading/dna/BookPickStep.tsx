@@ -19,7 +19,7 @@ interface BookPickStepProps {
   onPickedBooksChange?: (books: CandidateBook[]) => void;
 }
 
-const MIN_BOOKS = 3;
+const MIN_BOOKS = 5;
 
 export default function BookPickStep({
   selected,
@@ -258,12 +258,17 @@ export default function BookPickStep({
 
       {selected.size > 0 && selected.size < MIN_BOOKS && (
         <p className="text-center text-sm text-muted font-body">
-          {MIN_BOOKS - selected.size} more to go — search for another favorite above
+          {MIN_BOOKS - selected.size} more to go — try different authors and series for better results
         </p>
       )}
-      {selected.size >= MIN_BOOKS && (
+      {selected.size >= MIN_BOOKS && selected.size < 8 && (
         <p className="text-center text-sm text-muted font-body">
-          Keep adding books for better recommendations, or hit Next
+          The more variety you add, the better your recommendations. Try another author or series!
+        </p>
+      )}
+      {selected.size >= 8 && (
+        <p className="text-center text-sm text-muted font-body">
+          Great selection! Hit Next when you&apos;re ready.
         </p>
       )}
     </div>
