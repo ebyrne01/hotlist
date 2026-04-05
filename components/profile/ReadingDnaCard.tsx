@@ -11,6 +11,7 @@ const SUBGENRE_LABEL_MAP: Record<string, string> = Object.fromEntries(
 interface DnaData {
   tropeAffinities: Record<string, number>;
   spicePreferred: number;
+  spiceTolerance: number;
   signalCount: number;
   source: string;
   dnaDescription: string | null;
@@ -82,8 +83,14 @@ export default function ReadingDnaCard() {
     .sort(([, a], [, b]) => b - a)
     .slice(0, 5);
 
-  const spiceRounded = Math.round(dna.spicePreferred);
-  const spiceLabel = SPICE_LABELS[spiceRounded] ?? "Medium";
+  const spicePref = dna.spicePreferred;
+  const spiceTol = dna.spiceTolerance ?? 0;
+  const spiceMin = Math.max(1, Math.round(spicePref - spiceTol));
+  const spiceMax = Math.min(5, Math.round(spicePref + spiceTol));
+  const isSpiceRange = spiceMin < spiceMax;
+  const spiceLabel = isSpiceRange
+    ? `${SPICE_LABELS[spiceMin]} to ${SPICE_LABELS[spiceMax]}`
+    : SPICE_LABELS[Math.round(spicePref)] ?? "Medium";
 
   // Context line based on signal count
   let contextLine: string;
@@ -161,7 +168,9 @@ export default function ReadingDnaCard() {
           Spice Level
         </p>
         <p className="text-sm font-body text-ink">
-          {"🌶️".repeat(spiceRounded)} {spiceLabel}
+          {isSpiceRange
+            ? `${"🌶️".repeat(spiceMin)} – ${"🌶️".repeat(spiceMax)} ${spiceLabel}`
+            : `${"🌶️".repeat(Math.round(spicePref))} ${spiceLabel}`}
         </p>
       </div>
 

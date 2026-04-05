@@ -2,7 +2,7 @@
  * POST /api/reading-dna
  *
  * Save DNA test results and compute initial Reading DNA.
- * Body: { subgenrePreferences: string[], spiceLevel: number, tropeSelections: string[], bookSelections: string[] }
+ * Body: { subgenrePreferences: string[], spiceLevels: number[], tropeSelections: string[], bookSelections: string[] }
  */
 
 import { createClient } from "@/lib/supabase/server";
@@ -29,9 +29,9 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { subgenrePreferences, spiceLevel, tropeSelections, bookSelections, dislikedBooks, cwPreferences } = body as {
+  const { subgenrePreferences, spiceLevels, tropeSelections, bookSelections, dislikedBooks, cwPreferences } = body as {
     subgenrePreferences?: string[];
-    spiceLevel: number;
+    spiceLevels: number[];
     tropeSelections: string[];
     bookSelections: string[];
     dislikedBooks?: string[];
@@ -40,16 +40,16 @@ export async function POST(request: NextRequest) {
 
   // Validate
   if (
-    typeof spiceLevel !== "number" ||
-    spiceLevel < 1 ||
-    spiceLevel > 5 ||
+    !Array.isArray(spiceLevels) ||
+    spiceLevels.length < 1 ||
+    spiceLevels.some((l) => typeof l !== "number" || l < 1 || l > 5) ||
     !Array.isArray(tropeSelections) ||
     tropeSelections.length < 3 ||
     !Array.isArray(bookSelections) ||
     bookSelections.length < 3
   ) {
     return NextResponse.json(
-      { error: "Invalid test data. Need spice (1-5), 3+ tropes, 3+ books." },
+      { error: "Invalid test data. Need 1+ spice levels (1-5), 3+ tropes, 3+ books." },
       { status: 400 }
     );
   }
@@ -143,7 +143,7 @@ export async function POST(request: NextRequest) {
       tropes: Object.keys(vectorMap.get(id)!),
     }));
 
-  const profile = buildDnaProfile(dnaSignals, spiceLevel, []);
+  const profile = buildDnaProfile(dnaSignals, spiceLevels, []);
   await saveDna(user.id, profile, "quiz");
 
   // Save subgenre preferences
@@ -193,6 +193,7 @@ export async function POST(request: NextRequest) {
         score: t.score,
       })),
       spicePreferred: profile.spicePreferred,
+      spiceLevels,
       bookTitles,
       subgenres: subgenrePreferences,
     });

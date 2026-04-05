@@ -30,6 +30,7 @@ const SPICE_LABELS: Record<number, string> = {
 export async function generateDnaBlurb(input: {
   topTropes: { name: string; score: number }[];
   spicePreferred: number;
+  spiceLevels?: number[];
   bookTitles: string[];
   subgenres?: string[];
 }): Promise<string | null> {
@@ -52,8 +53,13 @@ export async function generateDnaBlurb(input: {
 
   const client = new Anthropic({ apiKey });
 
-  const spiceLabel =
-    SPICE_LABELS[Math.round(input.spicePreferred)] ?? "medium";
+  // Build spice description from selected levels (or fall back to preferred)
+  const selectedLevels = input.spiceLevels && input.spiceLevels.length > 0
+    ? [...input.spiceLevels].sort((a, b) => a - b)
+    : [Math.round(input.spicePreferred)];
+  const spiceLabel = selectedLevels.length === 1
+    ? SPICE_LABELS[selectedLevels[0]] ?? "medium"
+    : selectedLevels.map((l) => SPICE_LABELS[l] ?? String(l)).join(" to ");
 
   const tropeList = input.topTropes
     .map((t) => `${t.name} (${Math.round(t.score * 100)}%)`)

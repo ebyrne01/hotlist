@@ -11,6 +11,7 @@ const SUBGENRE_LABEL_MAP: Record<string, string> = Object.fromEntries(
 interface DnaData {
   tropeAffinities: Record<string, number>;
   spicePreferred: number;
+  spiceTolerance: number;
   dnaDescription: string | null;
   subgenrePreferences?: string[];
 }
@@ -70,8 +71,15 @@ export default function DnaResults() {
         .slice(0, 6)
     : [];
 
-  const spiceRounded = Math.round(dna?.spicePreferred ?? 3);
-  const spiceLabel = SPICE_LABELS[spiceRounded] ?? "Medium";
+  // Derive spice range from preferred + tolerance
+  const spicePref = dna?.spicePreferred ?? 3;
+  const spiceTol = dna?.spiceTolerance ?? 0;
+  const spiceMin = Math.max(1, Math.round(spicePref - spiceTol));
+  const spiceMax = Math.min(5, Math.round(spicePref + spiceTol));
+  const isRange = spiceMin < spiceMax;
+  const spiceLabel = isRange
+    ? `${SPICE_LABELS[spiceMin]} to ${SPICE_LABELS[spiceMax]}`
+    : SPICE_LABELS[Math.round(spicePref)] ?? "Medium";
 
   return (
     <div className="max-w-lg mx-auto px-4 py-16 text-center">
@@ -141,7 +149,9 @@ export default function DnaResults() {
                 Spice level
               </p>
               <p className="text-sm font-body text-ink">
-                {"🌶️".repeat(spiceRounded)} {spiceLabel}
+                {isRange
+                  ? `${"🌶️".repeat(spiceMin)} – ${"🌶️".repeat(spiceMax)} ${spiceLabel}`
+                  : `${"🌶️".repeat(Math.round(spicePref))} ${spiceLabel}`}
               </p>
             </div>
           )}

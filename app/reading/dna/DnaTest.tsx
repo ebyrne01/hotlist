@@ -28,7 +28,7 @@ export default function DnaTest({ tropes }: DnaTestProps) {
 
   const [step, setStep] = useState<Step>("subgenre");
   const [selectedSubgenres, setSelectedSubgenres] = useState<Set<string>>(new Set());
-  const [spiceLevel, setSpiceLevel] = useState<number | null>(null);
+  const [spiceLevels, setSpiceLevels] = useState<Set<number>>(new Set());
   const [selectedTropes, setSelectedTropes] = useState<Set<string>>(new Set());
   const [selectedBooks, setSelectedBooks] = useState<Set<string>>(new Set());
   const [dislikedBooks, setDislikedBooks] = useState<Set<string>>(new Set());
@@ -45,6 +45,15 @@ export default function DnaTest({ tropes }: DnaTestProps) {
       const next = new Set(prev);
       if (next.has(slug)) next.delete(slug);
       else next.add(slug);
+      return next;
+    });
+  }, []);
+
+  const toggleSpice = useCallback((level: number) => {
+    setSpiceLevels((prev) => {
+      const next = new Set(prev);
+      if (next.has(level)) next.delete(level);
+      else next.add(level);
       return next;
     });
   }, []);
@@ -87,7 +96,7 @@ export default function DnaTest({ tropes }: DnaTestProps) {
 
   const canAdvance = () => {
     if (step === "subgenre") return selectedSubgenres.size >= 1;
-    if (step === "spice") return spiceLevel !== null;
+    if (step === "spice") return spiceLevels.size >= 1;
     if (step === "tropes") return selectedTropes.size >= MIN_TROPES;
     if (step === "books") return selectedBooks.size >= MIN_BOOKS;
     if (step === "disliked") return true;
@@ -127,7 +136,7 @@ export default function DnaTest({ tropes }: DnaTestProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           subgenrePreferences: Array.from(selectedSubgenres),
-          spiceLevel,
+          spiceLevels: Array.from(spiceLevels),
           tropeSelections: Array.from(selectedTropes),
           bookSelections: Array.from(selectedBooks),
           dislikedBooks: Array.from(dislikedBooks),
@@ -173,7 +182,7 @@ export default function DnaTest({ tropes }: DnaTestProps) {
         />
       )}
       {step === "spice" && (
-        <SpiceStep selected={spiceLevel} onSelect={setSpiceLevel} />
+        <SpiceStep selected={spiceLevels} onToggle={toggleSpice} />
       )}
       {step === "tropes" && (
         <TropeStep

@@ -70,28 +70,36 @@ export function computeTropeAffinities(signals: DnaSignal[]): Record<string, num
 }
 
 /**
- * Compute spice preference from explicit quiz pick + any rated books.
+ * Compute spice preference from explicit quiz picks + any rated books.
  *
- * If quiz spice is provided, it's used as the baseline.
- * Organic ratings shift it via weighted average over time.
+ * quizSpice can be a single number, an array of selected levels, or null.
+ * Multiple quiz selections widen the tolerance naturally.
+ * Organic ratings shift the preference via weighted average over time.
  */
 export function computeSpicePreference(
-  quizSpice: number | null,
+  quizSpice: number | number[] | null,
   ratedSpiceLevels: { level: number; weight: number }[]
 ): { preferred: number; tolerance: number } {
-  if (ratedSpiceLevels.length === 0 && quizSpice !== null) {
-    return { preferred: quizSpice, tolerance: 1.0 };
+  const quizLevels = quizSpice === null ? [] : Array.isArray(quizSpice) ? quizSpice : [quizSpice];
+
+  if (ratedSpiceLevels.length === 0 && quizLevels.length === 0) {
+    return { preferred: 3.0, tolerance: 1.5 }; // neutral default
   }
 
-  if (ratedSpiceLevels.length === 0 && quizSpice === null) {
-    return { preferred: 3.0, tolerance: 1.5 }; // neutral default
+  if (ratedSpiceLevels.length === 0 && quizLevels.length > 0) {
+    const avg = quizLevels.reduce((a, b) => a + b, 0) / quizLevels.length;
+    const preferred = Math.round(avg * 10) / 10;
+    // Tolerance from range: single pick = 1.0, wider range = wider tolerance
+    const range = Math.max(...quizLevels) - Math.min(...quizLevels);
+    const tolerance = Math.max(range / 2, 0.5);
+    return { preferred, tolerance: Math.round(tolerance * 10) / 10 };
   }
 
   // Weighted average of all spice data points
   const allPoints: { level: number; weight: number }[] = [];
 
-  if (quizSpice !== null) {
-    allPoints.push({ level: quizSpice, weight: 1.5 }); // quiz gets extra weight
+  for (const level of quizLevels) {
+    allPoints.push({ level, weight: 1.5 }); // quiz picks get extra weight
   }
   allPoints.push(...ratedSpiceLevels);
 
@@ -102,7 +110,7 @@ export function computeSpicePreference(
   // Tolerance = weighted std dev
   const variance =
     allPoints.reduce((sum, p) => sum + p.weight * (p.level - preferred) ** 2, 0) / totalWeight;
-  const tolerance = Math.round(Math.sqrt(variance) * 10) / 10 || 1.0;
+  const tolerance = Math.round(Math.sqrt(variance) * 10) / 10 || 0.5;
 
   return { preferred, tolerance };
 }
@@ -112,7 +120,7 @@ export function computeSpicePreference(
  */
 export function buildDnaProfile(
   signals: DnaSignal[],
-  quizSpice: number | null,
+  quizSpice: number | number[] | null,
   ratedSpiceLevels: { level: number; weight: number }[]
 ): DnaProfile {
   const tropeAffinities = computeTropeAffinities(signals);
