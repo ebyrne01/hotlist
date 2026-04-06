@@ -42,18 +42,25 @@ const CANONICAL_TROPES = [
   "billionaire",
   "bodyguard-romance",
   "chosen-one",
+  "court-academy",
   "dark-romance",
+  "dragon-riders",
   "enemies-to-lovers",
   "fae-faerie",
   "fake-dating",
+  "fated-mates",
   "forbidden-romance",
   "forced-proximity",
+  "found-family",
   "friends-to-lovers",
   "grumpy-sunshine",
   "holiday-romance",
   "instalove",
   "love-triangle",
   "mafia-romance",
+  "monster-romance",
+  "morally-grey",
+  "mortal-immortal",
   "office-romance",
   "reverse-harem",
   "second-chance",
@@ -106,7 +113,7 @@ Description: ${book.description}
 
 Rules:
 - Only select tropes you are reasonably confident apply based on the description
-- Most books have 1-4 tropes. Some may have none from this list.
+- Most books have 3-8 tropes. Select all that clearly apply.
 - Do NOT guess tropes that aren't supported by the description
 - Return trope names exactly as listed above
 
