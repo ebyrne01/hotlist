@@ -20,6 +20,7 @@ export interface QualityScorecard {
     tropes: { count: number; pct: number };
     amazonAsin: { count: number; pct: number };
     aiRecommendations: { count: number; pct: number };
+    subgenre: { count: number; pct: number };
   };
   flags: {
     openP0: number;
@@ -53,6 +54,7 @@ export async function computeQualityScorecard(): Promise<QualityScorecard> {
     rioSpiceResult,
     tropeResult,
     recsResult,
+    subgenreResult,
     flagP0Result,
     flagP1Result,
     flagTotalResult,
@@ -79,6 +81,8 @@ export async function computeQualityScorecard(): Promise<QualityScorecard> {
     supabase.rpc("count_canon_with_tropes"),
     // AI recommendations coverage
     supabase.rpc("count_canon_with_recommendations"),
+    // Subgenre coverage
+    supabase.from("books").select("*", { count: "exact", head: true }).eq("is_canon", true).not("subgenre", "is", null),
     // Open quality flags
     supabase.from("quality_flags").select("*", { count: "exact", head: true }).eq("status", "open").eq("priority", "P0"),
     supabase.from("quality_flags").select("*", { count: "exact", head: true }).eq("status", "open").eq("priority", "P1"),
@@ -107,6 +111,7 @@ export async function computeQualityScorecard(): Promise<QualityScorecard> {
       tropes: { count: tropeCount, pct: pct(tropeCount) },
       amazonAsin: { count: asinResult.count ?? 0, pct: pct(asinResult.count ?? 0) },
       aiRecommendations: { count: recsCount, pct: pct(recsCount) },
+      subgenre: { count: subgenreResult.count ?? 0, pct: pct(subgenreResult.count ?? 0) },
     },
     flags: {
       openP0: flagP0Result.count ?? 0,

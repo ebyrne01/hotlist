@@ -54,6 +54,7 @@ interface Scorecard {
     tropes: CoverageMetric;
     amazonAsin: CoverageMetric;
     aiRecommendations: CoverageMetric;
+    subgenre: CoverageMetric;
   };
   flags: {
     openP0: number;
@@ -133,6 +134,7 @@ const COVERAGE_LABELS: Record<string, string> = {
   tropes: "Tropes",
   amazonAsin: "Amazon ASIN",
   aiRecommendations: "AI Recs",
+  subgenre: "Subgenre",
 };
 
 const REMAP_ISSUE_TYPES = [
