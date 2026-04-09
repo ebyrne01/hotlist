@@ -1,38 +1,33 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { Star, Check } from "lucide-react";
+import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { useSignInModal } from "@/lib/auth/useSignInModal";
-import { clsx } from "clsx";
 
-// ── Inline Star Rating Badge ────────────────────────
-// Lives in the ratings row alongside Goodreads + Amazon badges.
+// ── Inline Score Badge ──────────────────────────────
+// Read-only display of user's decimal score in the ratings row.
+// Scoring now lives inside ReaderResponse (post-read expansion).
 
 export function InlineUserRating({ bookId }: { bookId: string }) {
-  const [user, setUser] = useState<{ id: string } | null>(null);
+  const [score, setScore] = useState<number | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
-  const [starRating, setStarRating] = useState(0);
-  const [hovered, setHovered] = useState(0);
-  const [editing, setEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [justSaved, setJustSaved] = useState(false);
-  const { openSignIn } = useSignInModal();
   const supabase = createClient();
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) {
-        setUser({ id: data.user.id });
         supabase
           .from("user_ratings")
-          .select("star_rating")
+          .select("score, star_rating")
           .eq("user_id", data.user.id)
           .eq("book_id", bookId)
           .single()
           .then(({ data: existing }) => {
-            if (existing?.star_rating) {
-              setStarRating(existing.star_rating);
+            if (existing) {
+              // Prefer decimal score, fall back to star_rating
+              const s = existing.score != null
+                ? parseFloat(existing.score)
+                : existing.star_rating ?? null;
+              setScore(s);
             }
           });
       }
@@ -40,184 +35,16 @@ export function InlineUserRating({ bookId }: { bookId: string }) {
     });
   }, [bookId, supabase]);
 
-  const saveRating = useCallback(
-    async (value: number) => {
-      if (!user || saving) return;
-      setSaving(true);
-      const prevStarRating = starRating;
-      // Optimistic update
-      setStarRating(value);
-      setEditing(false);
+  if (!authChecked || score === null) return null;
 
-      try {
-        await supabase.from("user_ratings").upsert(
-          {
-            user_id: user.id,
-            book_id: bookId,
-            star_rating: value,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "user_id,book_id" }
-        );
-
-        // Auto-set reading status to "read" if none set
-        const { data: currentStatus } = await supabase
-          .from("reading_status")
-          .select("status")
-          .eq("user_id", user.id)
-          .eq("book_id", bookId)
-          .single();
-
-        if (!currentStatus) {
-          await supabase.from("reading_status").upsert(
-            {
-              user_id: user.id,
-              book_id: bookId,
-              status: "read",
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: "user_id,book_id" }
-          );
-        }
-
-        // Fire-and-forget: update Reading DNA signal
-        fetch("/api/reading-dna/recompute", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            bookId,
-            signalType: "rating",
-            weight: value >= 5 ? 1.0 : value >= 4 ? 0.8 : value >= 3 ? 0.6 : 0.3,
-          }),
-        }).catch(() => {});
-
-        setJustSaved(true);
-        setTimeout(() => setJustSaved(false), 1500);
-      } catch (err) {
-        console.error("[saveRating] failed:", err);
-        setStarRating(prevStarRating);
-      } finally {
-        setSaving(false);
-      }
-    },
-    [user, saving, starRating, bookId, supabase]
-  );
-
-  if (!authChecked) return null;
-
-  // Logged out: interactive stars that trigger auth on tap
-  if (!user) {
-    return (
-      <div className="flex flex-col items-center gap-1">
-        <span
-          className="inline-flex items-center gap-1"
-          role="radiogroup"
-          aria-label="Rate this book, 1 to 5 stars"
-        >
-          {Array.from({ length: 5 }, (_, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => openSignIn()}
-              className="p-0 transition-colors cursor-pointer hover:scale-110"
-              aria-label={`${i + 1} star${i > 0 ? "s" : ""}`}
-            >
-              <Star
-                size={24}
-                className="fill-none text-[#D4A574] transition-colors hover:fill-[#D4A574]"
-              />
-            </button>
-          ))}
-        </span>
-        <span className="text-xs font-mono text-stone-400 tracking-wide">
-          Rate this book
-        </span>
-      </div>
-    );
-  }
-
-  const display = hovered || starRating;
-
-  // Just saved: brief checkmark
-  if (justSaved) {
-    return (
-      <div className="flex flex-col items-center gap-1">
-        <span className="text-green-600">
-          <Check size={24} strokeWidth={3} />
-        </span>
-        <span className="text-xs font-mono text-green-600 tracking-wide">
-          Saved!
-        </span>
-      </div>
-    );
-  }
-
-  // Logged in, rated, not editing: show filled gold stars
-  if (starRating > 0 && !editing) {
-    return (
-      <div className="flex flex-col items-center gap-1">
-        <span className="inline-flex items-center gap-0.5">
-          {Array.from({ length: 5 }, (_, i) => (
-            <Star
-              key={i}
-              size={24}
-              className={clsx(
-                i < starRating ? "fill-gold text-gold" : "fill-none text-[#D4A574]/40"
-              )}
-            />
-          ))}
-        </span>
-        <button
-          onClick={() => setEditing(true)}
-          className="text-xs font-mono text-stone-400 hover:text-fire transition-colors tracking-wide"
-        >
-          Your rating &middot; edit
-        </button>
-      </div>
-    );
-  }
-
-  // Logged in, unrated or editing: interactive stars
   return (
-    <div
-      className="flex flex-col items-center gap-1"
-      onMouseLeave={() => setHovered(0)}
-    >
-      <span
-        className="inline-flex items-center gap-0.5"
-        role="radiogroup"
-        aria-label="Rate this book, 1 to 5 stars"
-      >
-        {Array.from({ length: 5 }, (_, i) => {
-          const starIndex = i + 1;
-          const filled = starIndex <= Math.round(display);
-          return (
-            <button
-              key={i}
-              type="button"
-              role="radio"
-              aria-checked={starIndex === starRating}
-              disabled={saving}
-              className="p-0 transition-colors cursor-pointer hover:scale-110 focus-visible:outline-2 focus-visible:outline-fire focus-visible:outline-offset-2 rounded"
-              onMouseEnter={() => setHovered(starIndex)}
-              onClick={() => saveRating(starIndex)}
-              aria-label={`${starIndex} star${starIndex > 1 ? "s" : ""}`}
-            >
-              <Star
-                size={24}
-                className={clsx(
-                  "transition-colors",
-                  filled ? "fill-gold text-gold" : "fill-none text-[#D4A574]"
-                )}
-              />
-            </button>
-          );
-        })}
+    <div className="flex flex-col items-center gap-1">
+      <span className="font-display text-lg font-bold text-fire">
+        {score.toFixed(1)}
       </span>
-      <span className="text-xs font-mono text-stone-400 tracking-wide">
-        Rate this book
+      <span className="text-xs font-mono text-muted tracking-wide">
+        Your rating
       </span>
     </div>
   );
 }
-

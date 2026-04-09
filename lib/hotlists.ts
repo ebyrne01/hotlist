@@ -159,7 +159,7 @@ export async function getHotlistWithBooks(
     userId && rawBooks.length > 0
       ? supabase
           .from("user_ratings")
-          .select("book_id, star_rating, spice_rating, note")
+          .select("book_id, star_rating, score, spice_rating, note")
           .eq("user_id", userId)
           .in("book_id", rawBooks.map((b) => b.id as string))
       : Promise.resolve({ data: null }),
@@ -170,6 +170,7 @@ export async function getHotlistWithBooks(
   for (const r of (userRatingsRes.data ?? []) as Record<string, unknown>[]) {
     userRatingMap.set(r.book_id as string, {
       starRating: r.star_rating as number | null,
+      score: r.score != null ? parseFloat(r.score as string) : null,
       spiceRating: r.spice_rating as number | null,
       note: (r.note as string) ?? null,
     });

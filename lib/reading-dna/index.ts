@@ -174,15 +174,18 @@ export async function recomputeDna(userId: string): Promise<DnaProfile | null> {
 }
 
 /**
- * Get the weight for a star rating value.
+ * Get the DNA weight for a decimal score (0.0–5.0).
  */
-export function weightForStarRating(rating: number): number {
-  if (rating >= 5) return SIGNAL_WEIGHTS.star_5;
-  if (rating >= 4) return SIGNAL_WEIGHTS.star_4;
-  if (rating >= 3) return SIGNAL_WEIGHTS.star_3;
-  if (rating >= 2) return SIGNAL_WEIGHTS.star_2;
+export function weightForScore(score: number): number {
+  if (score >= 4.5) return SIGNAL_WEIGHTS.star_5;
+  if (score >= 3.5) return SIGNAL_WEIGHTS.star_4;
+  if (score >= 2.5) return SIGNAL_WEIGHTS.star_3;
+  if (score >= 1.5) return SIGNAL_WEIGHTS.star_2;
   return SIGNAL_WEIGHTS.star_1;
 }
+
+/** @deprecated Use weightForScore instead */
+export const weightForStarRating = weightForScore;
 
 // Re-export types and computation functions
 export type { DnaProfile, DnaSignal } from "./compute";

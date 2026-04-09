@@ -23,6 +23,7 @@ interface SpiceSectionProps {
   romanceIoSlug: string | null;
   communitySpice: SpiceData | null;
   inferredSpice: SpiceData | null;
+  compact?: boolean;
 }
 
 export default function SpiceSection({
@@ -33,6 +34,7 @@ export default function SpiceSection({
   romanceIoSlug,
   communitySpice: initialCommunity,
   inferredSpice,
+  compact = false,
 }: SpiceSectionProps) {
   const [user, setUser] = useState<{ id: string } | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
@@ -105,10 +107,10 @@ export default function SpiceSection({
           { onConflict: "user_id,book_id" }
         );
 
-        // Auto-set reading status to "read" if none set
+        // Auto-set reading status to "read" / "loved_it" if none set
         const { data: currentStatus } = await supabase
           .from("reading_status")
-          .select("status")
+          .select("status, response")
           .eq("user_id", user.id)
           .eq("book_id", bookId)
           .single();
@@ -119,6 +121,8 @@ export default function SpiceSection({
               user_id: user.id,
               book_id: bookId,
               status: "read",
+              response: "loved_it",
+              is_reading: false,
               updated_at: new Date().toISOString(),
             },
             { onConflict: "user_id,book_id" }

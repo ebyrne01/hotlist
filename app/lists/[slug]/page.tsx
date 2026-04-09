@@ -36,6 +36,19 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       title: `${meta.name} — Hotlist`,
       description: `${byline} Hotlist with ${meta.bookCount} books compared side by side`,
       type: "website",
+      images: [
+        {
+          url: `/api/hotlists/${params.slug}/og-image`,
+          width: 1200,
+          height: 630,
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `${meta.name} — Hotlist`,
+      description: `${byline} Hotlist with ${meta.bookCount} books compared side by side`,
+      images: [`/api/hotlists/${params.slug}/og-image`],
     },
   };
 }

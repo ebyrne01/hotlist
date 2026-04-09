@@ -31,12 +31,12 @@ export default function ProfilePage() {
             .from("reading_status")
             .select("id", { count: "exact", head: true })
             .eq("user_id", user!.id)
-            .eq("status", "read"),
+            .in("response", ["loved_it", "it_was_fine", "didnt_finish"]),
           supabase
             .from("reading_status")
             .select("id", { count: "exact", head: true })
             .eq("user_id", user!.id)
-            .eq("status", "want_to_read"),
+            .in("response", ["must_read", "on_the_shelf"]),
           supabase
             .from("hotlists")
             .select("id", { count: "exact", head: true })

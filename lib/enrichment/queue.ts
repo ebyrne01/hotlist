@@ -37,7 +37,9 @@ export type JobType =
   | "author_crawl"
   | "booktrack_prompt"
   | "spotify_playlists"
-  | "ai_recommendations";
+  | "ai_recommendations"
+  | "reddit_buzz"
+  | "discussion_links";
 
 export interface QueuedJob {
   id: string;
@@ -70,7 +72,7 @@ export async function queueEnrichmentJobs(
   // trope_inference, review_classifier, llm_spice, booktrack_prompt (high coverage, not needed for new books)
   const allJobs: JobType[] = [
     "goodreads_detail", "goodreads_rating", "amazon_rating", "romance_io_spice",
-    "metadata", "spotify_playlists",
+    "metadata", "spotify_playlists", "reddit_buzz", "discussion_links",
   ];
 
   const jobs = skipJobTypes
@@ -78,7 +80,7 @@ export async function queueEnrichmentJobs(
     : allJobs;
 
   // Serper-dependent jobs get more retries — transient Google index misses are common
-  const SERPER_JOBS = new Set<JobType>(["romance_io_spice", "amazon_rating", "goodreads_rating"]);
+  const SERPER_JOBS = new Set<JobType>(["romance_io_spice", "amazon_rating", "goodreads_rating", "reddit_buzz", "discussion_links"]);
 
   const rows = jobs.map((jobType) => ({
     book_id: bookId,
@@ -110,7 +112,7 @@ export const JOB_TYPE_PRIORITY: JobType[][] = [
   // Tier 2: Core data — covers, descriptions, ISBNs
   ["goodreads_detail", "metadata"],
   // Tier 3: Nice-to-have enrichments
-  ["author_crawl", "spotify_playlists"],
+  ["author_crawl", "spotify_playlists", "reddit_buzz", "discussion_links"],
 ];
 
 /**
@@ -226,7 +228,7 @@ export async function markJobFailed(
  * These are nice-to-have enrichments — if they fail or are pending,
  * the book should still be marked "complete" once core jobs finish.
  */
-const BONUS_JOB_TYPES: JobType[] = ["spotify_playlists"];
+const BONUS_JOB_TYPES: JobType[] = ["spotify_playlists", "discussion_links"];
 
 /**
  * Update a book's enrichment_status based on its completed jobs.

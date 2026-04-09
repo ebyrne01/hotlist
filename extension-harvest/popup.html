@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=350">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,700&family=DM+Mono:wght@400;500&family=Libre+Baskerville&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup">
+    <div class="header">
+      <span class="wordmark">Harvester</span>
+      <span class="fire" role="img" aria-label="Hotlist logo">🌾</span>
+    </div>
+
+    <!-- Always visible: source picker + navigate -->
+    <div class="source-nav">
+      <select id="sourcePicker" class="source-picker">
+        <option value="">Jump to source...</option>
+        <optgroup label="Weekly — Romance.io">
+          <option value="https://www.romance.io/new">All new releases (this week)</option>
+          <option value="https://www.romance.io/new/dark-romance">Dark romance &amp; mafia</option>
+          <option value="https://www.romance.io/new/fantasy-romance">Fantasy romance</option>
+          <option value="https://www.romance.io/new/contemporary-romance">Contemporary romance</option>
+          <option value="https://www.romance.io/new/paranormal-romance">Paranormal romance</option>
+          <option value="https://www.romance.io/new/romantic-comedy">Romantic comedy</option>
+          <option value="https://www.romance.io/new/sports-romance">Sports romance</option>
+          <option value="https://www.romance.io/new/new-adult-romance">New adult romance</option>
+          <option value="https://www.romance.io/new/science-fiction-romance">Sci-fi romance</option>
+        </optgroup>
+        <optgroup label="Weekly — Amazon New Releases">
+          <option value="https://www.amazon.com/gp/new-releases/books/23">Romance — all new releases</option>
+          <option value="https://www.amazon.com/gp/new-releases/books/13354">Contemporary romance</option>
+          <option value="https://www.amazon.com/gp/new-releases/books/10159309011">Romantic erotica</option>
+          <option value="https://www.amazon.com/gp/new-releases/books/7654406011">Romantasy (physical)</option>
+        </optgroup>
+        <optgroup label="Weekly — Amazon Coming Soon">
+          <option value="https://www.amazon.com/Romance-Coming-Soon-Books/s?rh=n%3A23%2Cp_n_publication_date%3A1250228011">Romance — coming soon</option>
+          <option value="https://www.amazon.com/Contemporary-Romance-Coming-Soon/s?rh=n%3A13354%2Cp_n_publication_date%3A1250228011">Contemporary — coming soon</option>
+          <option value="https://www.amazon.com/Romance-Coming-Soon-Kindle-eBooks/s?rh=n%3A158566011%2Cp_n_date%3A1249102011">Kindle romance — coming soon</option>
+        </optgroup>
+        <optgroup label="Weekly — Amazon Bestsellers">
+          <option value="https://www.amazon.com/Best-Sellers-Romance/zgbs/books/23">Romance (print)</option>
+          <option value="https://www.amazon.com/Best-Sellers-Romance/zgbs/digital-text/158566011">Romance (Kindle)</option>
+          <option value="https://www.amazon.com/Best-Sellers-Romantic-Fantasy/zgbs/digital-text/14530456011">Romantic Fantasy</option>
+          <option value="https://www.amazon.com/Best-Sellers-Romantasy/zgbs/books/7654406011">Romantasy (print)</option>
+          <option value="https://www.amazon.com/Best-Sellers-Paranormal/zgbs/digital-text/15195309011">Paranormal romance</option>
+          <option value="https://www.amazon.com/Best-Sellers-Contemporary-Romance/zgbs/books/13354">Contemporary romance</option>
+        </optgroup>
+        <optgroup label="Monthly — Goodreads Anticipated">
+          <option value="https://www.goodreads.com/list/show/228872">Apr 2026 anticipated</option>
+          <option value="https://www.goodreads.com/list/show/228874">May 2026 anticipated</option>
+          <option value="https://www.goodreads.com/list/show/228873">Jun 2026 anticipated</option>
+          <option value="https://www.goodreads.com/list/show/228875">Jul 2026 anticipated</option>
+          <option value="https://www.goodreads.com/list/show/230174">2026 Most Anticipated (annual)</option>
+          <option value="https://www.goodreads.com/list/show/233046">2026 Romantasy &amp; Fantasy Romance</option>
+          <option value="https://www.goodreads.com/list/show/235570">2026 Dark Romance</option>
+          <option value="https://www.goodreads.com/list/show/234050">Best Reverse Harem 2026</option>
+          <option value="https://www.goodreads.com/list/show/232055">Romantasy TBR 2026</option>
+          <option value="https://www.goodreads.com/list/show/235195">2026 Paranormal Romance</option>
+          <option value="https://www.goodreads.com/list/show/234280">2026 Contemporary Romance</option>
+        </optgroup>
+        <optgroup label="Monthly — Blogs">
+          <option value="https://www.shereadsromancebooks.com/new-romance-books-2026/">She Reads — 2026 Romance</option>
+          <option value="https://www.shereadsromancebooks.com/new-romantasy-books-2026/">She Reads — 2026 Romantasy</option>
+          <option value="https://thenerddaily.com/2026-anticipated-romance-book-releases/">Nerd Daily — 2026 Romance</option>
+          <option value="https://www.gabriellesands.com/most-anticipated-romance-books-2026/">Gabrielle Sands — 2026</option>
+          <option value="https://www.momneedsachapter.com/turnthepage/new-romance-releases-2026">Mom Needs a Chapter — 2026</option>
+          <option value="https://www.booklistqueen.com/2026-book-releases/">Booklist Queen — 2026</option>
+          <option value="https://www.popvortex.com/books/charts/fantasy-romance-ebooks.php">PopVortex — Fantasy Romance</option>
+        </optgroup>
+      </select>
+    </div>
+
+    <!-- State: Ready to scan (on a harvestable page) -->
+    <div id="state-ready" class="state hidden">
+      <p class="tagline" id="readyUrl"></p>
+      <button id="scanBtn" class="btn-primary">Scan Page</button>
+    </div>
+
+    <!-- State: Scan results -->
+    <div id="state-harvest" class="state hidden">
+      <div class="harvest-preview">
+        <p class="status-text" id="harvestStatus">Scanning page...</p>
+        <div id="harvestWarning" class="harvest-warning hidden"></div>
+        <div id="harvestSample" class="harvest-sample book-list" role="list" aria-label="Preview of found books"></div>
+        <div class="harvest-summary" id="harvestSummary">
+          <span class="harvest-count" id="harvestCount"></span>
+          <span class="harvest-new" id="harvestNew"></span>
+        </div>
+        <div class="harvest-options">
+          <label><input type="checkbox" id="skipAudiobooks" checked> Skip audiobooks</label>
+        </div>
+        <button id="harvestBtn" class="btn-primary" disabled>Add to Batch</button>
+      </div>
+    </div>
+
+    <!-- State: Not a harvestable page -->
+    <div id="state-default" class="state hidden">
+      <p class="tagline">Pick a source above, or navigate to any supported page and click the icon.</p>
+    </div>
+
+    <!-- State: Error -->
+    <div id="state-error" class="state hidden">
+      <p class="error-text" id="errorText"></p>
+      <button id="retryBtn" class="btn-secondary">Try Again</button>
+    </div>
+
+    <!-- Always visible: batch status -->
+    <div class="harvest-batch" id="batchSection">
+      <div class="batch-header">
+        <span class="batch-count" id="batchCount">0 books in batch</span>
+        <span class="batch-age" id="batchAge"></span>
+      </div>
+      <div class="batch-actions">
+        <button id="exportCsvBtn" class="btn-secondary" disabled>Export CSV</button>
+        <button id="uploadBtn" class="btn-secondary" disabled>Upload to Hotlist</button>
+      </div>
+      <a href="#" class="btn-text" id="clearBatchBtn">Clear batch</a>
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

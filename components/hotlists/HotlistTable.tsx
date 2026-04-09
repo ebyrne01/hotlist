@@ -291,7 +291,7 @@ export default function HotlistTable({
                     ) : null}
                     <InlineStarRating
                       bookId={hb.bookId}
-                      currentRating={hb.userRating?.starRating ?? null}
+                      currentRating={hb.userRating?.score ?? hb.userRating?.starRating ?? null}
                       isOwner={isOwner}
                       onRate={onRateBook}
                     />
@@ -472,7 +472,7 @@ export default function HotlistTable({
                   <td className="px-3 py-3 text-center">
                     <InlineStarRating
                       bookId={hb.bookId}
-                      currentRating={hb.userRating?.starRating ?? null}
+                      currentRating={hb.userRating?.score ?? hb.userRating?.starRating ?? null}
                       isOwner={isOwner}
                       onRate={onRateBook}
                     />

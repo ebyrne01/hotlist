@@ -6,15 +6,12 @@ import { getAdminClient } from "@/lib/supabase/admin";
 import BookCover from "@/components/ui/BookCover";
 import RatingBadge from "@/components/ui/RatingBadge";
 import Badge from "@/components/ui/Badge";
-import BookRow from "@/components/books/BookRow";
-import { hydrateBookDetailBatch } from "@/lib/books/cache";
 import { cache } from "react";
 import { getBookDetail } from "@/lib/books";
 import { extractGoodreadsIdFromSlug } from "@/lib/books/goodreads-search";
 import { isJunkTitle } from "@/lib/books/romance-filter";
-import { deduplicateBooks, isCompilationTitle } from "@/lib/books/utils";
+import { isCompilationTitle } from "@/lib/books/utils";
 import type { BookDetail } from "@/lib/types";
-import { Video } from "lucide-react";
 import BookDetailClient from "./BookDetailClient";
 import BookPreview from "@/components/books/BookPreview";
 import { InlineUserRating } from "./InlineRatings";
@@ -27,6 +24,9 @@ import AdminBookFlag from "@/components/books/AdminBookFlag";
 import SpotifyTrigger from "./SpotifyTrigger";
 import OnDemandSynopsis from "./OnDemandSynopsis";
 import { PepperRow } from "@/components/ui/PepperIcon";
+import WhatsHot from "@/components/books/WhatsHot";
+import WhatMightCoolYouOff from "@/components/books/WhatMightCoolYouOff";
+import DiscussionHub from "@/components/books/DiscussionHub";
 
 // ── Helpers ──────────────────────────────────────────
 
@@ -66,131 +66,6 @@ const getBook = cache(async (slug: string): Promise<BookDetail | null> => {
 
   return null;
 });
-
-async function getRelatedBooks(
-  book: BookDetail,
-  limit: number = 10
-): Promise<BookDetail[]> {
-  const supabase = getAdminClient();
-
-  // Phase 1: Try AI-powered recommendations (cached in book_recommendations)
-  const { data: aiRecs } = await supabase
-    .from("book_recommendations")
-    .select("recommended_book_id")
-    .eq("book_id", book.id)
-    .order("position", { ascending: true })
-    .limit(limit * 2);
-
-  if (aiRecs && aiRecs.length > 0) {
-    const recIds = aiRecs.map((r) => r.recommended_book_id);
-    const { data: recBooks } = await supabase
-      .from("books")
-      .select("*")
-      .in("id", recIds)
-      .eq("is_canon", true)
-      .not("cover_url", "is", null);
-
-    if (recBooks && recBooks.length > 0) {
-      const filtered = (recBooks as Record<string, unknown>[]).filter(
-        (b) => !isJunkTitle(b.title as string)
-      );
-      const batchMap = await hydrateBookDetailBatch(supabase, filtered);
-      const results: BookDetail[] = [];
-      for (const b of filtered) {
-        const hydrated = batchMap.get(b.id as string);
-        if (hydrated) results.push(hydrated);
-      }
-
-      // Preserve AI ordering
-      const orderMap = new Map(recIds.map((id, i) => [id, i]));
-      results.sort((a, b) => (orderMap.get(a.id) ?? 99) - (orderMap.get(b.id) ?? 99));
-
-      const qualified = deduplicateBooks(results)
-        .filter((b) => !!b.coverUrl)
-        .slice(0, limit);
-
-      if (qualified.length >= 3) return qualified;
-      // If AI recs are too sparse (books deleted, etc.), fall through to trope matching
-    }
-  }
-
-  // Phase 2: Trope-based matching (fallback)
-  if (book.tropes.length === 0) {
-    // No tropes — fall back to same-author books
-    const { data: authorBooks } = await supabase
-      .from("books")
-      .select("*")
-      .eq("author", book.author)
-      .neq("id", book.id)
-      .eq("is_canon", true)
-      .not("cover_url", "is", null)
-      .order("created_at", { ascending: false })
-      .limit(limit * 3);
-
-    if (!authorBooks || authorBooks.length === 0) return [];
-
-    const filteredAuthor = (authorBooks as Record<string, unknown>[]).filter(
-      (b) => !isJunkTitle(b.title as string)
-    );
-    const authorBatchMap = await hydrateBookDetailBatch(supabase, filteredAuthor);
-    const results: BookDetail[] = [];
-    for (const b of filteredAuthor) {
-      const hydrated = authorBatchMap.get(b.id as string);
-      if (hydrated) results.push(hydrated);
-    }
-
-    return deduplicateBooks(results)
-      .filter((b) => !!b.coverUrl)
-      .slice(0, limit);
-  }
-
-  const tropeIds = book.tropes.map((t) => t.id);
-
-  const { data: sharedTropes } = await supabase
-    .from("book_tropes")
-    .select("book_id")
-    .in("trope_id", tropeIds)
-    .neq("book_id", book.id);
-
-  if (!sharedTropes || sharedTropes.length === 0) return [];
-
-  const overlapCount = new Map<string, number>();
-  for (const row of sharedTropes) {
-    overlapCount.set(row.book_id, (overlapCount.get(row.book_id) ?? 0) + 1);
-  }
-  const sortedIds = Array.from(overlapCount.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, limit * 3)
-    .map(([id]) => id);
-
-  if (sortedIds.length === 0) return [];
-
-  const { data: relatedDbBooks } = await supabase
-    .from("books")
-    .select("*")
-    .in("id", sortedIds)
-    .eq("is_canon", true)
-    .not("cover_url", "is", null);
-
-  if (!relatedDbBooks || relatedDbBooks.length === 0) return [];
-
-  const filteredRelated = (relatedDbBooks as Record<string, unknown>[]).filter(
-    (b) => !isJunkTitle(b.title as string)
-  );
-  const relatedBatchMap = await hydrateBookDetailBatch(supabase, filteredRelated);
-  const results: BookDetail[] = [];
-  for (const b of filteredRelated) {
-    const hydrated = relatedBatchMap.get(b.id as string);
-    if (hydrated) results.push(hydrated);
-  }
-
-  const orderMap = new Map(sortedIds.map((id, i) => [id, i]));
-  results.sort((a, b) => (orderMap.get(a.id) ?? 99) - (orderMap.get(b.id) ?? 99));
-
-  return deduplicateBooks(results)
-    .filter((b) => !!b.coverUrl)
-    .slice(0, limit);
-}
 
 // ── SEO metadata ─────────────────────────────────────
 
@@ -253,7 +128,6 @@ export default async function BookPage({ params }: PageProps) {
   }
 
   const enrichmentStatus = book.enrichmentStatus ?? "pending";
-  const relatedBooks = await getRelatedBooks(book);
 
   // Fetch BookTok creator mentions for this book
   const supabase = getAdminClient();
@@ -281,12 +155,34 @@ export default async function BookPage({ params }: PageProps) {
       return true;
     });
 
-  // Fetch series books for sidebar navigation
+  // Fetch buzz signals for WhatsHot
+  const { data: buzzSignalRows } = await supabase
+    .from("book_buzz_signals")
+    .select("source, metadata")
+    .eq("book_id", book.id);
+
+  // Fetch discussion links for Discussion Hub
+  const { data: discussionLinkRows } = await supabase
+    .from("book_discussion_links")
+    .select("url, title, source, source_detail, comment_count")
+    .eq("book_id", book.id)
+    .order("fetched_at", { ascending: false })
+    .limit(5);
+
+  // Fetch series books for navigation + seriesInfo
   let seriesBooks: { id: string; title: string; slug: string; seriesPosition: number | null }[] = [];
+  let seriesInfo: {
+    seriesName: string | null;
+    seriesPosition: number | null;
+    totalBooksInDb: number;
+    highestPosition: number;
+    latestPublishedYear: number | null;
+  } | null = null;
+
   if (book.seriesName) {
     const { data: sBooks } = await supabase
       .from("books")
-      .select("id, title, slug, series_position, goodreads_id, cover_url")
+      .select("id, title, slug, series_position, goodreads_id, cover_url, published_year")
       .eq("series_name", book.seriesName)
       .eq("is_canon", true)
       .not("series_position", "is", null)
@@ -333,7 +229,26 @@ export default async function BookPage({ params }: PageProps) {
         }
       }
 
-      seriesBooks = Array.from(byPosition.values())
+      const positionValues = Array.from(byPosition.values());
+
+      // Compute seriesInfo for WhatsHot / WhatMightCoolYouOff
+      if (positionValues.length > 0) {
+        const highestPosition = Math.max(...positionValues.map(sb => sb.series_position as number));
+        const publishedYears = positionValues
+          .map(sb => sb.published_year as number | null)
+          .filter((y): y is number => y !== null && y > 0);
+        const latestPublishedYear = publishedYears.length > 0 ? Math.max(...publishedYears) : null;
+
+        seriesInfo = {
+          seriesName: book.seriesName,
+          seriesPosition: book.seriesPosition ?? null,
+          totalBooksInDb: positionValues.length,
+          highestPosition,
+          latestPublishedYear,
+        };
+      }
+
+      seriesBooks = positionValues
         .sort((a, b) => (a.series_position as number) - (b.series_position as number))
         .map((sb) => ({
           id: sb.id as string,
@@ -425,7 +340,7 @@ export default async function BookPage({ params }: PageProps) {
 
       <div className="max-w-5xl mx-auto px-4 py-6 sm:py-10 pb-24 sm:pb-10">
 
-        {/* ── Zone A: Hero Header ── */}
+        {/* ── 1. IDENTITY — Hero Header ── */}
         <div className="flex flex-col sm:flex-row gap-5 sm:gap-8 pb-6 sm:pb-8 border-b border-border">
 
           {/* Cover — fixed width on desktop, centered on mobile */}
@@ -619,7 +534,7 @@ export default async function BookPage({ params }: PageProps) {
             {/* Personal spice rating — "Your take" */}
             <InlineSpiceRating bookId={book.id} />
 
-            {/* Row 1: Primary actions — "what do I do with this book" */}
+            {/* Primary actions — "what do I do with this book" */}
             <div className="mt-auto pt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
               {/* Add to Hotlist — primary CTA (hidden on mobile where sticky footer handles it) */}
               <div className="hidden sm:block">
@@ -640,43 +555,7 @@ export default async function BookPage({ params }: PageProps) {
               </div>
             </div>
 
-            {/* Row 2: Buy links — "where do I get this book" (demoted, text-link style) */}
-            <div className="flex items-center flex-wrap gap-x-4 gap-y-1 mt-3">
-              <a
-                href={kindleUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm font-mono text-stone-500 hover:text-fire transition-colors"
-              >
-                Read on Kindle &rarr;
-              </a>
-              <a
-                href={amazonDirectUrl ?? amazonSearchUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm font-mono text-stone-500 hover:text-fire transition-colors"
-              >
-                Amazon
-              </a>
-              <a
-                href={bnUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm font-mono text-stone-500 hover:text-fire transition-colors"
-              >
-                B&amp;N
-              </a>
-              <a
-                href={bookshopUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm font-mono text-stone-500 hover:text-fire transition-colors"
-              >
-                Bookshop
-              </a>
-            </div>
-
-            {/* Row 3: Secondary actions (text link style) */}
+            {/* Share card */}
             <div className="mt-2">
               <CreateShareCardButton bookSlug={book.slug} />
             </div>
@@ -694,200 +573,203 @@ export default async function BookPage({ params }: PageProps) {
           </div>
         </div>
 
-        {/* ── Zone B: Content Body ── */}
-        <div className="mt-6 sm:mt-8 grid grid-cols-1 sm:grid-cols-[1fr_280px] gap-6 sm:gap-8">
+        {/* ── 2. WHAT MAKES IT HOT ── */}
+        <WhatsHot
+          ratings={book.ratings}
+          creatorMentionCount={creatorMentions.length}
+          buzzSignals={(buzzSignalRows ?? []).map((r) => ({
+            source: r.source as string,
+            metadata: (r.metadata ?? {}) as Record<string, unknown>,
+          }))}
+          seriesInfo={seriesInfo}
+        />
 
-          {/* ── Main column ── */}
-          <div className="min-w-0">
+        {/* ── 3. WHAT MIGHT COOL YOU OFF ── */}
+        <WhatMightCoolYouOff
+          ratings={book.ratings}
+          seriesInfo={seriesInfo}
+          goodreadsRatingCount={goodreadsRating?.ratingCount ?? null}
+        />
 
-            {/* Synopsis */}
-            <div className="pb-6 border-b border-border">
-              <h2 className="text-xs font-mono text-muted-a11y uppercase tracking-wide mb-2">
-                About this book
-              </h2>
-              {hasSynopsis ? (
-                <div>
-                  <ExpandableText
-                    text={cleanSynopsis(book.aiSynopsis!, book.title, book.author)}
-                    hookLine
-                    maxLines={3}
-                    className="font-body text-ink/90 leading-[1.85]"
-                    style={{ fontSize: "0.95rem" }}
-                  />
-                  <span className="inline-block mt-1 text-[10px] font-mono text-muted-a11y/60">
-                    AI-generated synopsis
-                  </span>
-                </div>
-              ) : hasDescription ? (
-                <OnDemandSynopsis
-                  bookId={book.id}
-                  bookTitle={book.title}
-                  bookAuthor={book.author}
-                  description={book.description!}
-                  goodreadsId={book.goodreadsId}
-                />
-              ) : (
-                <p className="font-body text-muted-a11y text-sm italic">
-                  No synopsis available yet.
-                </p>
-              )}
-            </div>
-
-
-            {/* Seen on BookTok */}
-            <div className="py-6">
-              <BookTokMentions mentions={creatorMentions} />
-            </div>
-
-            {/* Google Books preview */}
-            <BookPreview
-              isbn={book.isbn13 ?? book.isbn ?? null}
-              googleBooksId={book.googleBooksId ?? null}
-              title={book.title}
-            />
-          </div>
-
-          {/* ── Sidebar (280px on desktop, full-width stacked on mobile) ── */}
-          <div className="space-y-6">
-
-            {/* Series navigation — first in sidebar (decision-critical info) */}
-            {book.seriesName && seriesBooks.length > 1 && (
-              <div id="series-nav">
-                <h3 className="text-xs font-mono text-muted-a11y uppercase tracking-wide mb-2">
-                  {book.seriesName}
-                </h3>
-                <div className="flex flex-col gap-1.5">
-                  {seriesBooks.map((sb) => {
-                    const isCurrent = sb.id === book.id;
-                    const sharedClasses = "flex items-center gap-2 px-3 py-2 rounded-lg text-sm";
-                    const inner = (
-                      <>
-                        <span className={`text-xs font-mono ${isCurrent ? "text-fire" : "text-muted"}`}>
-                          {sb.seriesPosition ?? "?"}
-                        </span>
-                        <span className="truncate">{sb.title}</span>
-                        {isCurrent && (
-                          <span className="ml-auto text-[10px] font-mono text-fire/60">
-                            current
-                          </span>
-                        )}
-                      </>
-                    );
-                    return isCurrent ? (
-                      <div
-                        key={sb.id}
-                        className={`${sharedClasses} bg-fire/5 border border-fire/20 text-ink font-medium`}
-                        aria-current="page"
-                      >
-                        {inner}
-                      </div>
-                    ) : (
-                      <Link
-                        key={sb.id}
-                        href={`/book/${sb.slug}`}
-                        className={`${sharedClasses} border border-border hover:border-muted/40 hover:bg-cream/50 text-ink/80 transition-colors`}
-                      >
-                        {inner}
-                      </Link>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Booktrack — Spotify playlists + AI reading vibes prompt */}
-            <BooktrackSection
-              spotifyPlaylists={book.spotifyPlaylists}
-              booktrackPrompt={book.booktrackPrompt}
-              booktrackMoods={book.booktrackMoods}
-              bookTitle={book.title}
-            />
-            {/* Fire-and-forget: trigger on-demand Spotify lookup if no playlists cached */}
-            {!book.spotifyPlaylists && (
-              <SpotifyTrigger bookId={book.id} title={book.title} author={book.author} />
-            )}
-
-            {/* Source links */}
-            <div>
-              <h3 className="text-xs font-mono text-muted-a11y uppercase tracking-wide mb-2">
-                View on
-              </h3>
-              <div className="flex flex-col gap-1">
-                {book.goodreadsId && (
-                  <a
-                    href={`https://www.goodreads.com/book/show/${book.goodreadsId}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm font-body text-muted-a11y hover:text-fire transition-colors"
-                  >
-                    See reviews on Goodreads <span className="opacity-50">{"\u2197"}</span>
-                  </a>
-                )}
-                {book.romanceIoSlug && (
-                  <a
-                    href={romanceIoUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm font-body text-muted-a11y hover:text-fire transition-colors"
-                  >
-                    View on Romance.io <span className="opacity-50">{"\u2197"}</span>
-                  </a>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Zone C: Full-width bottom ── */}
-
-        {/* Readers also loved */}
-        <section className="mt-8 sm:mt-12 pt-6 sm:pt-8 border-t border-border">
-          <h2 className="font-display text-xl sm:text-2xl font-bold text-ink mb-4">
-            {book.tropes.length > 0
-              ? `More ${book.tropes[0].name.toLowerCase()} reads`
-              : "Similar vibes"}
+        {/* ── 4. ABOUT THIS BOOK ── */}
+        <section className="mt-6 pt-6 border-t border-border">
+          <h2 className="text-xs font-mono text-muted-a11y uppercase tracking-wide mb-2">
+            About this book
           </h2>
-          {relatedBooks.length > 0 ? (
-            <BookRow books={relatedBooks} />
+          {hasSynopsis ? (
+            <div>
+              <ExpandableText
+                text={cleanSynopsis(book.aiSynopsis!, book.title, book.author)}
+                hookLine
+                maxLines={3}
+                className="font-body text-ink/90 leading-[1.85]"
+                style={{ fontSize: "0.95rem" }}
+              />
+              <span className="inline-block mt-1 text-[10px] font-mono text-muted-a11y/60">
+                AI-generated synopsis
+              </span>
+            </div>
+          ) : hasDescription ? (
+            <OnDemandSynopsis
+              bookId={book.id}
+              bookTitle={book.title}
+              bookAuthor={book.author}
+              description={book.description!}
+              goodreadsId={book.goodreadsId}
+            />
           ) : (
-            <p className="text-sm font-body text-muted/70 py-4">
-              We&apos;re still finding similar books. Check back soon!
+            <p className="font-body text-muted-a11y text-sm italic">
+              No synopsis available yet.
             </p>
           )}
         </section>
 
-        {/* BookTok CTA */}
-        <section className="mt-8 pt-6 border-t border-border">
-          <div className="flex items-center gap-3">
-            <Video size={20} className="text-fire" aria-hidden="true" />
-            <div>
-              {creatorMentions.length > 0 ? (
-                <>
-                  <p className="text-sm font-body text-ink font-medium">
-                    Recommended by @{creatorMentions[0].creatorHandle}
-                  </p>
-                  <Link
-                    href={`/discover/${encodeURIComponent(creatorMentions[0].creatorHandle)}`}
-                    className="text-xs font-mono text-fire hover:text-fire/80 transition-colors"
+        {/* ── 5. STAY IN THE WORLD ── */}
+        <section className="mt-6 pt-6 border-t border-border space-y-6">
+          {/* Booktrack — Spotify playlists + AI reading vibes prompt */}
+          <BooktrackSection
+            spotifyPlaylists={book.spotifyPlaylists}
+            booktrackPrompt={book.booktrackPrompt}
+            booktrackMoods={book.booktrackMoods}
+            bookTitle={book.title}
+          />
+          {/* Fire-and-forget: trigger on-demand Spotify lookup if no playlists cached */}
+          {!book.spotifyPlaylists && (
+            <SpotifyTrigger bookId={book.id} title={book.title} author={book.author} />
+          )}
+
+          {/* Seen on BookTok */}
+          <BookTokMentions mentions={creatorMentions} />
+
+          {/* Curated discussions */}
+          <DiscussionHub
+            links={(discussionLinkRows ?? []).map((r) => ({
+              url: r.url as string,
+              title: r.title as string,
+              source: r.source as string,
+              sourceDetail: (r.source_detail as string) ?? null,
+              commentCount: (r.comment_count as number) ?? null,
+            }))}
+          />
+        </section>
+
+        {/* ── 6. SERIES NAVIGATION ── */}
+        {book.seriesName && seriesBooks.length > 1 && (
+          <section id="series-nav" className="mt-6 pt-6 border-t border-border">
+            <h2 className="text-xs font-mono text-muted-a11y uppercase tracking-wide mb-2">
+              {book.seriesName}
+            </h2>
+            <div className="flex flex-col gap-1.5">
+              {seriesBooks.map((sb) => {
+                const isCurrent = sb.id === book.id;
+                const sharedClasses = "flex items-center gap-2 px-3 py-2 rounded-lg text-sm";
+                const inner = (
+                  <>
+                    <span className={`text-xs font-mono ${isCurrent ? "text-fire" : "text-muted"}`}>
+                      {sb.seriesPosition ?? "?"}
+                    </span>
+                    <span className="truncate">{sb.title}</span>
+                    {isCurrent && (
+                      <span className="ml-auto text-[10px] font-mono text-fire/60">
+                        current
+                      </span>
+                    )}
+                  </>
+                );
+                return isCurrent ? (
+                  <div
+                    key={sb.id}
+                    className={`${sharedClasses} bg-fire/5 border border-fire/20 text-ink font-medium`}
+                    aria-current="page"
                   >
-                    See all their picks &rarr;
-                  </Link>
-                </>
-              ) : (
-                <>
-                  <p className="text-sm font-body text-ink font-medium">
-                    Saw this on BookTok?
-                  </p>
+                    {inner}
+                  </div>
+                ) : (
                   <Link
-                    href="/booktok"
-                    className="text-xs font-mono text-fire hover:text-fire/80 transition-colors"
+                    key={sb.id}
+                    href={`/book/${sb.slug}`}
+                    className={`${sharedClasses} border border-border hover:border-muted/40 hover:bg-cream/50 text-ink/80 transition-colors`}
                   >
-                    Paste that video link and find every book &rarr;
+                    {inner}
                   </Link>
-                </>
-              )}
+                );
+              })}
             </div>
+          </section>
+        )}
+
+        {/* ── 7. GET THIS BOOK ── */}
+        <section className="mt-6 pt-6 border-t border-border space-y-4">
+          <h2 className="text-xs font-mono text-muted-a11y uppercase tracking-wide">
+            Get this book
+          </h2>
+
+          {/* Buy links */}
+          <div className="flex items-center flex-wrap gap-x-4 gap-y-1">
+            <a
+              href={kindleUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-mono text-stone-500 hover:text-fire transition-colors"
+            >
+              Read on Kindle &rarr;
+            </a>
+            <a
+              href={amazonDirectUrl ?? amazonSearchUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-mono text-stone-500 hover:text-fire transition-colors"
+            >
+              Amazon
+            </a>
+            <a
+              href={bnUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-mono text-stone-500 hover:text-fire transition-colors"
+            >
+              B&amp;N
+            </a>
+            <a
+              href={bookshopUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-mono text-stone-500 hover:text-fire transition-colors"
+            >
+              Bookshop
+            </a>
           </div>
+
+          {/* View on links */}
+          <div className="flex flex-col gap-1">
+            {book.goodreadsId && (
+              <a
+                href={`https://www.goodreads.com/book/show/${book.goodreadsId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-body text-muted-a11y hover:text-fire transition-colors"
+              >
+                See reviews on Goodreads <span className="opacity-50">{"\u2197"}</span>
+              </a>
+            )}
+            {book.romanceIoSlug && (
+              <a
+                href={romanceIoUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-body text-muted-a11y hover:text-fire transition-colors"
+              >
+                View on Romance.io <span className="opacity-50">{"\u2197"}</span>
+              </a>
+            )}
+          </div>
+
+          {/* Google Books preview */}
+          <BookPreview
+            isbn={book.isbn13 ?? book.isbn ?? null}
+            googleBooksId={book.googleBooksId ?? null}
+            title={book.title}
+          />
         </section>
       </div>
 

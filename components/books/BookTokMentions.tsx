@@ -19,9 +19,9 @@ export default function BookTokMentions({ mentions }: { mentions: Mention[] }) {
   if (mentions.length === 0) return null;
 
   return (
-    <section className="mt-8 pt-6 border-t border-border">
-      <h2 className="text-xs font-mono text-muted uppercase tracking-wide mb-3">
-        Seen on BookTok
+    <section>
+      <h2 className="font-display text-lg font-bold text-ink mb-3">
+        📹 Seen on BookTok
       </h2>
       <div className="space-y-3">
         {mentions.slice(0, 5).map((m, i) => (
@@ -48,6 +48,12 @@ export default function BookTokMentions({ mentions }: { mentions: Mention[] }) {
                   &ldquo;{m.quote}&rdquo;
                 </p>
               )}
+              <Link
+                href={`/discover/${encodeURIComponent(m.creatorHandle)}`}
+                className="text-xs font-mono text-fire hover:text-fire/80 transition-colors mt-1 inline-block"
+              >
+                See all picks &rarr;
+              </Link>
             </div>
           </div>
         ))}

@@ -6,20 +6,20 @@ import SignInModal from "@/components/auth/SignInModal";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Hotlist — Find your next romance read",
+  title: "Hotlist — Is it hot? Ratings, spice & tropes for every romance book",
   description:
-    "Your next great read, already waiting. Compare romance and romantasy books side by side with ratings, spice levels, tropes, and AI synopses.",
+    "Bring any romance or romantasy book. Hotlist shows you ratings from Goodreads, Amazon, and Romance.io, community spice levels, tropes, and BookTok buzz — so you can decide what to read next.",
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://myhotlist.app"),
   openGraph: {
-    title: "Hotlist — Find your next romance read",
-    description: "Every rating. Every trope. One decision.",
+    title: "Hotlist — Is it hot? Ratings, spice & tropes for every romance book",
+    description: "Bring any book. We'll tell you if it's hot.",
     siteName: "Hotlist",
     type: "website",
   },
   twitter: {
     card: "summary",
     title: "Hotlist",
-    description: "Every rating. Every trope. One decision.",
+    description: "Bring any book. We'll tell you if it's hot.",
   },
   appleWebApp: {
     capable: true,

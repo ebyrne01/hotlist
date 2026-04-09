@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import HotlistTable from "@/components/hotlists/HotlistTable";
+import HotlistShareSheet from "@/components/hotlists/HotlistShareSheet";
 import SearchBar, { type SearchResult } from "@/components/search/SearchBar";
 import type { HotlistDetail, BookDetail } from "@/lib/types";
 
@@ -22,6 +23,7 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
   const [shareSlug] = useState(hotlist.shareSlug);
   const [copied, setCopied] = useState(false);
   const [books, setBooks] = useState(hotlist.books);
+  const [showShareSheet, setShowShareSheet] = useState(false);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [deleteToast, setDeleteToast] = useState(false);
   const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -174,6 +176,7 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
           user_id: currentUserId,
           book_id: bookId,
           star_rating: stars,
+          score: stars, // dual-write
           updated_at: new Date().toISOString(),
         },
         { onConflict: "user_id,book_id" }
@@ -182,7 +185,7 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
       setBooks((prev) =>
         prev.map((b) =>
           b.bookId === bookId
-            ? { ...b, userRating: { starRating: stars, spiceRating: b.userRating?.spiceRating ?? null, note: b.userRating?.note ?? null } }
+            ? { ...b, userRating: { starRating: stars, score: stars, spiceRating: b.userRating?.spiceRating ?? null, note: b.userRating?.note ?? null } }
             : b
         )
       );
@@ -407,17 +410,19 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
                 : "Private \u2014 tap to share"}
             </button>
 
-            {/* Copy link button (only when public, separate from toggle) */}
-            {isPublic && !copied && (
+            {/* Share button (only when public) */}
+            {isPublic && (
               <button
-                onClick={handleCopyLink}
+                onClick={() => setShowShareSheet(true)}
                 className="inline-flex items-center gap-1 text-xs font-mono px-3 py-1.5 rounded-full border border-fire/20 text-fire hover:bg-fire/5 transition-colors"
               >
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="4" y="4" width="7" height="7" rx="1" />
-                  <path d="M8 4V2.5A1.5 1.5 0 006.5 1H2.5A1.5 1.5 0 001 2.5v4A1.5 1.5 0 002.5 8H4" />
+                  <circle cx="9" cy="2.5" r="1.5" />
+                  <circle cx="3" cy="6" r="1.5" />
+                  <circle cx="9" cy="9.5" r="1.5" />
+                  <path d="M4.29 6.83l3.42 1.84M7.71 3.33L4.29 5.17" />
                 </svg>
-                Copy Link
+                Share
               </button>
             )}
           </div>
@@ -489,6 +494,24 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
         </div>
       )}
 
+      {/* Anonymous CTA for non-owners */}
+      {!isOwner && !currentUserId && (
+        <div className="mt-12 pt-6 border-t border-border text-center">
+          <p className="font-display text-lg font-bold text-ink mb-2">
+            Build your own Hotlist
+          </p>
+          <p className="text-sm font-body text-muted mb-4 max-w-md mx-auto">
+            Compare books side by side — ratings, spice levels, and tropes all in one place.
+          </p>
+          <Link
+            href="/get-started"
+            className="inline-block px-5 py-2.5 bg-fire text-white text-sm font-mono rounded-lg hover:bg-fire/90 transition-colors"
+          >
+            Get started free
+          </Link>
+        </div>
+      )}
+
       {/* Undo delete toast */}
       {deleteToast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-ink text-cream rounded-lg shadow-lg px-4 py-3 flex items-center gap-3">
@@ -501,6 +524,14 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
           </button>
         </div>
       )}
+
+      {/* Share sheet */}
+      <HotlistShareSheet
+        shareSlug={shareSlug ?? hotlist.id}
+        hotlistName={name}
+        isOpen={showShareSheet}
+        onClose={() => setShowShareSheet(false)}
+      />
     </div>
   );
 }

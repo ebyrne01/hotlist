@@ -140,11 +140,31 @@ export interface HotlistBookDetail {
 
 export interface UserRating {
   starRating: number | null;
+  score: number | null;
   spiceRating: number | null;
   note: string | null;
 }
 
 export type ReadingStatus = "want_to_read" | "reading" | "read";
+
+export type ReaderResponse =
+  | "must_read"
+  | "on_the_shelf"
+  | "not_for_me"
+  | "loved_it"
+  | "it_was_fine"
+  | "didnt_finish";
+
+export type PreReadResponse = "must_read" | "on_the_shelf" | "not_for_me";
+export type PostReadResponse = "loved_it" | "it_was_fine" | "didnt_finish";
+
+export function isPreRead(r: ReaderResponse): r is PreReadResponse {
+  return r === "must_read" || r === "on_the_shelf" || r === "not_for_me";
+}
+
+export function isPostRead(r: ReaderResponse): r is PostReadResponse {
+  return r === "loved_it" || r === "it_was_fine" || r === "didnt_finish";
+}
 
 // Shape used when mapping from external APIs before saving to DB
 export interface BookData {

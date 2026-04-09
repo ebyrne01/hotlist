@@ -37,8 +37,16 @@ export const SIGNAL_WEIGHTS = {
   sg_import: 0.7,
   kindle_import: 0.5,
   scan: 0.6,
+  // Legacy status weights (kept for backward compat)
   want_to_read: 0.3,
   reading: 0.5,
+  // New reader response weights
+  must_read: 0.3,
+  on_the_shelf: 0.1,
+  not_for_me: -0.5,
+  loved_it: 1.0,
+  it_was_fine: 0.7,
+  didnt_finish: -0.9,
 } as const;
 
 /**

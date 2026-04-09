@@ -11,7 +11,7 @@ export async function getUserRating(
   const supabase = createClient();
   const { data } = await supabase
     .from("user_ratings")
-    .select("star_rating, spice_rating, note")
+    .select("star_rating, score, spice_rating, note")
     .eq("user_id", userId)
     .eq("book_id", bookId)
     .single();
@@ -19,6 +19,7 @@ export async function getUserRating(
   if (!data) return null;
   return {
     starRating: data.star_rating ?? null,
+    score: data.score != null ? parseFloat(data.score) : null,
     spiceRating: data.spice_rating ?? null,
     note: data.note ?? null,
   };
@@ -26,13 +27,13 @@ export async function getUserRating(
 
 /**
  * Save (upsert) a user's rating for a book.
- * Only updates the fields that are provided — does not overwrite existing values
- * for fields not included in the update.
+ * Accepts decimal `score` (0.0–5.0) and/or legacy `starRating` (1-5 int).
+ * Dual-writes both columns during transition.
  */
 export async function saveUserRating(
   userId: string,
   bookId: string,
-  rating: { starRating?: number; spiceRating?: number; note?: string }
+  rating: { starRating?: number; score?: number; spiceRating?: number; note?: string }
 ): Promise<UserRating> {
   const supabase = createClient();
 
@@ -42,14 +43,27 @@ export async function saveUserRating(
     book_id: bookId,
     updated_at: new Date().toISOString(),
   };
-  if (rating.starRating !== undefined) payload.star_rating = rating.starRating;
+
+  // Dual-write: if score provided, also set star_rating (rounded)
+  if (rating.score !== undefined) {
+    payload.score = rating.score;
+    payload.star_rating = Math.round(rating.score);
+  }
+  // If only starRating provided (legacy), also set score
+  if (rating.starRating !== undefined) {
+    payload.star_rating = rating.starRating;
+    if (rating.score === undefined) {
+      payload.score = rating.starRating;
+    }
+  }
+
   if (rating.spiceRating !== undefined) payload.spice_rating = rating.spiceRating;
   if (rating.note !== undefined) payload.note = rating.note;
 
   const { data } = await supabase
     .from("user_ratings")
     .upsert(payload, { onConflict: "user_id,book_id" })
-    .select("star_rating, spice_rating, note")
+    .select("star_rating, score, spice_rating, note")
     .single();
 
   // If spice rating was updated, recalculate community average
@@ -59,6 +73,7 @@ export async function saveUserRating(
 
   return {
     starRating: data?.star_rating ?? null,
+    score: data?.score != null ? parseFloat(data.score) : null,
     spiceRating: data?.spice_rating ?? null,
     note: data?.note ?? null,
   };

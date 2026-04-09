@@ -581,6 +581,20 @@ async function processJob(job: QueuedJob): Promise<"data" | "no-data"> {
       break;
     }
 
+    case "reddit_buzz": {
+      if (!book_title || !book_author) break;
+      const { enrichRedditBuzz } = await import("./reddit-buzz");
+      await enrichRedditBuzz(book_id, book_title, book_author);
+      break;
+    }
+
+    case "discussion_links": {
+      if (!book_title || !book_author) break;
+      const { enrichDiscussionLinks } = await import("./discussion-links");
+      await enrichDiscussionLinks(book_id, book_title, book_author);
+      break;
+    }
+
     default:
       console.warn(`[enrichment-worker] Unknown job type: ${job_type}`);
   }

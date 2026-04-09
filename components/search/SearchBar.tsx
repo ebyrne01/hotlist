@@ -6,12 +6,7 @@ import { Search, X, Video } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { clsx } from "clsx";
 import BookCover from "@/components/ui/BookCover";
-
-/** Detect if a string looks like a video URL (TikTok, Instagram, YouTube, etc.) */
-function isVideoUrl(text: string): boolean {
-  const trimmed = text.trim();
-  return /^https?:\/\/.*(tiktok\.com|instagram\.com|youtube\.com|youtu\.be|reels|shorts)/i.test(trimmed);
-}
+import { isVideoUrl } from "@/lib/utils/video-url";
 
 // API search result shape (lean — not the full BookDetail)
 export interface SearchResult {
