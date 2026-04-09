@@ -143,14 +143,6 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
     }
   }
 
-  async function handleCopyLink() {
-    const slug = shareSlug ?? hotlist.id;
-    const url = `${window.location.origin}/lists/${slug}`;
-    await navigator.clipboard.writeText(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
   async function handleRemoveBook(bookId: string) {
     try {
       const supabase = createClient();

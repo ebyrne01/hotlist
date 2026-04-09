@@ -34,7 +34,7 @@ export default function SpiceSection({
   romanceIoSlug,
   communitySpice: initialCommunity,
   inferredSpice,
-  compact = false,
+  compact: _compact = false,
 }: SpiceSectionProps) {
   const [user, setUser] = useState<{ id: string } | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
