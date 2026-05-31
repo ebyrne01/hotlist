@@ -14,6 +14,7 @@ import { getAdminClient } from "@/lib/supabase/admin";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 const P0_LIMIT = 250;
+const PAID_RETRY_COOLDOWN_DAYS = 30;
 
 type P0Target = { book_id: string };
 
@@ -47,7 +48,11 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  const [{ data: withAmazon }, { data: activeJobs }] = await Promise.all([
+  const cooldownDate = new Date(
+    Date.now() - PAID_RETRY_COOLDOWN_DAYS * 24 * 60 * 60 * 1000
+  ).toISOString();
+
+  const [{ data: withAmazon }, { data: attemptedJobs }] = await Promise.all([
     supabase
       .from("book_ratings")
       .select("book_id")
@@ -55,16 +60,18 @@ export async function GET(request: NextRequest) {
       .in("book_id", p0Ids),
     supabase
       .from("enrichment_queue")
-      .select("book_id")
+      .select("book_id, status, updated_at")
       .eq("job_type", "amazon_rating")
-      .in("status", ["pending", "running"])
+      .or(`status.in.(pending,running,failed),updated_at.gte.${cooldownDate}`)
       .in("book_id", p0Ids),
   ]);
 
   const withAmazonIds = new Set((withAmazon ?? []).map((row) => row.book_id));
-  const activeJobIds = new Set((activeJobs ?? []).map((row) => row.book_id));
+  const attemptedJobIds = new Set(
+    (attemptedJobs ?? []).map((row) => row.book_id)
+  );
   const toQueue = p0Ids.filter(
-    (id) => !withAmazonIds.has(id) && !activeJobIds.has(id)
+    (id) => !withAmazonIds.has(id) && !attemptedJobIds.has(id)
   );
 
   const now = new Date().toISOString();
@@ -91,7 +98,7 @@ export async function GET(request: NextRequest) {
     scope: "p0_canon",
     p0_targets: p0Ids.length,
     already_has_amazon: withAmazonIds.size,
-    already_active: activeJobIds.size,
+    recently_attempted_or_active: attemptedJobIds.size,
     jobs_queued: rows.length,
   });
 }

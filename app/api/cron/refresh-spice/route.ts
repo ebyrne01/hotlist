@@ -20,6 +20,7 @@ export const maxDuration = 60;
 
 const STALE_DAYS = 30;
 const P0_LIMIT = 250;
+const PAID_RETRY_COOLDOWN_DAYS = 30;
 
 type P0Target = { book_id: string };
 
@@ -66,6 +67,9 @@ export async function GET(request: Request) {
 
     // ── Phase 2: Queue stale romance_io signals for re-scrape (~5s budget) ──
     const staleDate = new Date(Date.now() - STALE_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    const cooldownDate = new Date(
+      Date.now() - PAID_RETRY_COOLDOWN_DAYS * 24 * 60 * 60 * 1000
+    ).toISOString();
 
     const { data: p0Targets, error: p0Error } = await supabase.rpc(
       "get_p0_canon_enrichment_targets",
@@ -80,7 +84,7 @@ export async function GET(request: Request) {
       (target) => target.book_id
     );
 
-    const [{ data: p0RomanceIoSignals }, { data: activeRomanceIoJobs }] = p0Ids.length
+    const [{ data: p0RomanceIoSignals }, { data: attemptedRomanceIoJobs }] = p0Ids.length
       ? await Promise.all([
           supabase
             .from("spice_signals")
@@ -89,9 +93,9 @@ export async function GET(request: Request) {
             .in("book_id", p0Ids),
           supabase
             .from("enrichment_queue")
-            .select("book_id")
+            .select("book_id, status, updated_at")
             .eq("job_type", "romance_io_spice")
-            .in("status", ["pending", "running"])
+            .or(`status.in.(pending,running,failed),updated_at.gte.${cooldownDate}`)
             .in("book_id", p0Ids),
         ])
       : [{ data: [] }, { data: [] }];
@@ -99,12 +103,12 @@ export async function GET(request: Request) {
     const signalMap = new Map(
       (p0RomanceIoSignals ?? []).map((row) => [row.book_id, row.updated_at])
     );
-    const activeJobIds = new Set(
-      (activeRomanceIoJobs ?? []).map((row) => row.book_id)
+    const attemptedJobIds = new Set(
+      (attemptedRomanceIoJobs ?? []).map((row) => row.book_id)
     );
     const staleSignals = p0Ids
       .filter((bookId: string) => {
-        if (activeJobIds.has(bookId)) return false;
+        if (attemptedJobIds.has(bookId)) return false;
         const updatedAt = signalMap.get(bookId);
         return !updatedAt || updatedAt < staleDate;
       })
