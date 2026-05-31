@@ -91,10 +91,11 @@ export async function GET(request: Request) {
                 job_type: "romance_io_spice",
                 status: "pending",
                 attempts: 0,
-                book_title: book.title,
-                book_author: book.author,
-                created_at: new Date().toISOString(),
-                next_attempt_at: new Date().toISOString(),
+                max_attempts: 5,
+                next_retry_at: new Date().toISOString(),
+                error_message: null,
+                outcome: null,
+                updated_at: new Date().toISOString(),
               },
               { onConflict: "book_id,job_type" }
             );
