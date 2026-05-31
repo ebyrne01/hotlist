@@ -41,6 +41,7 @@ type HarvestedBook = z.infer<typeof harvestBookSchema>;
 
 const FOCUSED_HARVEST_SOURCES = new Set([
   "amazon_list",
+  "goodreads_list",
   "romanceio",
   "generic_links",
   "blog_list",
