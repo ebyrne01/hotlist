@@ -78,6 +78,27 @@ async function mergeProvisionalIntoExisting(
   return true;
 }
 
+async function upsertGoodreadsRating(
+  supabase: SupabaseClient,
+  bookId: string,
+  rating: number | null | undefined,
+  ratingCount: number | null | undefined
+): Promise<boolean> {
+  if (!rating || rating < 1 || rating > 5) return false;
+
+  await supabase.from("book_ratings").upsert(
+    {
+      book_id: bookId,
+      source: "goodreads",
+      rating,
+      rating_count: ratingCount ?? null,
+      scraped_at: new Date().toISOString(),
+    },
+    { onConflict: "book_id,source" }
+  );
+  return true;
+}
+
 const JOB_DELAY_MS = 300; // Delay between scraping jobs to respect rate limits
 const CONCURRENCY = 5; // Max parallel jobs within a tier
 
@@ -369,6 +390,12 @@ async function processJob(job: QueuedJob): Promise<"data" | "no-data"> {
               .eq("id", job.id);
             // Detect audiobook from new cover
             await detectAndSaveAudiobookStatus(book_id, detail.coverUrl ?? null);
+            await upsertGoodreadsRating(
+              supabase,
+              book_id,
+              detail.rating,
+              detail.ratingCount
+            );
           }
         }
       } else if (book_goodreads_id) {
@@ -403,6 +430,12 @@ async function processJob(job: QueuedJob): Promise<"data" | "no-data"> {
             pageCount: detail.pageCount,
             genres: detail.genres,
           });
+          await upsertGoodreadsRating(
+            supabase,
+            book_id,
+            detail.rating,
+            detail.ratingCount
+          );
           // Store scraped title+author as evidence for quality mismatch detection
           await supabase
             .from("enrichment_queue")
@@ -426,17 +459,26 @@ async function processJob(job: QueuedJob): Promise<"data" | "no-data"> {
 
     case "goodreads_rating": {
       if (!book_title || !book_author) break;
+      if (book_goodreads_id) {
+        const detail = await getGoodreadsBookById(book_goodreads_id);
+        if (
+          await upsertGoodreadsRating(
+            supabase,
+            book_id,
+            detail?.rating,
+            detail?.ratingCount
+          )
+        ) {
+          break;
+        }
+      }
       const grData = await scrapeGoodreadsRating(book_title, book_author);
       if (!grData) return "no-data";
-      await supabase.from("book_ratings").upsert(
-        {
-          book_id,
-          source: "goodreads",
-          rating: grData.rating,
-          rating_count: grData.ratingCount,
-          scraped_at: new Date().toISOString(),
-        },
-        { onConflict: "book_id,source" }
+      await upsertGoodreadsRating(
+        supabase,
+        book_id,
+        grData.rating,
+        grData.ratingCount
       );
       break;
     }

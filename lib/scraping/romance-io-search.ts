@@ -365,9 +365,11 @@ export async function getRomanceIoSpice(
     });
 
     if (!response.ok) {
-      console.warn(
-        `[romance.io] Serper API error: ${response.status} ${response.statusText}`
-      );
+      const message = await getSerperErrorMessage(response);
+      console.warn(`[romance.io] Serper API error: ${response.status} ${message}`);
+      if (isSerperProviderUnavailable(response.status, message)) {
+        throw new Error(`rate limit: Serper unavailable for romance.io lookup (${message})`);
+      }
       return null;
     }
 
@@ -395,6 +397,12 @@ export async function getRomanceIoSpice(
         romanceIoResults = (fallbackData.organic ?? []).filter(
           (r) => r.link.includes("romance.io/")
         );
+      } else {
+        const message = await getSerperErrorMessage(fallbackRes);
+        console.warn(`[romance.io] Fallback Serper API error: ${fallbackRes.status} ${message}`);
+        if (isSerperProviderUnavailable(fallbackRes.status, message)) {
+          throw new Error(`rate limit: Serper unavailable for romance.io lookup (${message})`);
+        }
       }
     }
 
@@ -540,9 +548,18 @@ export async function getRomanceIoSpice(
           if (bestRating) {
             console.log(`[romance.io] "${title}" → rating=${bestRating} (from rating-targeted query)`);
           }
+        } else {
+          const message = await getSerperErrorMessage(ratingRes);
+          console.warn(`[romance.io] Rating Serper API error: ${ratingRes.status} ${message}`);
+          if (isSerperProviderUnavailable(ratingRes.status, message)) {
+            throw new Error(`rate limit: Serper unavailable for romance.io lookup (${message})`);
+          }
         }
       } catch (err) {
         console.warn(`[romance.io] Rating follow-up query failed for "${title}":`, err);
+        if (err instanceof Error && err.message.startsWith("rate limit:")) {
+          throw err;
+        }
       }
     }
 
@@ -592,6 +609,29 @@ export async function getRomanceIoSpice(
     };
   } catch (err) {
     console.warn(`[romance.io] Error searching for "${title}":`, err);
+    if (err instanceof Error && err.message.startsWith("rate limit:")) {
+      throw err;
+    }
     return null;
   }
+}
+
+async function getSerperErrorMessage(response: Response): Promise<string> {
+  const body = await response.text().catch(() => "");
+  try {
+    const parsed = JSON.parse(body) as { message?: unknown };
+    return typeof parsed.message === "string" ? parsed.message : response.statusText;
+  } catch {
+    return body.trim() || response.statusText;
+  }
+}
+
+function isSerperProviderUnavailable(status: number, message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    status === 429 ||
+    lower.includes("not enough credits") ||
+    lower.includes("quota") ||
+    lower.includes("rate limit")
+  );
 }

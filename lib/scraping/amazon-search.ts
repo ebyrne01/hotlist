@@ -65,6 +65,9 @@ export async function getAmazonRatingViaSerper(
     return result ?? siteResult;
   } catch (err) {
     console.warn("[amazon-search] Failed:", err);
+    if (err instanceof Error && err.message.startsWith("rate limit:")) {
+      throw err;
+    }
     return null;
   }
 }
@@ -87,7 +90,12 @@ async function searchSerper(
   });
 
   if (!res.ok) {
-    console.warn(`[amazon-search] Serper returned ${res.status}`);
+    const body = await res.text().catch(() => "");
+    const message = parseSerperErrorMessage(body) || res.statusText;
+    console.warn(`[amazon-search] Serper returned ${res.status}: ${message}`);
+    if (isSerperProviderUnavailable(res.status, message)) {
+      throw new Error(`rate limit: Serper unavailable for Amazon lookup (${message})`);
+    }
     return null;
   }
 
@@ -245,6 +253,25 @@ function extractRatingFromText(
 function extractAsinFromText(text: string): string | null {
   const match = text.match(/amazon\.com(?:\/[^/]+)?\/(?:dp|gp\/product)\/([A-Z0-9]{10})/);
   return match?.[1] ?? null;
+}
+
+function parseSerperErrorMessage(body: string): string | null {
+  try {
+    const parsed = JSON.parse(body) as { message?: unknown };
+    return typeof parsed.message === "string" ? parsed.message : null;
+  } catch {
+    return body.trim() || null;
+  }
+}
+
+function isSerperProviderUnavailable(status: number, message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    status === 429 ||
+    lower.includes("not enough credits") ||
+    lower.includes("quota") ||
+    lower.includes("rate limit")
+  );
 }
 
 interface SerperResult {
