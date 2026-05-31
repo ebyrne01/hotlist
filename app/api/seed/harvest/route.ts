@@ -73,12 +73,18 @@ function cleanHarvestCoverUrl(coverUrl?: string | null): string | null {
   return coverUrl;
 }
 
+function normalizeRomanceIoSlug(slug?: string | null): string | null {
+  if (!slug) return null;
+  return slug.split("/").filter(Boolean)[0] || null;
+}
+
 function sanitizeHarvestBook(book: HarvestedBook): HarvestedBook {
   const cleaned = cleanHarvestTitle(book.title);
   return {
     ...book,
     title: cleaned.title,
     coverUrl: cleanHarvestCoverUrl(book.coverUrl),
+    romanceIoSlug: normalizeRomanceIoSlug(book.romanceIoSlug),
     seriesName: book.seriesName ?? cleaned.seriesName,
     seriesPosition: book.seriesPosition ?? cleaned.seriesPosition,
   };
@@ -108,7 +114,13 @@ function computeUpdates(
     updates.amazon_asin = harvested.asin;
   if (!existing.cover_url && harvested.coverUrl)
     updates.cover_url = harvested.coverUrl;
-  if (!existing.romance_io_slug && harvested.romanceIoSlug)
+  const existingRomanceIoSlug = normalizeRomanceIoSlug(
+    typeof existing.romance_io_slug === "string" ? existing.romance_io_slug : null
+  );
+  if (
+    harvested.romanceIoSlug &&
+    existingRomanceIoSlug !== harvested.romanceIoSlug
+  )
     updates.romance_io_slug = harvested.romanceIoSlug;
   if (!existing.series_name && harvested.seriesName) {
     updates.series_name = harvested.seriesName;
@@ -153,7 +165,30 @@ async function findExistingBook(
     if (data) return { id: data.id, needsUpdate: computeUpdates(data, book) };
   }
 
-  // 4. Normalized title + author last name
+  // 4. Romance.io slug match. Older harvests sometimes stored the full path
+  // (`slug/title/similar`), so match both exact and prefix forms.
+  if (book.romanceIoSlug) {
+    const { data: exactMatch } = await supabase
+      .from("books")
+      .select(selectFields)
+      .eq("romance_io_slug", book.romanceIoSlug)
+      .single();
+    if (exactMatch) {
+      return { id: exactMatch.id, needsUpdate: computeUpdates(exactMatch, book) };
+    }
+
+    const { data: prefixMatches } = await supabase
+      .from("books")
+      .select(selectFields)
+      .ilike("romance_io_slug", `${book.romanceIoSlug}/%`)
+      .limit(1);
+    const prefixMatch = prefixMatches?.[0];
+    if (prefixMatch) {
+      return { id: prefixMatch.id, needsUpdate: computeUpdates(prefixMatch, book) };
+    }
+  }
+
+  // 5. Normalized title + author last name
   const normTitle = normalizeTitle(book.title);
   const authorLastName = (book.author || "").split(" ").pop()?.toLowerCase() ?? "";
   if (normTitle && authorLastName) {
