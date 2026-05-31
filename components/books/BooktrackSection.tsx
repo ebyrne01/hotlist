@@ -67,6 +67,11 @@ export default function BooktrackSection({
     setTimeout(() => setCopied(false), 2000);
   }
 
+  async function copyPromptAndOpenSpotify() {
+    await copyPrompt();
+    window.open("https://open.spotify.com", "_blank", "noopener,noreferrer");
+  }
+
   return (
     <section className="overflow-hidden rounded-3xl border border-aged-gold/30 bg-[#171014] text-cream shadow-sm">
       <div className="relative p-4 sm:p-5">
@@ -215,24 +220,24 @@ export default function BooktrackSection({
             </p>
             <div className="mt-3 flex flex-col gap-2 sm:flex-row">
               <button
-                onClick={copyPrompt}
+                onClick={copyPromptAndOpenSpotify}
                 className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#1DB954] px-4 text-sm font-mono text-white transition-colors hover:bg-[#1ed760]"
               >
-                {copied ? "Prompt copied" : "Copy prompt"}
-                <Copy size={14} aria-hidden="true" />
+                {copied ? "Prompt copied" : "Copy prompt & open Spotify"}
+                <ExternalLink size={14} aria-hidden="true" />
               </button>
-              <a
-                href="https://open.spotify.com"
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                onClick={copyPrompt}
                 className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-cream/10 bg-cream/10 px-4 text-sm font-mono text-cream transition-colors hover:bg-cream/15"
               >
-                Open Spotify
-                <ExternalLink size={14} aria-hidden="true" />
-              </a>
+                Copy only
+                <Copy size={14} aria-hidden="true" />
+              </button>
             </div>
             <p className="mt-3 text-[11px] font-mono leading-5 text-cream/45">
-              Spotify Prompted Playlists are Premium/mobile gated, so Hotlist keeps this as a fallback until direct playlist creation is connected.
+              Paste the copied prompt into Spotify&apos;s AI Playlist flow. It is
+              Premium/mobile gated, so Hotlist keeps this one-tap handoff until
+              direct playlist creation is connected.
             </p>
           </div>
         </div>

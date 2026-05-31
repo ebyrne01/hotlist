@@ -13,6 +13,7 @@ const ALLOWED_EVENTS = new Set([
   "grab_start",
   "grab_complete",
   "profile_view",
+  "feedback",
 ]);
 
 /**
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { event_type, profile_id, hotlist_id, book_id, referrer } = body;
+    const { event_type, profile_id, hotlist_id, book_id, referrer, metadata } = body;
 
     if (!event_type || typeof event_type !== "string") {
       return NextResponse.json({ error: "event_type required" }, { status: 400 });
@@ -44,6 +45,10 @@ export async function POST(request: NextRequest) {
       hotlist_id: hotlist_id || null,
       book_id: book_id || null,
       referrer: referrer || null,
+      metadata:
+        metadata && typeof metadata === "object" && !Array.isArray(metadata)
+          ? metadata
+          : {},
     });
 
     return NextResponse.json({ ok: true });

@@ -3,6 +3,7 @@ import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import { AuthProvider } from "@/lib/auth/AuthProvider";
 import SignInModal from "@/components/auth/SignInModal";
+import FeedbackWidget from "@/components/ui/FeedbackWidget";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -50,6 +51,7 @@ export default function RootLayout({
           <main className="flex-1">{children}</main>
           <Footer />
           <SignInModal />
+          <FeedbackWidget />
         </AuthProvider>
       </body>
     </html>
