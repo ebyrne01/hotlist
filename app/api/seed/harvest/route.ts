@@ -26,6 +26,7 @@ const harvestBookSchema = z.object({
   amazonRating: z.number().min(0).max(5).optional().nullable(),
   amazonRatingCount: z.number().int().min(0).optional().nullable(),
   romanceIoSpice: z.number().int().min(1).max(5).optional().nullable(),
+  romanceIoSlug: z.string().max(300).optional().nullable(),
   format: z.string().optional().nullable(),
   source: z.string().max(100),
 });
@@ -40,9 +41,48 @@ type HarvestedBook = z.infer<typeof harvestBookSchema>;
 
 const FOCUSED_HARVEST_SOURCES = new Set([
   "amazon_list",
+  "romanceio",
   "generic_links",
   "blog_list",
 ]);
+
+function cleanHarvestTitle(title: string): {
+  title: string;
+  seriesName: string | null;
+  seriesPosition: number | null;
+} {
+  const compact = title.replace(/\s+/g, " ").trim();
+  const seriesMatch = compact.match(/\(([^)]*?)\s+#?(\d+(?:\.\d+)?)\)\s*$/);
+  const withoutSeries = seriesMatch
+    ? compact.replace(/\s*\([^)]*?\s+#?\d+(?:\.\d+)?\)\s*$/, "")
+    : compact;
+
+  const cleaned = withoutSeries
+    .replace(/:\s+(?:a\s+|an\s+|the\s+)?(?:slow[-\s]?burn|fast[-\s]?paced|epic|dark|steamy|spicy|enemies[-\s]?to[-\s]?lovers|forbidden|romantic|fantasy|romantasy|paranormal|vampire|wolf|shifter|fae|witch|monster|alien|gothic|high[-\s]?stakes|stunning|immersive|discover|novel|book)\b.*$/i, "")
+    .trim();
+
+  return {
+    title: cleaned || compact,
+    seriesName: seriesMatch?.[1]?.trim() ?? null,
+    seriesPosition: seriesMatch ? Math.floor(Number(seriesMatch[2])) : null,
+  };
+}
+
+function cleanHarvestCoverUrl(coverUrl?: string | null): string | null {
+  if (!coverUrl || coverUrl.includes("placeholder.png")) return null;
+  return coverUrl;
+}
+
+function sanitizeHarvestBook(book: HarvestedBook): HarvestedBook {
+  const cleaned = cleanHarvestTitle(book.title);
+  return {
+    ...book,
+    title: cleaned.title,
+    coverUrl: cleanHarvestCoverUrl(book.coverUrl),
+    seriesName: book.seriesName ?? cleaned.seriesName,
+    seriesPosition: book.seriesPosition ?? cleaned.seriesPosition,
+  };
+}
 
 function normalizeTitle(title: string): string {
   return title
@@ -68,6 +108,8 @@ function computeUpdates(
     updates.amazon_asin = harvested.asin;
   if (!existing.cover_url && harvested.coverUrl)
     updates.cover_url = harvested.coverUrl;
+  if (!existing.romance_io_slug && harvested.romanceIoSlug)
+    updates.romance_io_slug = harvested.romanceIoSlug;
   if (!existing.series_name && harvested.seriesName) {
     updates.series_name = harvested.seriesName;
     updates.series_position = harvested.seriesPosition;
@@ -79,7 +121,7 @@ async function findExistingBook(
   supabase: ReturnType<typeof getAdminClient>,
   book: HarvestedBook
 ): Promise<{ id: string; needsUpdate: Record<string, unknown> } | null> {
-  const selectFields = "id, amazon_asin, goodreads_id, cover_url, series_name";
+  const selectFields = "id, amazon_asin, goodreads_id, cover_url, romance_io_slug, series_name";
 
   // 1. Goodreads ID match
   if (book.goodreadsId) {
@@ -280,7 +322,8 @@ export async function POST(request: Request) {
   const updatedBooks: string[] = [];
   const sources = new Set<string>();
 
-  for (const book of books) {
+  for (const rawBook of books) {
+    const book = sanitizeHarvestBook(rawBook);
     sources.add(book.source);
 
     // 1. Skip audiobooks
@@ -344,6 +387,7 @@ export async function POST(request: Request) {
           amazon_asin: book.asin || null,
           series_name: book.seriesName || null,
           series_position: book.seriesPosition || null,
+          romance_io_slug: book.romanceIoSlug || null,
           cover_url: book.coverUrl || null,
           enrichment_status: "pending",
           discovery_source: book.source,

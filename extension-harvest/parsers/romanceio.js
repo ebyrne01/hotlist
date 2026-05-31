@@ -14,11 +14,67 @@
   const bookLinks = document.querySelectorAll("a[href*='/books/']");
   const processedHrefs = new Set();
 
+  function extractRomanceIoSlug(href) {
+    try {
+      const url = new URL(href);
+      const parts = url.pathname.split("/").filter(Boolean);
+      const bookIndex = parts.indexOf("books");
+      return bookIndex >= 0 ? parts[bookIndex + 1] || null : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function extractSpice(card) {
+    const cardText = card.textContent || "";
+    const flameMatch = cardText.match(/(🔥+)/);
+    if (flameMatch) {
+      const count = [...flameMatch[1]].filter(
+        (c) => c === "🔥" || c.codePointAt(0) === 0x1F525
+      ).length;
+      if (count >= 1 && count <= 5) return count;
+    }
+
+    const numericMatch = cardText.match(
+      /(?:spice|steam|heat|open\s*door)[^\d]{0,20}([1-5])(?:\s*\/\s*5)?/i
+    );
+    if (numericMatch) return parseInt(numericMatch[1], 10);
+
+    const ariaEls = card.querySelectorAll("[aria-label], [title]");
+    for (const el of ariaEls) {
+      const label = `${el.getAttribute("aria-label") || ""} ${el.getAttribute("title") || ""}`;
+      const labelMatch = label.match(/(?:spice|steam|heat|flame)[^\d]{0,20}([1-5])/i);
+      if (labelMatch) return parseInt(labelMatch[1], 10);
+    }
+
+    const spiceEls = card.querySelectorAll(
+      "[class*='spice'], [class*='steam'], [class*='flame'], [class*='heat']"
+    );
+    for (const el of spiceEls) {
+      const num = parseInt(el.textContent.trim(), 10);
+      if (num >= 1 && num <= 5) return num;
+      const activeIcons = el.querySelectorAll(
+        "svg[class*='active'], svg[class*='filled'], .active, .filled"
+      );
+      if (activeIcons.length >= 1 && activeIcons.length <= 5) {
+        return activeIcons.length;
+      }
+    }
+
+    const flames = card.querySelectorAll(
+      "svg[class*='flame'], svg[class*='fire'], svg[aria-label*='flame'], svg[aria-label*='fire']"
+    );
+    if (flames.length >= 1 && flames.length <= 5) return flames.length;
+
+    return null;
+  }
+
   for (const link of bookLinks) {
     try {
       const href = link.href;
       if (processedHrefs.has(href)) continue;
       processedHrefs.add(href);
+      const romanceIoSlug = extractRomanceIoSlug(href);
 
       // Walk up to the card container
       let card = link;
@@ -56,38 +112,13 @@
       }
 
       // Spice/flame rating — the unique high-value data from romance.io
-      let romanceIoSpice = null;
-      // Look for flame emoji count
-      const cardText = card.textContent;
-      const flameMatch = cardText.match(/(🔥+)/);
-      if (flameMatch) {
-        // Count flame emoji (each is 2 chars in JS for the emoji)
-        romanceIoSpice = [...flameMatch[1]].filter(c => c === '🔥' || c.codePointAt(0) === 0x1F525).length;
-        if (romanceIoSpice === 0) romanceIoSpice = flameMatch[1].length; // fallback
-      }
-      // Also check for numeric spice indicators or flame SVGs
-      if (!romanceIoSpice) {
-        const spiceEls = card.querySelectorAll("[class*='spice'], [class*='flame'], [class*='heat']");
-        for (const el of spiceEls) {
-          const num = parseInt(el.textContent.trim(), 10);
-          if (num >= 1 && num <= 5) {
-            romanceIoSpice = num;
-            break;
-          }
-        }
-      }
-      // Count flame SVG icons
-      if (!romanceIoSpice) {
-        const flames = card.querySelectorAll("svg[class*='flame'], svg[class*='fire'], svg[aria-label*='flame']");
-        if (flames.length >= 1 && flames.length <= 5) {
-          romanceIoSpice = flames.length;
-        }
-      }
+      const romanceIoSpice = extractSpice(card);
 
       // Cover image
       let coverUrl = null;
       const img = card.querySelector("img");
       if (img) coverUrl = img.src || img.getAttribute("data-src") || null;
+      if (coverUrl && coverUrl.includes("placeholder.png")) coverUrl = null;
 
       // Amazon link → extract ASIN
       let asin = null;
@@ -105,8 +136,11 @@
         if (grMatch) goodreadsId = grMatch[1];
       }
 
+      const cleaned = cleanTitle(title.replace(/\s+/g, " "));
+      const series = parseSeries(cleaned);
+
       const book = {
-        title: cleanTitle(title),
+        title: series.cleanedTitle || cleaned,
         author,
         goodreadsId,
         asin,
@@ -117,8 +151,9 @@
         amazonRating: null,
         amazonRatingCount: null,
         romanceIoSpice,
-        seriesName: null,
-        seriesPosition: null,
+        romanceIoSlug,
+        seriesName: series.seriesName,
+        seriesPosition: series.seriesPosition,
         format: null,
         source: "romanceio",
         harvestedAt: new Date().toISOString(),

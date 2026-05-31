@@ -45,7 +45,7 @@ function parseSeries(title) {
 
   // Match: "(Series Name, #N)" or "(Series Name #N)" or "(Series Name Book N)" or "(Series Name, N)"
   const patterns = [
-    /\(([^)]+?)(?:,\s*)?#(\d+)\)\s*$/i,        // (Series, #2) or (Series #2)
+    /\(([^)]+?)(?:,\s*)?#(\d+(?:\.\d+)?)\)\s*$/i, // (Series, #2) or (Series #2)
     /\(([^)]+?),\s*Book\s+(\d+)\)\s*$/i,        // (Series, Book 2)
     /\(([^)]+?),\s*(\d+)\)\s*$/i,               // (Series, 1)
   ];

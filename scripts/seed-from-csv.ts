@@ -108,6 +108,7 @@ function toHarvestBook(row: Record<string, string>) {
     amazonRating: parseNum(row.amazonRating || row.amazon_rating || row.AmazonRating),
     amazonRatingCount: parseInt_(row.amazonRatingCount || row.amazon_rating_count || row.AmazonRatingCount),
     romanceIoSpice: parseInt_(row.romanceIoSpice || row.romanceio_spice || row.Spice),
+    romanceIoSlug: row.romanceIoSlug || row.romanceio_slug || null,
     format: row.format || row.Format || null,
     source: row.source || row.Source || "csv_import",
   };

@@ -358,7 +358,7 @@ function exportBatch(books) {
     "series_name", "series_position", "cover_url",
     "goodreads_rating", "goodreads_rating_count",
     "amazon_rating", "amazon_rating_count",
-    "romanceio_spice", "format", "source", "harvested_at",
+    "romanceio_spice", "romanceio_slug", "format", "source", "harvested_at",
   ];
 
   const rows = [columns.join(",")];
@@ -368,7 +368,7 @@ function exportBatch(books) {
       book.seriesName, book.seriesPosition, book.coverUrl,
       book.goodreadsRating, book.goodreadsRatingCount,
       book.amazonRating, book.amazonRatingCount,
-      book.romanceIoSpice, book.format, book.source, book.harvestedAt,
+      book.romanceIoSpice, book.romanceIoSlug, book.format, book.source, book.harvestedAt,
     ].map((v) => csvEscape(v));
     rows.push(row.join(","));
   }
