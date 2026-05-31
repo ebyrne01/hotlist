@@ -21,16 +21,25 @@
 
 import { create } from "zustand";
 
+export interface SignInContext {
+  title?: string;
+  subtitle?: string;
+  note?: string;
+}
+
 interface SignInModalState {
   isOpen: boolean;
   onSuccess: (() => void) | null;
-  openSignIn: (onSuccess?: () => void) => void;
+  context: SignInContext | null;
+  openSignIn: (onSuccess?: (() => void) | null, context?: SignInContext) => void;
   closeSignIn: () => void;
 }
 
 export const useSignInModal = create<SignInModalState>((set) => ({
   isOpen: false,
   onSuccess: null,
-  openSignIn: (onSuccess) => set({ isOpen: true, onSuccess: onSuccess ?? null }),
-  closeSignIn: () => set({ isOpen: false, onSuccess: null }),
+  context: null,
+  openSignIn: (onSuccess, context) =>
+    set({ isOpen: true, onSuccess: onSuccess ?? null, context: context ?? null }),
+  closeSignIn: () => set({ isOpen: false, onSuccess: null, context: null }),
 }));

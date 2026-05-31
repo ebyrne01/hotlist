@@ -845,12 +845,20 @@ export default async function BookPage({ params }: PageProps) {
 
       {/* ── Sticky mobile CTA ── */}
       <div className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-sm border-t border-border px-4 py-3">
-        <BookDetailClient
-          section="mobile-cta"
-          bookId={book.id}
-          bookTitle={book.title}
-          ctaLabel="Compare in Hotlist"
-        />
+        <div className="grid grid-cols-[1fr_auto] gap-2">
+          <BookDetailClient
+            section="mobile-cta"
+            bookId={book.id}
+            bookTitle={book.title}
+            ctaLabel="Compare"
+          />
+          <a
+            href="#get-this-book"
+            className="inline-flex min-h-[48px] items-center justify-center rounded-lg border border-aged-gold/30 bg-cream px-4 text-sm font-mono text-muted-a11y transition-colors hover:border-fire/30 hover:text-fire"
+          >
+            Buy
+          </a>
+        </div>
       </div>
     </>
   );

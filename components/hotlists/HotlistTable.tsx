@@ -135,20 +135,28 @@ export default function HotlistTable({
 
   if (books.length === 0) {
     return (
-      <div className="text-center py-12 border border-dashed border-border rounded-lg">
-        <p className="font-display text-lg font-bold text-ink">
+      <div className="rounded-2xl border border-dashed border-aged-gold/40 bg-white px-5 py-10 text-center shadow-sm">
+        <p className="font-display text-2xl font-bold text-ink">
           Your Hotlist is empty &mdash; let&apos;s fix that
         </p>
-        <p className="font-body text-muted text-sm mt-2 max-w-sm mx-auto">
+        <p className="mx-auto mt-2 max-w-sm text-sm font-body leading-6 text-muted-a11y">
           Search for books to add, then compare ratings, spice levels, and tropes side by side to decide what to read next.
         </p>
-        <Link
-          href="/booktok"
-          className="inline-flex items-center gap-2 mt-4 text-sm font-mono text-fire hover:text-fire/80 transition-colors"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></svg>
-          Or paste a BookTok link to add all books at once &rarr;
-        </Link>
+        <div className="mt-5 flex flex-col justify-center gap-3 sm:flex-row">
+          <Link
+            href="/search"
+            className="inline-flex min-h-11 items-center justify-center rounded-lg bg-fire px-5 py-2 text-sm font-mono text-white transition-colors hover:bg-fire/90"
+          >
+            Find books
+          </Link>
+          <Link
+            href="/booktok"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-aged-gold/30 bg-cream px-5 py-2 text-sm font-mono text-muted-a11y transition-colors hover:border-fire/30 hover:text-fire"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></svg>
+            Paste BookTok link
+          </Link>
+        </div>
       </div>
     );
   }

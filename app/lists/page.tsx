@@ -210,12 +210,20 @@ export default function MyHotlistsPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-10">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="font-display text-2xl font-bold text-ink">My Hotlists</h1>
+    <div className="mx-auto max-w-3xl px-4 py-8 sm:py-10">
+      <div className="mb-6 rounded-3xl border border-aged-gold/30 bg-white/70 p-5 shadow-sm sm:flex sm:items-center sm:justify-between">
+        <div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-aged-gold">
+            Your comparisons
+          </p>
+          <h1 className="mt-1 font-display text-3xl font-bold text-ink">My Hotlists</h1>
+          <p className="mt-1 text-sm font-body text-muted-a11y">
+            Build shortlists, compare the spicy details, and pick what to read next.
+          </p>
+        </div>
         <button
           onClick={() => setShowCreate(true)}
-          className="text-sm font-mono text-fire hover:text-fire/80 transition-colors"
+          className="mt-4 inline-flex min-h-11 items-center rounded-lg bg-fire px-4 py-2 text-sm font-mono text-white transition-colors hover:bg-fire/90 sm:mt-0"
         >
           + Create New
         </button>
@@ -253,19 +261,27 @@ export default function MyHotlistsPage() {
 
       {/* Hotlist cards */}
       {hotlists.length === 0 ? (
-        <div className="text-center py-16 border border-dashed border-border rounded-lg">
-          <p className="font-display text-lg text-ink mb-2">
-            No hotlists yet
+        <div className="rounded-3xl border border-dashed border-aged-gold/40 bg-white px-6 py-12 text-center shadow-sm">
+          <p className="font-display text-2xl font-bold text-ink">
+            Start with one delicious maybe.
           </p>
-          <p className="text-sm font-body text-muted mb-6">
-            Create your first Hotlist to start comparing books
+          <p className="mx-auto mt-2 max-w-md text-sm font-body leading-6 text-muted-a11y">
+            Create a Hotlist, then add books from search, book pages, or a BookTok grab.
           </p>
-          <button
-            onClick={() => setShowCreate(true)}
-            className="px-5 py-2.5 bg-fire text-white text-sm font-mono rounded-lg hover:bg-fire/90 transition-colors"
-          >
-            + Create New Hotlist
-          </button>
+          <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+            <button
+              onClick={() => setShowCreate(true)}
+              className="inline-flex min-h-11 items-center justify-center rounded-lg bg-fire px-5 py-2 text-sm font-mono text-white transition-colors hover:bg-fire/90"
+            >
+              + Create New Hotlist
+            </button>
+            <Link
+              href="/booktok"
+              className="inline-flex min-h-11 items-center justify-center rounded-lg border border-aged-gold/30 bg-cream px-5 py-2 text-sm font-mono text-muted-a11y transition-colors hover:border-fire/30 hover:text-fire"
+            >
+              Grab from BookTok
+            </Link>
+          </div>
         </div>
       ) : (
         <div className="grid gap-3">

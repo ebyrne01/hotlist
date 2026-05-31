@@ -6,7 +6,7 @@ import { useAuth } from "@/lib/auth/AuthProvider";
 import { useSignInModal } from "@/lib/auth/useSignInModal";
 
 export default function SignInModal() {
-  const { isOpen, onSuccess, closeSignIn } = useSignInModal();
+  const { isOpen, onSuccess, context, closeSignIn } = useSignInModal();
   const { signInWithGoogle, signInWithApple, user } = useAuth();
   const [loading, setLoading] = useState(false);
 
@@ -41,6 +41,10 @@ export default function SignInModal() {
 
   if (!isOpen) return null;
 
+  const title = context?.title ?? "Save books. Build your Hotlist.";
+  const subtitle = context?.subtitle ?? "Sign in free — no password needed.";
+  const note = context?.note ?? "We will bring you right back to what you were doing.";
+
   async function handleGoogle() {
     setLoading(true);
     await signInWithGoogle();
@@ -62,7 +66,7 @@ export default function SignInModal() {
         {/* Close button */}
         <button
           onClick={closeSignIn}
-          className="absolute top-4 right-4 text-muted hover:text-ink transition-colors"
+          className="absolute top-3 right-3 inline-flex min-h-11 min-w-11 items-center justify-center text-muted transition-colors hover:text-ink"
           aria-label="Close"
         >
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -78,10 +82,13 @@ export default function SignInModal() {
             <span>Hotlist</span>
           </h2>
           <p className="font-display text-lg font-semibold text-ink mt-3">
-            Save books. Build your Hotlist.
+            {title}
           </p>
           <p className="text-sm text-muted mt-1">
-            Sign in free — no password needed.
+            {subtitle}
+          </p>
+          <p className="mt-3 rounded-xl border border-aged-gold/30 bg-white/60 px-3 py-2 text-xs font-body leading-5 text-muted-a11y">
+            {note}
           </p>
         </div>
 
@@ -95,7 +102,7 @@ export default function SignInModal() {
             {/* Google */}
             <button
               onClick={handleGoogle}
-              className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white border border-border rounded-lg hover:bg-gray-50 transition-colors font-mono text-sm text-ink"
+              className="flex min-h-11 w-full items-center justify-center gap-3 rounded-lg border border-border bg-white px-4 py-3 font-mono text-sm text-ink transition-colors hover:bg-gray-50"
             >
               <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
                 <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615Z" fill="#4285F4"/>
@@ -109,7 +116,7 @@ export default function SignInModal() {
             {/* Apple */}
             <button
               onClick={handleApple}
-              className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-ink text-cream rounded-lg hover:bg-ink/90 transition-colors font-mono text-sm"
+              className="flex min-h-11 w-full items-center justify-center gap-3 rounded-lg bg-ink px-4 py-3 font-mono text-sm text-cream transition-colors hover:bg-ink/90"
             >
               <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
                 <path d="M14.94 9.88c-.02-2.08 1.7-3.08 1.78-3.13-0.97-1.42-2.48-1.61-3.01-1.63-1.28-.13-2.5.75-3.15.75-.65 0-1.65-.73-2.71-.71-1.4.02-2.68.81-3.4 2.06-1.45 2.52-.37 6.25 1.04 8.3.69 1 1.51 2.12 2.59 2.08 1.04-.04 1.43-.67 2.69-.67 1.25 0 1.61.67 2.71.65 1.12-.02 1.82-.102 2.51-2.05.79-1.86.31-3.67-.05-4.65Zm-3.56-8.56C12.04.48 12.5-.58 12.37-1.63c-.97.04-2.14.65-2.84 1.46-.62.72-1.17 1.87-1.02 2.97 1.08.08 2.18-.55 2.87-1.48Z" transform="translate(0,3)"/>

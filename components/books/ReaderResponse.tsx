@@ -46,6 +46,7 @@ export default function ReaderResponse({ bookId }: ReaderResponseProps) {
   const [isReading, setIsReading] = useState(false);
   const [rating, setRating] = useState<UserRating | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saveState, setSaveState] = useState<"idle" | "saved" | "error">("idle");
   const [expanded, setExpanded] = useState(false);
   const { openSignIn } = useSignInModal();
   const supabase = createClient();
@@ -108,12 +109,20 @@ export default function ReaderResponse({ bookId }: ReaderResponseProps) {
   );
 
   async function handleResponse(newResponse: ReaderResponseType) {
-    if (!user) {
-      openSignIn();
+    const activeUser = user ?? (await supabase.auth.getUser()).data.user;
+    if (!activeUser) {
+      openSignIn(() => {
+        void handleResponse(newResponse);
+      }, {
+        title: "Save your take on this book.",
+        subtitle: "Sign in free so your shelf and ratings stay with you.",
+        note: "After sign-in, we will apply the response you just chose.",
+      });
       return;
     }
 
     setSaving(true);
+    setSaveState("idle");
     const prevResponse = response;
     const prevIsReading = isReading;
 
@@ -139,7 +148,7 @@ export default function ReaderResponse({ bookId }: ReaderResponseProps) {
         await supabase
           .from("reading_status")
           .delete()
-          .eq("user_id", user.id)
+          .eq("user_id", activeUser.id)
           .eq("book_id", bookId);
       } else {
         const statusMap: Record<ReaderResponseType, string> = {
@@ -153,7 +162,7 @@ export default function ReaderResponse({ bookId }: ReaderResponseProps) {
 
         await supabase.from("reading_status").upsert(
           {
-            user_id: user.id,
+            user_id: activeUser.id,
             book_id: bookId,
             status: statusMap[newResponse],
             response: newResponse,
@@ -165,29 +174,41 @@ export default function ReaderResponse({ bookId }: ReaderResponseProps) {
 
         fireDnaSignal(newResponse);
       }
+      setUser({ id: activeUser.id });
+      setSaveState("saved");
+      setTimeout(() => setSaveState("idle"), 1800);
     } catch {
       // Rollback on error
       setResponse(prevResponse);
       setIsReading(prevIsReading);
+      setSaveState("error");
     } finally {
       setSaving(false);
     }
   }
 
   async function handleToggleReading() {
-    if (!user) {
-      openSignIn();
+    const activeUser = user ?? (await supabase.auth.getUser()).data.user;
+    if (!activeUser) {
+      openSignIn(() => {
+        void handleToggleReading();
+      }, {
+        title: "Keep track of what you are reading.",
+        subtitle: "Sign in free to save this book to your shelf.",
+        note: "After sign-in, we will mark this as currently reading.",
+      });
       return;
     }
 
     const newIsReading = !isReading;
     setIsReading(newIsReading);
+    setSaveState("idle");
 
     try {
       const existing = await supabase
         .from("reading_status")
         .select("response")
-        .eq("user_id", user.id)
+        .eq("user_id", activeUser.id)
         .eq("book_id", bookId)
         .single();
 
@@ -199,11 +220,11 @@ export default function ReaderResponse({ bookId }: ReaderResponseProps) {
             status: newIsReading ? "reading" : (response && isPreRead(response) ? "want_to_read" : "read"),
             updated_at: new Date().toISOString(),
           })
-          .eq("user_id", user.id)
+          .eq("user_id", activeUser.id)
           .eq("book_id", bookId);
       } else {
         await supabase.from("reading_status").insert({
-          user_id: user.id,
+          user_id: activeUser.id,
           book_id: bookId,
           status: newIsReading ? "reading" : "want_to_read",
           response: "on_the_shelf",
@@ -212,8 +233,12 @@ export default function ReaderResponse({ bookId }: ReaderResponseProps) {
         });
         if (!response) setResponse("on_the_shelf");
       }
+      setUser({ id: activeUser.id });
+      setSaveState("saved");
+      setTimeout(() => setSaveState("idle"), 1800);
     } catch {
       setIsReading(!newIsReading); // rollback
+      setSaveState("error");
     }
   }
 
@@ -328,6 +353,22 @@ export default function ReaderResponse({ bookId }: ReaderResponseProps) {
       <h3 className="text-xs font-mono text-muted uppercase tracking-wide">
         Your Take
       </h3>
+      <p className="text-xs font-body leading-5 text-muted-a11y">
+        Save this to your reading shelf and teach Hotlist what to recommend next.
+      </p>
+      {saveState !== "idle" && (
+        <p
+          className={clsx(
+            "rounded-lg px-3 py-2 text-xs font-mono",
+            saveState === "saved"
+              ? "border border-fire/15 bg-fire/5 text-fire"
+              : "border border-status-error/20 bg-status-error/5 text-status-error"
+          )}
+          role="status"
+        >
+          {saveState === "saved" ? "Saved to your shelf." : "Could not save that. Please try again."}
+        </p>
+      )}
 
       {/* Pre-read row */}
       <p className="text-[11px] font-mono uppercase tracking-[0.12em] text-muted/60">

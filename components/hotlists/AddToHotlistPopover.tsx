@@ -36,6 +36,7 @@ export default function AddToHotlistPopover({
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
   const [showNewInput, setShowNewInput] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -81,21 +82,29 @@ export default function AddToHotlistPopover({
   }, [showNewInput]);
 
   async function handleOpen() {
-    if (!user) {
-      openSignIn();
+    const supabase = createClient();
+    const activeUser = user ?? (await supabase.auth.getUser()).data.user;
+
+    if (!activeUser) {
+      openSignIn(() => {
+        void handleOpen();
+      }, {
+        title: "Save this book to a Hotlist.",
+        subtitle: "Sign in free, then choose or create the list.",
+        note: "Your book stays right here. After sign-in, we will reopen the Hotlist picker.",
+      });
       return;
     }
 
     setLoading(true);
     setOpen(true);
-
-    const supabase = createClient();
+    setError(null);
 
     // Fetch user's hotlists with book counts
     const { data: lists } = await supabase
       .from("hotlists")
       .select("id, name, share_slug, hotlist_books(count)")
-      .eq("user_id", user.id)
+      .eq("user_id", activeUser.id)
       .order("updated_at", { ascending: false });
 
     const mapped: HotlistItem[] = (lists ?? []).map((row: Record<string, unknown>) => {
@@ -162,6 +171,7 @@ export default function AddToHotlistPopover({
 
   async function toggleBook(hotlistId: string) {
     try {
+      setError(null);
       const supabase = createClient();
       const isAdded = addedTo.has(hotlistId);
 
@@ -209,15 +219,21 @@ export default function AddToHotlistPopover({
       }
     } catch (err) {
       console.error("[toggleBook] failed:", err);
+      setError("Could not update that Hotlist. Please try again.");
     }
   }
 
   async function handleCreate() {
-    if (!user || !newName.trim()) return;
+    if (!newName.trim()) return;
     setCreating(true);
+    setError(null);
 
     try {
       const supabase = createClient();
+      const activeUser = user ?? (await supabase.auth.getUser()).data.user;
+      if (!activeUser) {
+        throw new Error("Not signed in");
+      }
       const shareSlug = newName.trim().toLowerCase()
         .replace(/[^a-z0-9\s-]/g, "")
         .replace(/\s+/g, "-")
@@ -226,7 +242,7 @@ export default function AddToHotlistPopover({
       const { data: newList } = await supabase
         .from("hotlists")
         .insert({
-          user_id: user.id,
+          user_id: activeUser.id,
           name: newName.trim(),
           is_public: false,
           share_slug: shareSlug,
@@ -252,6 +268,7 @@ export default function AddToHotlistPopover({
       }
     } catch (err) {
       console.error("[handleCreate] failed:", err);
+      setError("Could not create that Hotlist. Please try again.");
     } finally {
       setCreating(false);
     }
@@ -282,11 +299,16 @@ export default function AddToHotlistPopover({
   const panelContent = (
     <>
       <div className="p-3 border-b border-border flex items-center justify-between">
-        <p className="text-xs font-mono text-muted uppercase tracking-wide">
-          Add to hotlist
-        </p>
+        <div>
+          <p className="text-xs font-mono text-muted uppercase tracking-wide">
+            Add to hotlist
+          </p>
+          <p className="mt-1 text-xs font-body text-muted-a11y">
+            Compare this book against the others you are considering.
+          </p>
+        </div>
         {isMobile && (
-          <button onClick={() => setOpen(false)} className="text-muted hover:text-ink p-1">
+          <button onClick={() => setOpen(false)} className="inline-flex min-h-11 min-w-11 items-center justify-center text-muted hover:text-ink">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <line x1="4" y1="4" x2="12" y2="12" />
               <line x1="12" y1="4" x2="4" y2="12" />
@@ -303,9 +325,14 @@ export default function AddToHotlistPopover({
         <>
           <div className="max-h-48 sm:max-h-48 overflow-y-auto">
             {hotlists.length === 0 && !showNewInput && (
-              <p className="px-3 py-4 text-sm font-body text-muted/60 text-center">
-                No hotlists yet. Create one below.
-              </p>
+              <div className="px-3 py-5 text-center">
+                <p className="font-display text-lg font-bold text-ink">
+                  Start your first comparison.
+                </p>
+                <p className="mx-auto mt-1 max-w-xs text-sm font-body leading-6 text-muted-a11y">
+                  Name the vibe, add this book, then keep building your shortlist.
+                </p>
+              </div>
             )}
             {hotlists.map((hl) => {
               const isIn = addedTo.has(hl.id);
@@ -343,6 +370,11 @@ export default function AddToHotlistPopover({
 
           {/* New hotlist section */}
           <div className="p-3 border-t border-border">
+            {error && (
+              <p className="mb-2 rounded-lg border border-status-error/20 bg-status-error/5 px-3 py-2 text-xs font-body text-status-error">
+                {error}
+              </p>
+            )}
             {showNewInput ? (
               <div className="flex gap-2">
                 <input

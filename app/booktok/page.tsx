@@ -99,6 +99,7 @@ function BookTokPageInner() {
   const [showTranscript, setShowTranscript] = useState(false);
   const [addingAll, setAddingAll] = useState(false);
   const [addedHotlistSlug, setAddedHotlistSlug] = useState<string | null>(null);
+  const [takingLong, setTakingLong] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   const { user } = useAuth();
@@ -113,6 +114,7 @@ function BookTokPageInner() {
     setStatus(null);
     setResult(null);
     setError(null);
+    setTakingLong(false);
 
     // Update browser URL so auth redirects and bookmarks preserve the video URL
     const urlParam = new URLSearchParams(window.location.search).get("url");
@@ -204,9 +206,26 @@ function BookTokPageInner() {
     }
   }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (!processing) {
+      setTakingLong(false);
+      return;
+    }
+    const timeout = setTimeout(() => setTakingLong(true), 45_000);
+    return () => clearTimeout(timeout);
+  }, [processing]);
+
   async function handleAddAllToHotlist() {
-    if (!user) {
-      openSignIn();
+    const supabase = createClient();
+    const activeUser = user ?? (await supabase.auth.getUser()).data.user;
+    if (!activeUser) {
+      openSignIn(() => {
+        void handleAddAllToHotlist();
+      }, {
+        title: "Save this video list as a Hotlist.",
+        subtitle: "Sign in free, then we will create the comparison table.",
+        note: "The books we found will stay on this page while you sign in.",
+      });
       return;
     }
     if (!result || !result.success) return;
@@ -218,13 +237,11 @@ function BookTokPageInner() {
 
     setAddingAll(true);
     try {
-      const supabase = createClient();
-
       // Check if this user is a verified creator (auto-public mode)
       const { data: creatorProfile } = await supabase
         .from("profiles")
         .select("is_creator, vanity_slug")
-        .eq("id", user.id)
+        .eq("id", activeUser.id)
         .single();
 
       const isCreator = creatorProfile?.is_creator === true;
@@ -253,7 +270,7 @@ function BookTokPageInner() {
       const { data: hotlist } = await supabase
         .from("hotlists")
         .insert({
-          user_id: user.id,
+          user_id: activeUser.id,
           name: listName,
           is_public: isCreator, // Auto-public for verified creators
           share_slug: shareSlug,
@@ -391,8 +408,25 @@ function BookTokPageInner() {
             {STATUS_MESSAGES[status]}
           </p>
           <p className="text-xs font-body text-muted/70 mt-1 text-center italic">
-            Extracting the magic — this takes about a minute
+            Extracting the magic — this usually takes about a minute
           </p>
+          {takingLong && (
+            <div className="mx-auto mt-4 max-w-md rounded-xl border border-aged-gold/30 bg-cream px-4 py-3 text-center">
+              <p className="text-sm font-body leading-6 text-muted-a11y">
+                Still working. Longer videos, carousels, and crowded rec lists can take extra time.
+              </p>
+              <button
+                onClick={() => {
+                  abortRef.current?.abort();
+                  setProcessing(false);
+                  setError("We stopped this grab. You can try again, or paste a different link.");
+                }}
+                className="mt-2 inline-flex min-h-11 items-center rounded-lg px-3 text-xs font-mono uppercase tracking-[0.14em] text-fire transition-colors hover:bg-fire/5"
+              >
+                Stop and try again
+              </button>
+            </div>
+          )}
 
           {/* Progress steps */}
           <div className="mt-6 flex items-center justify-center gap-1 max-w-sm mx-auto">
@@ -432,7 +466,27 @@ function BookTokPageInner() {
       {/* Error state */}
       {error && !processing && (
         <div className="mt-8 rounded-2xl border border-fire/20 bg-white p-5 text-center shadow-sm">
-          <p className="text-sm font-body text-ink">{error}</p>
+          <p className="font-display text-xl font-bold text-ink">
+            We could not finish that grab.
+          </p>
+          <p className="mx-auto mt-2 max-w-md text-sm font-body leading-6 text-muted-a11y">
+            {error}
+          </p>
+          <div className="mt-4 flex flex-col justify-center gap-2 sm:flex-row">
+            <button
+              onClick={() => handleGrab()}
+              disabled={!url.trim()}
+              className="inline-flex min-h-11 items-center justify-center rounded-lg bg-fire px-4 py-2 text-sm font-mono text-white transition-colors hover:bg-fire/90 disabled:opacity-50"
+            >
+              Try again
+            </button>
+            <Link
+              href="/search"
+              className="inline-flex min-h-11 items-center justify-center rounded-lg border border-aged-gold/30 bg-cream px-4 py-2 text-sm font-mono text-muted-a11y transition-colors hover:border-fire/30 hover:text-fire"
+            >
+              Search manually
+            </Link>
+          </div>
           {result && !result.success && "transcript" in result && result.transcript && (
             <button
               onClick={() => setShowTranscript(true)}
