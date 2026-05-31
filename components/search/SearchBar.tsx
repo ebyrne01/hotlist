@@ -55,8 +55,13 @@ export default function SearchBar({ variant = "navbar", className, inputId, onSe
     setLoading(true);
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/books/search?q=${encodeURIComponent(query)}`);
+        const res = await fetch(`/api/books/search?q=${encodeURIComponent(query)}&mode=quick`);
         const data = await res.json();
+        if (data.redirect) {
+          setIsOpen(false);
+          router.push(data.redirect);
+          return;
+        }
         const books = data.books?.slice(0, 6) ?? [];
         setResults(books);
         setNoResults(books.length === 0);
@@ -70,7 +75,7 @@ export default function SearchBar({ variant = "navbar", className, inputId, onSe
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [query]);
+  }, [query, router]);
 
   // Update dropdown position when open
   useEffect(() => {

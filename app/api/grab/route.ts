@@ -12,6 +12,7 @@ import {
   rateLimitResponse,
 } from "@/lib/api/rate-limit";
 import { createClient } from "@/lib/supabase/server";
+import { isVideoUrl } from "@/lib/utils/video-url";
 
 const RATE_LIMIT_MAX = 4;
 const RATE_LIMIT_WINDOW_SECONDS = 60 * 60;
@@ -25,15 +26,7 @@ const bodySchema = z.object({
     .string()
     .url()
     .refine(
-      (url) => {
-        const lower = url.toLowerCase();
-        return (
-          lower.includes("tiktok.com") ||
-          lower.includes("instagram.com") ||
-          lower.includes("youtube.com") ||
-          lower.includes("youtu.be")
-        );
-      },
+      (url) => isVideoUrl(url),
       { message: "URL must be a TikTok, Instagram, or YouTube link" }
     ),
   debug: z.boolean().optional(),

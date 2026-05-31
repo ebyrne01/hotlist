@@ -1,13 +1,13 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { hydrateBookDetail } from "@/lib/books/cache";
 import BookCard from "@/components/books/BookCard";
 import type { BookDetail, UserRating } from "@/lib/types";
 import ReadingListActions from "./ReadingListActions";
+import SignInPrompt from "@/components/auth/SignInPrompt";
 
 type TabKey = "want_to_read" | "reading" | "finished";
 
@@ -70,7 +70,20 @@ export default async function ReadingPage({ searchParams }: PageProps) {
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/?login=required");
+    return (
+      <SignInPrompt
+        eyebrow="Your shelf"
+        title="Save the books you keep thinking about."
+        body="Sign in to keep a want-to-read shelf, track what you are reading, and turn finished books into better recommendations."
+        context={{
+          title: "Save your reading list.",
+          subtitle: "Sign in free so your shelf follows you.",
+          note: "We will bring you right back to your reading list.",
+        }}
+        secondaryHref="/booktok"
+        secondaryLabel="Grab from BookTok"
+      />
+    );
   }
 
   const activeTab: TabKey =

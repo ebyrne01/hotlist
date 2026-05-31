@@ -19,6 +19,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest) {
   const query = request.nextUrl.searchParams.get("q");
+  const mode = request.nextUrl.searchParams.get("mode");
 
   if (!query || query.trim().length < 2) {
     return NextResponse.json(
@@ -47,6 +48,18 @@ export async function GET(request: NextRequest) {
         query,
         intent: "video_url",
         redirect: `/booktok?url=${encodeURIComponent(intent.url)}`,
+      });
+    }
+
+    // Typeahead / quick search should stay fast and free. Smart natural-language
+    // parsing happens on the full /search page after the reader submits.
+    if (mode === "quick") {
+      const books = await findBook(query);
+      return NextResponse.json({
+        query,
+        intent: "quick",
+        total: books.length,
+        books: shapeResults(books),
       });
     }
 

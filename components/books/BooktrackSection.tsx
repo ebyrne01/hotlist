@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import { Copy, ExternalLink, Headphones, Sparkles } from "lucide-react";
 import type { SpotifyPlaylistResult } from "@/lib/types";
 
 interface Props {
@@ -11,7 +12,6 @@ interface Props {
   bookTitle: string;
 }
 
-/** Spotify logo as inline SVG — green circle with sound waves */
 function SpotifyLogo({ size = 16 }: { size?: number }) {
   return (
     <svg
@@ -27,154 +27,216 @@ function SpotifyLogo({ size = 16 }: { size?: number }) {
   );
 }
 
+function cleanPrompt(prompt: string, bookTitle: string) {
+  return prompt
+    .replace(new RegExp(`^Create a playlist called ${escapeRegExp(bookTitle)}\\.\\s*`, "i"), "")
+    .trim();
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export default function BooktrackSection({
   spotifyPlaylists,
   booktrackPrompt,
   booktrackMoods,
+  bookTitle,
 }: Props) {
   const [copied, setCopied] = useState(false);
-  const [showEmbed, setShowEmbed] = useState(false);
+  const [activePlaylistId, setActivePlaylistId] = useState<string | null>(
+    spotifyPlaylists?.[0]?.id ?? null
+  );
 
-  const hasPlaylists = spotifyPlaylists && spotifyPlaylists.length > 0;
+  const hasPlaylists = !!spotifyPlaylists?.length;
   const hasVibes = !!booktrackPrompt;
 
   if (!hasPlaylists && !hasVibes) return null;
 
   const topPlaylist = spotifyPlaylists?.[0] ?? null;
+  const activePlaylist =
+    spotifyPlaylists?.find((playlist) => playlist.id === activePlaylistId) ??
+    topPlaylist;
+  const promptBody =
+    booktrackPrompt && cleanPrompt(booktrackPrompt, bookTitle);
 
-  function handleCopyAndOpen() {
+  async function copyPrompt() {
     if (!booktrackPrompt) return;
-    navigator.clipboard.writeText(booktrackPrompt);
+    await navigator.clipboard.writeText(booktrackPrompt);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
 
   return (
-    <div>
-      {/* Header */}
-      <div className="mb-3">
-        <span className="font-display text-lg font-bold text-ink flex items-center gap-1.5">
-          <SpotifyLogo size={18} />
-          Booktrack
-        </span>
-        <p className="text-xs font-mono text-muted mt-0.5">Listen while you read</p>
-      </div>
-
-      {/* Mood tags */}
-      {booktrackMoods && booktrackMoods.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mb-3">
-          {booktrackMoods.map((mood) => (
-            <span
-              key={mood}
-              className="text-[10px] font-mono text-muted/70 px-2 py-0.5 border border-border/60 rounded-full bg-white"
-            >
-              {mood}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {/* Existing Spotify playlist */}
-      {topPlaylist && (
-        <div className="mb-3">
-          <button
-            onClick={() => setShowEmbed(!showEmbed)}
-            className="w-full flex items-center gap-3 p-2.5 bg-white border border-border rounded-lg hover:border-fire/30 transition-colors text-left"
-          >
-            {topPlaylist.imageUrl && (
-              <Image
-                src={topPlaylist.imageUrl}
-                alt=""
-                width={48}
-                height={48}
-                className="rounded shrink-0"
-              />
-            )}
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-body text-ink font-medium truncate">
-                {topPlaylist.name}
+    <section className="overflow-hidden rounded-3xl border border-aged-gold/30 bg-[#171014] text-cream shadow-sm">
+      <div className="relative p-4 sm:p-5">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(212,67,14,0.3),transparent_45%),radial-gradient(circle_at_bottom_left,rgba(184,134,11,0.18),transparent_42%)]" />
+        <div className="relative">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.22em] text-aged-gold">
+                <Headphones size={13} aria-hidden="true" />
+                Reading soundtrack
               </p>
-              <p className="text-xs font-mono text-muted/70">
-                {topPlaylist.trackCount} songs · {topPlaylist.ownerName}
-              </p>
+              <h2 className="mt-1 font-display text-2xl font-bold text-cream">
+                Listen while you read
+              </h2>
             </div>
-            <span className="text-xs font-mono text-[#1DB954] shrink-0">
-              {showEmbed ? "Hide" : "Play"}
+            <span className="inline-flex min-h-9 items-center gap-1 rounded-full border border-[#1DB954]/30 bg-[#1DB954]/10 px-3 text-xs font-mono text-[#7AF0A0]">
+              <SpotifyLogo size={13} />
+              Spotify
             </span>
-          </button>
+          </div>
 
-          {/* Spotify embed player */}
-          {showEmbed && (
-            <div className="mt-2 rounded-xl overflow-hidden">
-              <iframe
-                src={`https://open.spotify.com/embed/playlist/${topPlaylist.id}?utm_source=generator&theme=0`}
-                width="100%"
-                height="152"
-                frameBorder="0"
-                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                loading="lazy"
-                className="rounded-xl"
-              />
-            </div>
-          )}
-
-          {/* More playlists */}
-          {spotifyPlaylists && spotifyPlaylists.length > 1 && (
-            <div className="mt-2 flex flex-col gap-1">
-              {spotifyPlaylists.slice(1).map((pl) => (
-                <a
-                  key={pl.id}
-                  href={pl.externalUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs font-mono text-muted/60 hover:text-fire transition-colors truncate"
-                  title={pl.name}
+          {booktrackMoods && booktrackMoods.length > 0 && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {booktrackMoods.slice(0, 5).map((mood) => (
+                <span
+                  key={mood}
+                  className="inline-flex min-h-9 items-center rounded-full border border-cream/10 bg-cream/10 px-3 text-[11px] font-mono uppercase tracking-[0.08em] text-cream/80"
                 >
-                  + {pl.name}
-                </a>
+                  {mood}
+                </span>
               ))}
             </div>
           )}
+
+          {promptBody && (
+            <p className="mt-4 max-w-2xl text-sm font-body leading-6 text-cream/80">
+              {promptBody}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {activePlaylist && (
+        <div className="border-t border-cream/10 bg-black/18 p-3 sm:p-4">
+          <button
+            onClick={() => setActivePlaylistId(activePlaylist.id)}
+            className="flex w-full items-center gap-3 rounded-2xl border border-cream/10 bg-cream/10 p-3 text-left transition-colors hover:border-[#1DB954]/40"
+          >
+            {activePlaylist.imageUrl ? (
+              <Image
+                src={activePlaylist.imageUrl}
+                alt=""
+                width={64}
+                height={64}
+                className="h-16 w-16 shrink-0 rounded-xl object-cover"
+              />
+            ) : (
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-cream/10">
+                <SpotifyLogo size={24} />
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#7AF0A0]">
+                Best match
+              </p>
+              <p className="truncate font-display text-lg font-bold text-cream">
+                {activePlaylist.name}
+              </p>
+              <p className="mt-0.5 truncate text-xs font-mono text-cream/55">
+                {activePlaylist.trackCount} songs by {activePlaylist.ownerName}
+              </p>
+              {activePlaylist.matchReason && (
+                <p className="mt-1 text-[11px] font-body text-cream/55">
+                  {activePlaylist.matchReason}
+                </p>
+              )}
+            </div>
+          </button>
+
+          <div className="mt-3 overflow-hidden rounded-2xl border border-cream/10 bg-black/20">
+            <iframe
+              src={`https://open.spotify.com/embed/playlist/${activePlaylist.id}?utm_source=generator&theme=0`}
+              width="100%"
+              height="152"
+              frameBorder="0"
+              allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+              loading="lazy"
+              className="block rounded-2xl"
+            />
+          </div>
+
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+            <a
+              href={activePlaylist.externalUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#1DB954] px-4 text-sm font-mono text-white transition-colors hover:bg-[#1ed760]"
+            >
+              Open in Spotify
+              <ExternalLink size={14} aria-hidden="true" />
+            </a>
+            {booktrackPrompt && (
+              <button
+                onClick={copyPrompt}
+                className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-cream/10 bg-cream/10 px-4 text-sm font-mono text-cream transition-colors hover:bg-cream/15"
+              >
+                {copied ? "Prompt copied" : "Copy soundtrack prompt"}
+                <Copy size={14} aria-hidden="true" />
+              </button>
+            )}
+          </div>
+
+          {spotifyPlaylists && spotifyPlaylists.length > 1 && (
+            <div className="mt-4">
+              <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.18em] text-cream/45">
+                Alternate vibes
+              </p>
+              <div className="grid gap-2">
+                {spotifyPlaylists.slice(1).map((playlist) => (
+                  <button
+                    key={playlist.id}
+                    onClick={() => setActivePlaylistId(playlist.id)}
+                    className="flex min-h-11 items-center justify-between gap-3 rounded-xl border border-cream/10 bg-cream/5 px-3 py-2 text-left text-sm font-body text-cream/80 transition-colors hover:border-[#1DB954]/35 hover:text-cream"
+                  >
+                    <span className="truncate">{playlist.name}</span>
+                    <span className="shrink-0 text-xs font-mono text-cream/45">
+                      {playlist.trackCount} songs
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* AI-generated vibes prompt */}
-      {hasVibes && (
-        <div className="bg-cream/50 border border-border/50 rounded-lg p-3">
-          <p className="text-xs font-mono text-muted/60 mb-1.5">
-            {hasPlaylists ? "Or create your own" : "Create a custom playlist"}
-          </p>
-          <p className="text-sm font-body text-ink/80 italic leading-relaxed">
-            &ldquo;{booktrackPrompt}&rdquo;
-          </p>
-          <div className="flex items-center gap-2 mt-2.5">
-            <button
-              onClick={handleCopyAndOpen}
-              className="inline-flex items-center gap-1.5 text-xs font-mono px-3 py-1.5 rounded-full border border-[#1DB954]/30 text-[#1DB954] hover:bg-[#1DB954]/5 transition-colors"
-            >
-              {copied ? (
-                <>&#10003; Copied!</>
-              ) : (
-                <>
-                  <SpotifyLogo size={12} />
-                  Copy prompt
-                </>
-              )}
-            </button>
-            <a
-              href="https://open.spotify.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs font-mono px-3 py-1.5 rounded-full bg-[#1DB954] text-white hover:bg-[#1ed760] transition-colors"
-            >
-              Open Spotify
-            </a>
+      {!activePlaylist && hasVibes && (
+        <div className="border-t border-cream/10 bg-black/18 p-4">
+          <div className="rounded-2xl border border-cream/10 bg-cream/10 p-4">
+            <p className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-aged-gold">
+              <Sparkles size={13} aria-hidden="true" />
+              Build the vibe
+            </p>
+            <p className="mt-2 text-sm font-body leading-6 text-cream/75">
+              No strong reader playlist surfaced yet, but this soundtrack prompt is tuned to the book&apos;s mood.
+            </p>
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+              <button
+                onClick={copyPrompt}
+                className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-[#1DB954] px-4 text-sm font-mono text-white transition-colors hover:bg-[#1ed760]"
+              >
+                {copied ? "Prompt copied" : "Copy prompt"}
+                <Copy size={14} aria-hidden="true" />
+              </button>
+              <a
+                href="https://open.spotify.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-cream/10 bg-cream/10 px-4 text-sm font-mono text-cream transition-colors hover:bg-cream/15"
+              >
+                Open Spotify
+                <ExternalLink size={14} aria-hidden="true" />
+              </a>
+            </div>
+            <p className="mt-3 text-[11px] font-mono leading-5 text-cream/45">
+              Spotify Prompted Playlists are Premium/mobile gated, so Hotlist keeps this as a fallback until direct playlist creation is connected.
+            </p>
           </div>
-          <p className="text-[10px] font-mono text-muted/40 mt-2">
-            Paste into Spotify&apos;s Prompted Playlists (Premium) to generate a custom soundtrack
-          </p>
         </div>
       )}
-    </div>
+    </section>
   );
 }

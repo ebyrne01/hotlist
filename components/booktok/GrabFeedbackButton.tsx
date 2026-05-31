@@ -42,7 +42,7 @@ export default function GrabFeedbackButton({
     return (
       <button
         onClick={() => setState("expanded")}
-        className="text-xs font-mono text-muted/70 hover:text-muted/60 transition-colors mt-0.5"
+        className="inline-flex min-h-9 items-center rounded-lg px-2 text-xs font-mono text-muted/70 transition-colors hover:bg-cream hover:text-ink"
       >
         Not right?
       </button>
@@ -71,12 +71,12 @@ export default function GrabFeedbackButton({
 
   return (
     <div className="border-t border-border/30 mt-2 pt-2">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {feedbackOptions.map((opt) => (
           <button
             key={opt}
             onClick={() => setSelectedType(opt)}
-            className={`text-xs font-mono px-2 py-0.5 rounded-full border transition-colors ${
+            className={`min-h-9 rounded-full border px-3 py-1 text-xs font-mono transition-colors ${
               selectedType === opt
                 ? "border-fire/40 text-fire bg-fire/5"
                 : "border-border text-muted/70 hover:border-muted/30"
@@ -91,20 +91,20 @@ export default function GrabFeedbackButton({
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
         placeholder="What should it be? (optional)"
-        className="mt-1.5 w-full text-xs font-body border border-border/50 rounded px-2 py-1 bg-white placeholder:text-muted/70 focus:outline-none focus:border-fire/30"
+        className="mt-2 min-h-11 w-full rounded-lg border border-border/50 bg-white px-3 py-2 text-sm font-body placeholder:text-muted/70 focus:border-fire/30 focus:outline-none"
         onKeyDown={(e) => e.key === "Enter" && !submitting && handleSubmit()}
       />
-      <div className="flex items-center gap-2 mt-1.5">
+      <div className="mt-2 flex items-center gap-2">
         <button
           onClick={handleSubmit}
           disabled={submitting}
-          className="text-xs font-mono text-fire hover:text-fire/80 transition-colors disabled:opacity-50"
+          className="inline-flex min-h-10 items-center rounded-lg px-3 text-xs font-mono text-fire transition-colors hover:bg-fire/5 hover:text-fire/80 disabled:opacity-50"
         >
           {submitting ? "Sending..." : "Send"}
         </button>
         <button
           onClick={() => setState("collapsed")}
-          className="text-xs font-mono text-muted/70 hover:text-muted/60 transition-colors"
+          className="inline-flex min-h-10 items-center rounded-lg px-3 text-xs font-mono text-muted/70 transition-colors hover:bg-cream hover:text-ink"
         >
           Cancel
         </button>

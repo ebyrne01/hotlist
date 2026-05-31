@@ -27,6 +27,8 @@ export interface SpotifyPlaylistResult {
   trackCount: number;
   ownerName: string;
   uri: string;
+  confidence: "high" | "medium";
+  matchReason: string;
 }
 
 export async function searchBookPlaylists(
@@ -94,21 +96,37 @@ export async function searchBookPlaylists(
         const playlistDesc = (item.description ?? "").toLowerCase();
         const searchText = `${playlistName} ${playlistDesc}`;
 
-        // Relevance filter: check full title, significant title words, or author last name
+        // Relevance filter: check full title, significant title words, or author last name.
+        // We only show medium/high confidence matches because a bad soundtrack match
+        // is more trust-damaging than showing no playlist.
         const matchesFullTitle = searchText.includes(lowerTitle);
         const matchingWords = titleWords.filter((w) => searchText.includes(w));
         const matchesTitleWords = titleWords.length > 0 && matchingWords.length >= Math.min(titleWords.length, 2);
         const matchesAuthor = authorLastName.length > 2 && searchText.includes(authorLastName);
+        const nameMatchesFullTitle = playlistName.includes(lowerTitle);
+        const nameMatchesAuthor = authorLastName.length > 2 && playlistName.includes(authorLastName);
 
         // For short titles (1-2 significant words), require full title match in the
         // playlist NAME (not description) to avoid false positives. Common words like
         // "Radiance" or "Wild" match too many unrelated playlists otherwise.
         if (titleWords.length <= 2) {
-          const nameMatchesTitle = playlistName.includes(lowerTitle);
-          const nameMatchesAuthor = authorLastName.length > 2 && playlistName.includes(authorLastName);
-          if (!nameMatchesTitle && !nameMatchesAuthor) continue;
+          if (!nameMatchesFullTitle && !nameMatchesAuthor) continue;
         } else {
           if (!matchesFullTitle && !matchesTitleWords && !matchesAuthor) continue;
+        }
+
+        let confidence: "high" | "medium" = "medium";
+        let matchReason = "Matched this book's title words";
+        if (nameMatchesFullTitle && matchesAuthor) {
+          confidence = "high";
+          matchReason = "Matched title and author";
+        } else if (nameMatchesFullTitle) {
+          confidence = "high";
+          matchReason = "Matched the book title";
+        } else if (matchesAuthor && matchesTitleWords) {
+          matchReason = "Matched author and title words";
+        } else if (matchesAuthor && titleWords.length <= 2) {
+          matchReason = "Matched the author's playlist";
         }
 
         results.set(item.id, {
@@ -120,6 +138,8 @@ export async function searchBookPlaylists(
           trackCount,
           ownerName: item.owner?.display_name ?? "Unknown",
           uri: item.uri,
+          confidence,
+          matchReason,
         });
       }
     } catch (err) {
@@ -140,10 +160,13 @@ export async function searchBookPlaylists(
     .sort((a, b) => {
       const aName = a.name.toLowerCase();
       const bName = b.name.toLowerCase();
-      // Full title match in name is best
+      // Full title match in name is best, followed by explicit confidence.
       const aFullTitle = aName.includes(lowerTitle) ? 2 : 0;
       const bFullTitle = bName.includes(lowerTitle) ? 2 : 0;
       if (aFullTitle !== bFullTitle) return bFullTitle - aFullTitle;
+      const aConfidence = a.confidence === "high" ? 1 : 0;
+      const bConfidence = b.confidence === "high" ? 1 : 0;
+      if (aConfidence !== bConfidence) return bConfidence - aConfidence;
       // Then prefer more title word matches
       const aWords = titleWords.filter((w) => aName.includes(w)).length;
       const bWords = titleWords.filter((w) => bName.includes(w)).length;

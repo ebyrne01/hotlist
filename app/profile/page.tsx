@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import Image from "next/image";
 import ReadingDnaCard from "@/components/profile/ReadingDnaCard";
+import SignInPrompt from "@/components/auth/SignInPrompt";
 import { ArrowRight, BookOpen, Crown, Flame, ListChecks, LogOut, Star } from "lucide-react";
 
 interface UserStats {
@@ -89,11 +90,16 @@ export default function ProfilePage() {
 
   if (!user) {
     return (
-      <div className="mx-auto max-w-5xl px-4 py-16 text-center">
-        <p className="text-sm font-mono text-muted-a11y">
-          Sign in to see your reader profile.
-        </p>
-      </div>
+      <SignInPrompt
+        eyebrow="Reader profile"
+        title="Your taste profile is waiting."
+        body="Sign in to see your Hotlists, Reading DNA, saved books, and ratings in one cozy little command center."
+        context={{
+          title: "Open your reader profile.",
+          subtitle: "Sign in free to see your saved Hotlists, ratings, and Reading DNA.",
+          note: "We will bring you right back to your profile.",
+        }}
+      />
     );
   }
 

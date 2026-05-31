@@ -6,6 +6,8 @@
  * that needs Haiku intent parsing.
  */
 
+import { isVideoUrl } from "@/lib/utils/video-url";
+
 export type QueryIntent =
   | { type: "title_author"; query: string }
   | { type: "discovery"; raw: string }
@@ -17,7 +19,7 @@ export function classifyQuery(input: string): QueryIntent {
   const trimmed = input.trim();
 
   // Video URL detection (already handled in SearchBar, but belt-and-suspenders)
-  if (/^https?:\/\/(www\.)?(tiktok|instagram|youtube|vm\.tiktok|youtu\.be)/.test(trimmed)) {
+  if (isVideoUrl(trimmed)) {
     return { type: "video_url", url: trimmed };
   }
 

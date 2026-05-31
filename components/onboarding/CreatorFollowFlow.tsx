@@ -48,10 +48,12 @@ export default function CreatorFollowFlow() {
   const [responses, setResponses] = useState<Record<string, string>>({});
   const [resultHotlistId, setResultHotlistId] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSearch = useCallback(async () => {
     if (!query.trim()) return;
     setSearching(true);
+    setError(null);
     try {
       const res = await fetch("/api/get-started/creators", {
         method: "POST",
@@ -61,7 +63,7 @@ export default function CreatorFollowFlow() {
       const data = await res.json();
       setSearchResults(data.creators ?? []);
     } catch {
-      // Silently fail — user can retry
+      setError("Could not search creators right now. Please try again.");
     } finally {
       setSearching(false);
     }
@@ -84,6 +86,7 @@ export default function CreatorFollowFlow() {
     if (creatorIds.length === 0) return;
 
     setStep("loading-books");
+    setError(null);
     try {
       const res = await fetch("/api/get-started/creators", {
         method: "POST",
@@ -94,17 +97,23 @@ export default function CreatorFollowFlow() {
       setBooks(data.books ?? []);
       setStep("rate");
     } catch {
+      setError("Could not load those creator picks. Try a different creator or search again.");
       setStep("search");
     }
   }
 
   async function handleApply() {
     if (!user) {
-      openSignIn(() => handleApply());
+      openSignIn(() => void handleApply(), {
+        title: "Follow creators and save your picks.",
+        subtitle: "Sign in free so creator follows and ratings stay with your profile.",
+        note: "Your selected creators and book ratings will stay on this page while you sign in.",
+      });
       return;
     }
 
     setStep("applying");
+    setError(null);
     const creatorIds = Array.from(selectedCreators.keys());
     const toApply = Object.entries(responses).map(([bookId, response]) => ({
       bookId,
@@ -125,6 +134,7 @@ export default function CreatorFollowFlow() {
       setResultHotlistId(data.hotlistId ?? null);
       setStep("done");
     } catch {
+      setError("Could not save those creator picks. Please try again.");
       setStep("rate");
     }
   }
@@ -134,6 +144,12 @@ export default function CreatorFollowFlow() {
     return (
       <div>
         {/* Search bar */}
+        {error && (
+          <p className="mb-4 rounded-lg border border-status-error/20 bg-status-error/5 px-3 py-2 text-sm font-body text-status-error" role="status">
+            {error}
+          </p>
+        )}
+
         <div className="flex gap-2 mb-6">
           <label htmlFor="creator-search" className="sr-only">
             Search creator handle
@@ -164,8 +180,8 @@ export default function CreatorFollowFlow() {
               return (
                 <button
                   key={creator.id}
-                  onClick={() => toggleCreator(creator)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg border transition-colors text-left ${
+              onClick={() => toggleCreator(creator)}
+                  className={`w-full flex min-h-[72px] items-center gap-3 px-4 py-3 rounded-lg border transition-colors text-left ${
                     isSelected
                       ? "border-fire bg-fire/5"
                       : "border-border hover:border-fire/30"
@@ -307,7 +323,7 @@ export default function CreatorFollowFlow() {
           </p>
           <button
             onClick={() => setStep("search")}
-            className="text-sm font-mono text-fire hover:text-fire/80 transition-colors"
+            className="inline-flex min-h-11 items-center rounded-lg px-3 text-sm font-mono text-fire hover:bg-fire/5 hover:text-fire/80 transition-colors"
           >
             ← Pick different creators
           </button>
@@ -359,7 +375,7 @@ export default function CreatorFollowFlow() {
                             return { ...prev, [book.id]: key };
                           })
                         }
-                        className={`min-h-9 rounded px-1 py-1.5 text-[10px] font-mono uppercase tracking-[0.08em] transition-colors ${
+                        className={`min-h-11 rounded px-1 py-1.5 text-[10px] font-mono uppercase tracking-[0.08em] transition-colors ${
                           currentResponse === key
                             ? "bg-fire/15 ring-1 ring-fire"
                             : "bg-cream hover:bg-fire/5"

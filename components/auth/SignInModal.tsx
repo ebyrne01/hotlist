@@ -9,6 +9,7 @@ export default function SignInModal() {
   const { isOpen, onSuccess, context, closeSignIn } = useSignInModal();
   const { signInWithGoogle, signInWithApple, user } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Close on ESC
   const handleKeyDown = useCallback(
@@ -47,12 +48,24 @@ export default function SignInModal() {
 
   async function handleGoogle() {
     setLoading(true);
-    await signInWithGoogle();
+    setError(null);
+    try {
+      await signInWithGoogle();
+    } catch {
+      setLoading(false);
+      setError("Could not start Google sign-in. Please try again.");
+    }
   }
 
   async function handleApple() {
     setLoading(true);
-    await signInWithApple();
+    setError(null);
+    try {
+      await signInWithApple();
+    } catch {
+      setLoading(false);
+      setError("Could not start Apple sign-in. Please try again.");
+    }
   }
 
   return (
@@ -99,6 +112,11 @@ export default function SignInModal() {
           </div>
         ) : (
           <div className="space-y-3">
+            {error && (
+              <p className="rounded-lg border border-status-error/20 bg-status-error/5 px-3 py-2 text-sm font-body text-status-error" role="status">
+                {error}
+              </p>
+            )}
             {/* Google */}
             <button
               onClick={handleGoogle}

@@ -75,13 +75,21 @@ export default async function DiscoverPage() {
               match your mood.
             </p>
           </div>
-          <Link
-            href="/booktok"
-            className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-lg bg-fire px-5 py-3 text-sm font-mono text-white transition-colors hover:bg-fire/90"
-          >
-            Grab a video
-            <ArrowRight size={14} aria-hidden="true" />
-          </Link>
+          <div className="flex flex-col gap-2 sm:items-end">
+            <Link
+              href="/booktok"
+              className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-lg bg-fire px-5 py-3 text-sm font-mono text-white transition-colors hover:bg-fire/90"
+            >
+              Grab a video
+              <ArrowRight size={14} aria-hidden="true" />
+            </Link>
+            <Link
+              href="/profile/creator"
+              className="inline-flex min-h-11 items-center justify-center rounded-lg border border-aged-gold/30 bg-white/80 px-4 py-2 text-xs font-mono uppercase tracking-[0.14em] text-muted-a11y transition-colors hover:border-fire/30 hover:text-fire"
+            >
+              Claim or apply
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -168,7 +176,7 @@ export default async function DiscoverPage() {
             No creators yet.
           </p>
           <p className="mx-auto mt-2 max-w-md text-sm font-body text-muted-a11y">
-            No creators yet. Grab a BookTok video to start discovering creators!
+            Grab a BookTok video to start discovering creators and building searchable shelves from their recommendations.
           </p>
           <Link
             href="/booktok"

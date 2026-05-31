@@ -213,7 +213,7 @@ export default function HotlistTable({
                     {isOwner && (
                       <button
                         onClick={() => onRemoveBook?.(hb.bookId)}
-                        className="-mr-2 -mt-2 flex min-h-[44px] min-w-[44px] items-center justify-center text-muted/70 hover:text-fire transition-colors shrink-0"
+                        className="-mr-2 -mt-2 flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg text-muted/70 transition-colors hover:bg-fire/5 hover:text-fire"
                         title="Remove"
                         aria-label={`Remove ${hb.book.title} from Hotlist`}
                       >
@@ -517,8 +517,9 @@ export default function HotlistTable({
                     <td className="px-2 py-3 text-center">
                       <button
                         onClick={() => onRemoveBook?.(hb.bookId)}
-                        className="text-muted/70 hover:text-fire transition-colors p-1"
+                        className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-muted/70 transition-colors hover:bg-fire/5 hover:text-fire"
                         title="Remove from list"
+                        aria-label={`Remove ${hb.book.title} from Hotlist`}
                       >
                         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                           <line x1="3" y1="3" x2="11" y2="11" />
@@ -558,7 +559,7 @@ function SortHeader({
     <th className="px-3 py-2 text-center">
       <button
         onClick={() => onClick(sortKey)}
-        className={`font-mono text-xs uppercase tracking-wide transition-colors ${
+        className={`inline-flex min-h-11 items-center justify-center font-mono text-xs uppercase tracking-wide transition-colors ${
           isActive ? "text-fire" : "text-cream/70 hover:text-cream"
         }`}
       >
@@ -802,7 +803,7 @@ function ReadStatusToggle({
   return (
     <button
       onClick={toggle}
-      className={`text-xs font-mono px-2 py-1 rounded-full border transition-colors ${
+      className={`min-h-11 rounded-full border px-3 py-2 text-xs font-mono transition-colors ${
         status === "read"
           ? "bg-green-50 text-green-700 border-green-200"
           : "bg-white text-muted border-border hover:border-fire/30 hover:text-ink"

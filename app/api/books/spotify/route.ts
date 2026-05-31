@@ -15,14 +15,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized origin" }, { status: 403 });
   }
 
-  const { bookId, title, author } = (await req.json()) as {
-    bookId: string;
-    title: string;
-    author: string;
-  };
+  let bookId: string | null = null;
+  try {
+    const body = await req.json();
+    bookId = typeof body?.bookId === "string" ? body.bookId : null;
+  } catch {
+    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+  }
 
-  if (!bookId || !title || !author) {
-    return NextResponse.json({ error: "Missing fields" }, { status: 400 });
+  if (!bookId) {
+    return NextResponse.json({ error: "Missing bookId" }, { status: 400 });
   }
 
   // Bail early if Spotify credentials aren't configured
@@ -35,9 +37,13 @@ export async function POST(req: NextRequest) {
   // Check if we already have fresh data (fetched within 7 days)
   const { data: book } = await supabase
     .from("books")
-    .select("spotify_playlists, spotify_fetched_at")
+    .select("title, author, spotify_playlists, spotify_fetched_at")
     .eq("id", bookId)
     .single();
+
+  if (!book?.title || !book.author) {
+    return NextResponse.json({ error: "Book not found" }, { status: 404 });
+  }
 
   if (book?.spotify_fetched_at) {
     const age = Date.now() - new Date(book.spotify_fetched_at).getTime();
@@ -47,7 +53,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const playlists = await searchBookPlaylists(title, author);
+    const playlists = await searchBookPlaylists(book.title, book.author);
 
     await supabase
       .from("books")
@@ -64,7 +70,7 @@ export async function POST(req: NextRequest) {
     if (msg.includes("rate limit")) {
       return NextResponse.json({ status: "rate_limited" }, { status: 429 });
     }
-    console.warn(`[spotify] On-demand fetch failed for "${title}":`, msg);
+    console.warn(`[spotify] On-demand fetch failed for "${book.title}":`, msg);
     return NextResponse.json({ status: "error" }, { status: 500 });
   }
 }

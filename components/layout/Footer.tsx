@@ -20,14 +20,14 @@ export default function Footer() {
           </div>
 
           {/* Links */}
-          <nav className="flex gap-6 text-sm font-body">
-            <Link href="/about" className="hover:text-cream transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire rounded">
+          <nav className="flex flex-wrap justify-center gap-2 text-sm font-body sm:gap-3">
+            <Link href="/about" className="inline-flex min-h-11 items-center rounded px-3 hover:text-cream transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire">
               About
             </Link>
-            <Link href="/privacy" className="hover:text-cream transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire rounded">
+            <Link href="/privacy" className="inline-flex min-h-11 items-center rounded px-3 hover:text-cream transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire">
               Privacy
             </Link>
-            <Link href="/terms" className="hover:text-cream transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire rounded">
+            <Link href="/terms" className="inline-flex min-h-11 items-center rounded px-3 hover:text-cream transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire">
               Terms
             </Link>
           </nav>

@@ -93,24 +93,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Store full URL in cookie so the server-side callback can redirect back
     const returnUrl = window.location.pathname + window.location.search;
     document.cookie = `auth_return_url=${encodeURIComponent(returnUrl)}; path=/; max-age=600; SameSite=Lax`;
-    await supabase.auth.signInWithOAuth({
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
         queryParams: { prompt: "select_account" },
       },
     });
+    if (error) throw error;
   }, [supabase]);
 
   const signInWithApple = useCallback(async () => {
     const returnUrl = window.location.pathname + window.location.search;
     document.cookie = `auth_return_url=${encodeURIComponent(returnUrl)}; path=/; max-age=600; SameSite=Lax`;
-    await supabase.auth.signInWithOAuth({
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: "apple",
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
       },
     });
+    if (error) throw error;
   }, [supabase]);
 
   const signOut = useCallback(async () => {

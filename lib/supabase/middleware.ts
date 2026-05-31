@@ -2,7 +2,8 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 // Refreshes the user's auth token on every request so sessions stay alive.
-// Also checks if the user is logged in for protected routes.
+// Admin routes stay protected at the edge; user-facing pages render their own
+// signed-out prompts so readers understand what signing in unlocks.
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request: { headers: request.headers } });
 
@@ -46,12 +47,10 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Protected routes: if not logged in, redirect to home
-  // Note: /lists/[slug] is PUBLIC (shared hotlists), only /lists exactly is protected
-  const protectedPaths = ["/dashboard", "/profile", "/admin"];
+  // Protected routes: if not logged in, redirect to home.
+  const protectedPaths = ["/dashboard", "/admin"];
   const isProtected =
-    protectedPaths.some((path) => pathname.startsWith(path)) ||
-    pathname === "/lists";
+    protectedPaths.some((path) => pathname.startsWith(path));
 
   if (isProtected && !user) {
     const redirectUrl = request.nextUrl.clone();

@@ -11,6 +11,8 @@ export interface SpotifyPlaylistResult {
   trackCount: number;
   ownerName: string;
   uri: string;
+  confidence?: "high" | "medium";
+  matchReason?: string;
 }
 
 export interface Book {

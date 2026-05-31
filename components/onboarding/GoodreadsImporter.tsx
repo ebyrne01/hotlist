@@ -46,7 +46,11 @@ export default function GoodreadsImporter() {
   const handleFile = useCallback(
     async (file: File) => {
       if (!user) {
-        openSignIn(() => handleFile(file));
+        openSignIn(null, {
+          title: "Import your Goodreads shelves.",
+          subtitle: "Sign in free before uploading so we can attach the import to your profile.",
+          note: "After sign-in, choose the CSV again. Browsers do not let us keep file uploads through OAuth.",
+        });
         return;
       }
 
@@ -262,14 +266,14 @@ export default function GoodreadsImporter() {
           {resultHotlistId && (
             <button
               onClick={() => router.push(`/lists/${resultHotlistId}`)}
-              className="px-5 py-2.5 bg-fire text-white text-sm font-mono rounded-lg hover:bg-fire/90 transition-colors"
+              className="min-h-11 px-5 py-2.5 bg-fire text-white text-sm font-mono rounded-lg hover:bg-fire/90 transition-colors"
             >
               View your Hotlist
             </button>
           )}
           <button
             onClick={() => router.push("/get-started/rate")}
-            className="px-5 py-2.5 border border-border text-sm font-mono text-ink rounded-lg hover:border-fire/30 transition-colors"
+            className="min-h-11 px-5 py-2.5 border border-border text-sm font-mono text-ink rounded-lg hover:border-fire/30 transition-colors"
           >
             Rate more books
           </button>
@@ -397,7 +401,7 @@ export default function GoodreadsImporter() {
         <button
           onClick={handleApply}
           disabled={selectedCount === 0}
-          className="w-full py-3 bg-fire text-white text-sm font-mono rounded-lg hover:bg-fire/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className="min-h-[48px] w-full py-3 bg-fire text-white text-sm font-mono rounded-lg hover:bg-fire/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           Import {selectedCount} book{selectedCount !== 1 ? "s" : ""}
         </button>

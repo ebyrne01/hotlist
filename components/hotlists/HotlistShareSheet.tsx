@@ -17,6 +17,7 @@ export default function HotlistShareSheet({
 }: Props) {
   const [copied, setCopied] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const shareUrl =
     typeof window !== "undefined"
@@ -40,9 +41,14 @@ export default function HotlistShareSheet({
   if (!isOpen) return null;
 
   async function handleCopyLink() {
-    await navigator.clipboard.writeText(shareUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setError(null);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setError("Could not copy automatically. Select the link below to copy it.");
+    }
   }
 
   async function handleDownloadImage() {
@@ -51,6 +57,7 @@ export default function HotlistShareSheet({
       const res = await fetch(
         `/api/hotlists/${shareSlug}/og-image?size=stories`
       );
+      if (!res.ok) throw new Error("Image request failed");
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -62,6 +69,7 @@ export default function HotlistShareSheet({
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error("[handleDownloadImage] failed:", err);
+      setError("Could not download the image right now. Please try again.");
     } finally {
       setDownloading(false);
     }
@@ -101,6 +109,22 @@ export default function HotlistShareSheet({
         <p className="text-xs font-mono text-muted mb-5 truncate">
           {hotlistName}
         </p>
+
+        <label className="mb-4 block">
+          <span className="sr-only">Share URL</span>
+          <input
+            value={shareUrl}
+            readOnly
+            onFocus={(e) => e.currentTarget.select()}
+            className="min-h-11 w-full rounded-lg border border-border bg-white px-3 py-2 text-xs font-mono text-muted-a11y outline-none focus:border-fire/40 focus:ring-2 focus:ring-fire/20"
+          />
+        </label>
+
+        {error && (
+          <p className="mb-4 rounded-lg border border-status-error/20 bg-status-error/5 px-3 py-2 text-sm font-body text-status-error" role="status">
+            {error}
+          </p>
+        )}
 
         <div className="flex flex-col gap-3">
           {/* Copy Link */}

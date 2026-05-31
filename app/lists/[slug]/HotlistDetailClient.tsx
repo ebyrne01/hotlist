@@ -18,14 +18,16 @@ interface Props {
 export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }: Props) {
   const router = useRouter();
   const [name, setName] = useState(hotlist.name);
+  const [savedName, setSavedName] = useState(hotlist.name);
   const [editing, setEditing] = useState(false);
   const [isPublic, setIsPublic] = useState(hotlist.isPublic);
-  const [shareSlug] = useState(hotlist.shareSlug);
+  const [shareSlug, setShareSlug] = useState(hotlist.shareSlug);
   const [copied, setCopied] = useState(false);
   const [books, setBooks] = useState(hotlist.books);
   const [showShareSheet, setShowShareSheet] = useState(false);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [deleteToast, setDeleteToast] = useState(false);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
   const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
@@ -101,9 +103,25 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
     };
   }, [hasEnrichingBooks, pollForUpdates]);
 
+  function generateShareSlug(listName: string): string {
+    const base = listName
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .slice(0, 30)
+      .replace(/^-+|-+$/g, "");
+    return `${base || "hotlist"}-${Math.random().toString(36).slice(2, 6)}`;
+  }
+
+  function showActionMessage(message: string) {
+    setActionMessage(message);
+    setTimeout(() => setActionMessage(null), 3500);
+  }
+
   async function handleNameSave() {
-    if (!name.trim() || name.trim() === hotlist.name) {
-      setName(hotlist.name);
+    const nextName = name.trim();
+    if (!nextName || nextName === savedName) {
+      setName(savedName);
       setEditing(false);
       return;
     }
@@ -111,13 +129,17 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
       const supabase = createClient();
       await supabase
         .from("hotlists")
-        .update({ name: name.trim(), updated_at: new Date().toISOString() })
+        .update({ name: nextName, updated_at: new Date().toISOString() })
         .eq("id", hotlist.id);
+      setName(nextName);
+      setSavedName(nextName);
       setEditing(false);
+      showActionMessage("Hotlist name updated.");
     } catch (err) {
       console.error("[handleNameSave] failed:", err);
-      setName(hotlist.name);
+      setName(savedName);
       setEditing(false);
+      showActionMessage("Could not rename this Hotlist. Please try again.");
     }
   }
 
@@ -131,34 +153,54 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
         updated_at: new Date().toISOString(),
       };
 
+      const nextShareSlug = shareSlug ?? generateShareSlug(name);
+      if (newPublic && !shareSlug) {
+        updates.share_slug = nextShareSlug;
+      }
+
       await supabase.from("hotlists").update(updates).eq("id", hotlist.id);
       setIsPublic(newPublic);
+      if (newPublic && !shareSlug) setShareSlug(nextShareSlug);
 
       // Auto-copy link when toggling to public
       if (newPublic) {
-        const slug = shareSlug ?? hotlist.id;
+        const slug = nextShareSlug ?? hotlist.id;
         const url = `${window.location.origin}/lists/${slug}`;
-        await navigator.clipboard.writeText(url);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 3000);
+        try {
+          await navigator.clipboard.writeText(url);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 3000);
+          showActionMessage("Public link copied.");
+        } catch {
+          showActionMessage("Hotlist is public. Use Share to copy the link.");
+        }
+      } else {
+        showActionMessage("Hotlist is private again.");
       }
     } catch (err) {
       console.error("[handleTogglePublic] failed:", err);
+      showActionMessage("Could not update sharing. Please try again.");
     }
   }
 
   async function handleRemoveBook(bookId: string) {
+    const previousBooks = books;
+    const removed = books.find((b) => b.bookId === bookId);
+    setBooks((prev) => prev.filter((b) => b.bookId !== bookId));
     try {
       const supabase = createClient();
-      await supabase
+      const { error } = await supabase
         .from("hotlist_books")
         .delete()
         .eq("hotlist_id", hotlist.id)
         .eq("book_id", bookId);
+      if (error) throw error;
 
-      setBooks((prev) => prev.filter((b) => b.bookId !== bookId));
+      showActionMessage(removed ? `Removed ${removed.book.title}.` : "Book removed.");
     } catch (err) {
       console.error("[handleRemoveBook] failed:", err);
+      setBooks(previousBooks);
+      showActionMessage("Could not remove that book. Please try again.");
     }
   }
 
@@ -192,14 +234,17 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
 
   async function handleAddBookFromSearch(searchResult: SearchResult) {
     // Check if book is already in this hotlist
-    if (books.some((b) => b.bookId === searchResult.id)) return;
+    if (books.some((b) => b.bookId === searchResult.id)) {
+      showActionMessage(`${searchResult.title} is already on this Hotlist.`);
+      return;
+    }
 
     try {
       const supabase = createClient();
       const nextPosition = books.length + 1;
 
       // Insert into hotlist_books
-      const { data: insertedRow } = await supabase
+      const { data: insertedRow, error: insertError } = await supabase
         .from("hotlist_books")
         .insert({
           hotlist_id: hotlist.id,
@@ -209,7 +254,7 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
         .select("id, added_at")
         .single();
 
-      if (!insertedRow) return;
+      if (insertError || !insertedRow) throw insertError ?? new Error("Could not add book");
 
       // Update hotlist timestamp
       await supabase
@@ -278,8 +323,10 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
           author: searchResult.author,
         }),
       }).catch(() => {});
+      showActionMessage(`Added ${searchResult.title}.`);
     } catch (err) {
       console.error("[handleAddBookFromSearch] failed:", err);
+      showActionMessage("Could not add that book. Please try again.");
     }
   }
 
@@ -338,7 +385,7 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
               onBlur={handleNameSave}
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleNameSave();
-                if (e.key === "Escape") { setName(hotlist.name); setEditing(false); }
+                if (e.key === "Escape") { setName(savedName); setEditing(false); }
               }}
               className="relative font-display text-3xl font-bold text-cream bg-transparent border-b-2 border-fire/50 focus:outline-none w-full"
               autoFocus
@@ -364,6 +411,7 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
                     setTimeout(() => nameInputRef.current?.focus(), 0);
                   }}
                   className="shrink-0 text-cream/50 hover:text-fire transition-colors p-1"
+                  aria-label="Edit Hotlist name"
                   title="Edit name"
                 >
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -394,7 +442,7 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
             {/* Privacy toggle — clickable badge */}
             <button
               onClick={handleTogglePublic}
-              className={`inline-flex items-center gap-1.5 text-xs font-mono px-3 py-1.5 rounded-full border transition-all ${
+              className={`inline-flex min-h-11 items-center gap-1.5 rounded-full border px-3 py-2 text-xs font-mono transition-all ${
                 isPublic
                   ? "text-green-700 bg-green-50 border-green-200 hover:bg-green-100"
                   : "text-cream/80 bg-cream/10 border-cream/20 hover:border-fire/60 hover:text-cream"
@@ -411,7 +459,7 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
             {isPublic && (
               <button
                 onClick={() => setShowShareSheet(true)}
-                className="inline-flex items-center gap-1 text-xs font-mono px-3 py-1.5 rounded-full border border-fire/20 text-fire hover:bg-fire/5 transition-colors"
+                className="inline-flex min-h-11 items-center gap-1 rounded-full border border-fire/20 px-3 py-2 text-xs font-mono text-fire transition-colors hover:bg-fire/5"
               >
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="9" cy="2.5" r="1.5" />
@@ -434,6 +482,12 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
             Fetching ratings and spice data for {enrichingBookIds.size}{" "}
             {enrichingBookIds.size === 1 ? "book" : "books"}...
           </p>
+        </div>
+      )}
+
+      {actionMessage && (
+        <div className="mb-3 rounded-lg border border-aged-gold/30 bg-white px-4 py-3 text-sm font-body text-muted-a11y shadow-sm" role="status">
+          {actionMessage}
         </div>
       )}
 
@@ -469,13 +523,13 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
               </p>
               <button
                 onClick={handleDelete}
-                className="text-xs font-mono px-3 py-1.5 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
+                className="inline-flex min-h-11 items-center rounded-md bg-red-600 px-3 py-2 text-xs font-mono text-white transition-colors hover:bg-red-700"
               >
                 Yes, delete
               </button>
               <button
                 onClick={() => setShowConfirmDelete(false)}
-                className="text-xs font-mono text-muted hover:text-ink transition-colors"
+                className="inline-flex min-h-11 items-center rounded-md px-3 py-2 text-xs font-mono text-muted transition-colors hover:bg-cream hover:text-ink"
               >
                 Cancel
               </button>
@@ -483,7 +537,7 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
           ) : (
             <button
               onClick={() => setShowConfirmDelete(true)}
-              className="text-xs font-mono text-muted/70 hover:text-red-600 transition-colors"
+              className="inline-flex min-h-11 items-center rounded-md px-3 py-2 text-xs font-mono text-muted/70 transition-colors hover:bg-red-50 hover:text-red-600"
             >
               Delete this hotlist
             </button>

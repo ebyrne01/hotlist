@@ -34,6 +34,7 @@ export default function BookPicker({ books }: { books: PickerBook[] }) {
   const [responses, setResponses] = useState<Map<string, ReaderResponse>>(new Map());
   const [showPostRead, setShowPostRead] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const responseCount = responses.size;
   const canContinue = responseCount >= MIN_RESPONSES;
@@ -67,6 +68,7 @@ export default function BookPicker({ books }: { books: PickerBook[] }) {
   async function handleSubmit() {
     if (!canContinue || submitting) return;
     setSubmitting(true);
+    setError(null);
 
     try {
       const payload = Array.from(responses.entries()).map(([bookId, response]) => ({
@@ -81,13 +83,18 @@ export default function BookPicker({ books }: { books: PickerBook[] }) {
       });
 
       if (res.status === 401) {
-        openSignIn();
+        openSignIn(() => void handleSubmit(), {
+          title: "Save your first taste profile.",
+          subtitle: "Sign in free so your picks can become a Hotlist and Reading DNA signal.",
+          note: "Your selections will stay on this page while you sign in.",
+        });
         setSubmitting(false);
         return;
       }
 
       if (!res.ok) {
         console.warn("Failed to submit responses:", await res.text());
+        setError("We could not save those picks. Please try again.");
         setSubmitting(false);
         return;
       }
@@ -101,6 +108,7 @@ export default function BookPicker({ books }: { books: PickerBook[] }) {
       }
     } catch (err) {
       console.warn("Submit error:", err);
+      setError("We could not save those picks. Please try again.");
       setSubmitting(false);
     }
   }
@@ -132,6 +140,12 @@ export default function BookPicker({ books }: { books: PickerBook[] }) {
       </div>
 
       {/* Book grid */}
+      {error && (
+        <p className="mb-4 rounded-lg border border-status-error/20 bg-status-error/5 px-3 py-2 text-sm font-body text-status-error" role="status">
+          {error}
+        </p>
+      )}
+
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 sm:gap-5">
         {books.map((book) => {
           const currentResponse = responses.get(book.id);
@@ -146,6 +160,7 @@ export default function BookPicker({ books }: { books: PickerBook[] }) {
                   src={book.coverUrl}
                   alt={book.title}
                   fill
+                  unoptimized
                   sizes="(max-width: 640px) 30vw, 20vw"
                   className="object-cover"
                 />
@@ -171,7 +186,7 @@ export default function BookPicker({ books }: { books: PickerBook[] }) {
                       key={opt.response}
                       onClick={() => handleResponse(book.id, opt.response)}
                       title={opt.label}
-                      className={`min-h-9 rounded-md border px-1.5 py-1 text-[10px] font-mono uppercase tracking-[0.08em] transition-all ${
+                      className={`min-h-11 rounded-md border px-1.5 py-1 text-[10px] font-mono uppercase tracking-[0.08em] transition-all ${
                         isActive
                           ? "border-fire bg-fire/10 text-fire"
                           : "border-border bg-white text-muted-a11y hover:border-muted/40"
@@ -186,7 +201,7 @@ export default function BookPicker({ books }: { books: PickerBook[] }) {
               {/* Toggle pre/post-read */}
               <button
                 onClick={() => togglePostRead(book.id)}
-                className="mt-1 inline-flex min-h-9 items-center justify-center px-2 text-[10px] font-mono text-muted-a11y hover:text-fire focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire transition-colors"
+                className="mt-1 inline-flex min-h-11 items-center justify-center px-2 text-[10px] font-mono text-muted-a11y hover:text-fire focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire transition-colors"
                 aria-label={
                   isPostRead
                     ? `Switch ${book.title} to not yet read options`

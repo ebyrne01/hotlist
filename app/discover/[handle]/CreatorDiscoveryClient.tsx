@@ -34,6 +34,7 @@ export default function CreatorDiscoveryClient({ creator, books }: Props) {
   const isClaimed = !!(creator.claimed_by);
   const [claimStatus, setClaimStatus] = useState<"idle" | "loading" | "submitted" | "error">("idle");
   const [claimError, setClaimError] = useState<string | null>(null);
+  const [claimNotice, setClaimNotice] = useState<string | null>(null);
 
   // Check follow status on load
   useEffect(() => {
@@ -50,12 +51,34 @@ export default function CreatorDiscoveryClient({ creator, books }: Props) {
       });
   }, [user, creator.id]);
 
+  // Check if the signed-in reader already has a claim/application pending.
+  useEffect(() => {
+    if (!user || isClaimed) return;
+    const supabase = createClient();
+    supabase
+      .from("creator_applications")
+      .select("id, status, claim_handle_id")
+      .eq("user_id", user.id)
+      .eq("claim_handle_id", creator.id as string)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.status === "pending") {
+          setClaimStatus("submitted");
+          setClaimNotice("Your claim is already under review.");
+        }
+      });
+  }, [user, creator.id, isClaimed]);
+
   const [followLoading, setFollowLoading] = useState(false);
   const [followError, setFollowError] = useState<string | null>(null);
 
   async function toggleFollow() {
     if (!user) {
-      openSignIn();
+      openSignIn(() => void toggleFollow(), {
+        title: `Follow ${handle}.`,
+        subtitle: "Sign in free so creator follows can shape your recommendations.",
+        note: "We will bring you right back to this creator shelf.",
+      });
       return;
     }
     setFollowLoading(true);
@@ -166,7 +189,7 @@ export default function CreatorDiscoveryClient({ creator, books }: Props) {
               <Link
                 key={t.slug}
                 href={`/tropes/${t.slug}`}
-                className="inline-flex min-h-8 items-center rounded-full border border-aged-gold/40 bg-white/70 px-2.5 py-1 text-xs font-mono text-muted-a11y transition-colors hover:border-fire/30 hover:text-fire"
+                className="inline-flex min-h-11 items-center rounded-full border border-aged-gold/40 bg-white/70 px-3 py-1 text-xs font-mono text-muted-a11y transition-colors hover:border-fire/30 hover:text-fire"
               >
                 {t.name}
               </Link>
@@ -183,9 +206,17 @@ export default function CreatorDiscoveryClient({ creator, books }: Props) {
             </p>
             <button
               onClick={async () => {
-                if (!user) { openSignIn(); return; }
+                if (!user) {
+                  openSignIn(null, {
+                    title: `Claim ${handle}.`,
+                    subtitle: "Sign in free to submit a creator claim for review.",
+                    note: "After sign-in, return here and tap Claim again so we can verify the right account.",
+                  });
+                  return;
+                }
                 setClaimStatus("loading");
                 setClaimError(null);
+                setClaimNotice(null);
                 try {
                   const res = await fetch("/api/creators/claim", {
                     method: "POST",
@@ -194,11 +225,17 @@ export default function CreatorDiscoveryClient({ creator, books }: Props) {
                   });
                   if (!res.ok) {
                     const data = await res.json();
-                    setClaimError(data.error || "Something went wrong.");
-                    setClaimStatus("error");
+                    if (data.status === "pending") {
+                      setClaimStatus("submitted");
+                      setClaimNotice(data.error || "This claim is already under review.");
+                    } else {
+                      setClaimError(data.error || "Something went wrong.");
+                      setClaimStatus("error");
+                    }
                     return;
                   }
                   setClaimStatus("submitted");
+                  setClaimNotice("Claim request submitted. We will review it within 48 hours.");
                 } catch {
                   setClaimError("Something went wrong. Please try again.");
                   setClaimStatus("error");
@@ -214,7 +251,7 @@ export default function CreatorDiscoveryClient({ creator, books }: Props) {
         {claimStatus === "submitted" && (
           <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
             <p className="text-xs font-body text-green-700">
-              Claim request submitted! We&apos;ll review it within 48 hours.
+              {claimNotice ?? "Claim request submitted! We\u2019ll review it within 48 hours."}
             </p>
           </div>
         )}
@@ -261,7 +298,7 @@ export default function CreatorDiscoveryClient({ creator, books }: Props) {
 
             return (
               <div key={book.id} className="flex gap-3 rounded-2xl border border-aged-gold/30 bg-white p-3 shadow-sm transition-colors hover:border-fire/25">
-                <Link href={`/book/${book.slug}`} className="min-h-[88px] shrink-0">
+                <Link href={`/book/${book.slug}`} className="min-h-[88px] min-w-14 shrink-0">
                   <BookCover
                     title={book.title}
                     coverUrl={book.coverUrl}
@@ -270,7 +307,10 @@ export default function CreatorDiscoveryClient({ creator, books }: Props) {
                   />
                 </Link>
                 <div className="flex-1 min-w-0">
-                  <Link href={`/book/${book.slug}`}>
+                  <Link
+                    href={`/book/${book.slug}`}
+                    className="flex min-h-11 items-center"
+                  >
                     <h3 className="text-sm font-display font-bold text-ink truncate hover:text-fire transition-colors">
                       {book.title}
                     </h3>
@@ -304,7 +344,7 @@ export default function CreatorDiscoveryClient({ creator, books }: Props) {
                         <Link
                           key={t.slug}
                           href={`/tropes/${t.slug}`}
-                          className="inline-flex min-h-7 items-center rounded-full border border-border px-2 py-0.5 text-xs font-mono text-muted-a11y transition-colors hover:border-fire/30 hover:text-fire"
+                          className="inline-flex min-h-11 items-center rounded-full border border-border px-3 py-1 text-xs font-mono text-muted-a11y transition-colors hover:border-fire/30 hover:text-fire"
                         >
                           {t.name}
                         </Link>

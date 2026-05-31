@@ -1,3 +1,5 @@
+import { getVideoPlatform } from "@/lib/utils/video-url";
+
 /**
  * Video Downloader — RapidAPI integration
  *
@@ -31,17 +33,7 @@ export interface VideoDownloadResult {
 export function detectPlatform(
   url: string
 ): "tiktok" | "instagram" | "youtube" | "unknown" {
-  const lower = url.toLowerCase();
-  if (lower.includes("tiktok.com") || lower.includes("vm.tiktok.com"))
-    return "tiktok";
-  if (lower.includes("instagram.com")) return "instagram";
-  if (
-    lower.includes("youtube.com") ||
-    lower.includes("youtu.be") ||
-    lower.includes("youtube.com/shorts")
-  )
-    return "youtube";
-  return "unknown";
+  return getVideoPlatform(url);
 }
 
 /**

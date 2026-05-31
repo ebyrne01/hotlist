@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { createClient } from "@/lib/supabase/client";
+import SignInPrompt from "@/components/auth/SignInPrompt";
 
 interface HotlistCard {
   id: string;
@@ -31,7 +32,10 @@ export default function MyHotlistsPage() {
   const renameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      if (!authLoading) setLoading(false);
+      return;
+    }
 
     async function fetchLists() {
       const supabase = createClient();
@@ -81,7 +85,7 @@ export default function MyHotlistsPage() {
     }
 
     fetchLists();
-  }, [user]);
+  }, [user, authLoading]);
 
   async function handleCreate() {
     if (!user || !newName.trim()) return;
@@ -203,9 +207,18 @@ export default function MyHotlistsPage() {
 
   if (!user) {
     return (
-      <div className="max-w-3xl mx-auto px-4 py-16 text-center">
-        <p className="text-muted font-mono text-sm">Redirecting...</p>
-      </div>
+      <SignInPrompt
+        eyebrow="Your comparisons"
+        title="Your Hotlists live behind a quick sign-in."
+        body="Sign in to see saved comparison tables, create new lists, and keep your TBR decisions from vanishing into the mist."
+        context={{
+          title: "Open your Hotlists.",
+          subtitle: "Sign in free to see and edit your comparison lists.",
+          note: "We will bring you right back to your Hotlists.",
+        }}
+        secondaryHref="/search"
+        secondaryLabel="Find books first"
+      />
     );
   }
 

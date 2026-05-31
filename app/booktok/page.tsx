@@ -10,6 +10,7 @@ import { createClient } from "@/lib/supabase/client";
 import BookCover from "@/components/ui/BookCover";
 import GrabFeedbackButton from "@/components/booktok/GrabFeedbackButton";
 import MissingBookFeedback from "@/components/booktok/MissingBookFeedback";
+import { isVideoUrl } from "@/lib/utils/video-url";
 import type { GrabResult, GrabStatus } from "@/lib/video";
 import type { ResolvedBook } from "@/lib/video/book-resolver";
 
@@ -100,6 +101,7 @@ function BookTokPageInner() {
   const [addingAll, setAddingAll] = useState(false);
   const [addedHotlistSlug, setAddedHotlistSlug] = useState<string | null>(null);
   const [takingLong, setTakingLong] = useState(false);
+  const [addAllError, setAddAllError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const { user } = useAuth();
@@ -109,16 +111,21 @@ function BookTokPageInner() {
   async function handleGrab(overrideUrl?: string) {
     const targetUrl = overrideUrl || url;
     if (!targetUrl.trim()) return;
+    if (!isVideoUrl(targetUrl)) {
+      setError("Please paste a TikTok, Instagram, or YouTube URL.");
+      return;
+    }
 
     setProcessing(true);
     setStatus(null);
     setResult(null);
     setError(null);
+    setAddAllError(null);
     setTakingLong(false);
 
     // Update browser URL so auth redirects and bookmarks preserve the video URL
     const urlParam = new URLSearchParams(window.location.search).get("url");
-    if (!urlParam) {
+    if (urlParam !== targetUrl.trim()) {
       window.history.replaceState({}, "", `/booktok?url=${encodeURIComponent(targetUrl.trim())}`);
     }
 
@@ -236,6 +243,7 @@ function BookTokPageInner() {
     if (matchedBooks.length === 0) return;
 
     setAddingAll(true);
+    setAddAllError(null);
     try {
       // Check if this user is a verified creator (auto-public mode)
       const { data: creatorProfile } = await supabase
@@ -267,7 +275,7 @@ function BookTokPageInner() {
         "-" +
         Math.random().toString(36).slice(2, 6);
 
-      const { data: hotlist } = await supabase
+      const { data: hotlist, error: hotlistError } = await supabase
         .from("hotlists")
         .insert({
           user_id: activeUser.id,
@@ -282,7 +290,7 @@ function BookTokPageInner() {
         .select("id, share_slug")
         .single();
 
-      if (!hotlist) throw new Error("Failed to create hotlist");
+      if (hotlistError || !hotlist) throw new Error("Failed to create hotlist");
 
       // Add all matched books — verify each book still exists in DB first
       // (cached grabs may reference books that were deleted/recreated)
@@ -301,17 +309,27 @@ function BookTokPageInner() {
           position: i,
         }));
 
+      if (bookRows.length === 0) {
+        throw new Error("The matched books are no longer available. Try running the grab again.");
+      }
+
       if (bookRows.length > 0) {
         const { error: insertErr } = await supabase
           .from("hotlist_books")
           .insert(bookRows);
         if (insertErr) {
-          console.error("[handleAddAllToHotlist] book insert failed:", insertErr);
+          await supabase.from("hotlists").delete().eq("id", hotlist.id);
+          throw insertErr;
         }
       }
       setAddedHotlistSlug(hotlist.share_slug);
     } catch (err) {
       console.error("[handleAddAllToHotlist] failed:", err);
+      setAddAllError(
+        err instanceof Error
+          ? err.message
+          : "We could not create that Hotlist. Please try again."
+      );
     } finally {
       setAddingAll(false);
     }
@@ -578,6 +596,11 @@ function BookTokPageInner() {
                   <p className="mt-1.5 text-xs font-mono text-muted/60">
                     Compare ratings, spice levels & tropes side by side
                   </p>
+                  {addAllError && (
+                    <p className="mt-2 max-w-md text-sm font-body leading-6 text-status-error">
+                      {addAllError}
+                    </p>
+                  )}
                 </>
               )}
             </div>

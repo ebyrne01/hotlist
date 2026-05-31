@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import SignInPrompt from "@/components/auth/SignInPrompt";
 
 interface CreatorApplication {
   id: string;
@@ -248,17 +249,18 @@ export default function CreatorSettingsPage() {
   // --- Not logged in ---
   if (!user) {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-16 text-center">
-        <p className="text-muted font-mono text-sm mb-4">
-          Sign in to access creator settings.
-        </p>
-        <Link
-          href="/profile"
-          className="text-fire font-mono text-sm hover:underline"
-        >
-          Go to sign in
-        </Link>
-      </div>
+      <SignInPrompt
+        eyebrow="Creator tools"
+        title="Claim your shelf or apply as a creator."
+        body="Sign in to submit a creator application, claim auto-generated BookTok shelves, and manage public profile settings."
+        context={{
+          title: "Open creator tools.",
+          subtitle: "Sign in free to apply, claim a handle, or edit creator settings.",
+          note: "We will bring you right back to creator settings.",
+        }}
+        secondaryHref="/discover"
+        secondaryLabel="Browse creators"
+      />
     );
   }
 

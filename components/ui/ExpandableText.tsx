@@ -58,7 +58,7 @@ export default function ExpandableText({
       {needsExpand && (
         <button
           onClick={() => setExpanded(!expanded)}
-          className="mt-1.5 text-xs font-mono text-fire/70 hover:text-fire transition-colors"
+          className="mt-1 inline-flex min-h-11 items-center rounded px-1 text-xs font-mono text-fire/70 hover:text-fire transition-colors"
         >
           {expanded ? "Show less" : "Read more \u2192"}
         </button>

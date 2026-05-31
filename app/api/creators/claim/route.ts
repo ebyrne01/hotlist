@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getAdminClient } from "@/lib/supabase/admin";
 
+interface PendingCreatorApplication {
+  id: string;
+  status: string;
+  claim_handle_id: string | null;
+}
+
 /**
  * POST /api/creators/claim
  * Submit a claim request for an auto-generated creator handle.
@@ -15,8 +21,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const body = await req.json();
-  const { creator_handle_id } = body as { creator_handle_id: string };
+  let creator_handle_id: string | null = null;
+  try {
+    const body = await req.json();
+    creator_handle_id =
+      typeof body?.creator_handle_id === "string" ? body.creator_handle_id : null;
+  } catch {
+    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+  }
 
   if (!creator_handle_id) {
     return NextResponse.json({ error: "Missing creator_handle_id" }, { status: 400 });
@@ -53,16 +65,45 @@ export async function POST(req: NextRequest) {
   }
 
   // Check for existing pending application/claim
-  const { data: existing } = await admin
+  const { data: existingForUser } = await admin
     .from("creator_applications")
-    .select("id, status")
+    .select("id, status, claim_handle_id")
     .eq("user_id", user.id)
     .eq("status", "pending")
     .limit(1);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  if (existing && (existing as any[]).length > 0) {
-    return NextResponse.json({ error: "You already have a pending application" }, { status: 400 });
+  const pendingApplications =
+    (existingForUser ?? []) as PendingCreatorApplication[];
+  if (pendingApplications.length > 0) {
+    const existing = pendingApplications[0];
+    const sameClaim = existing.claim_handle_id === creator_handle_id;
+    return NextResponse.json(
+      {
+        error: sameClaim
+          ? "You already submitted a claim for this profile"
+          : "You already have a pending creator application",
+        status: "pending",
+      },
+      { status: 409 }
+    );
+  }
+
+  // Check if another user already has a pending claim for this handle.
+  const { data: existingForHandle } = await admin
+    .from("creator_applications")
+    .select("id")
+    .eq("claim_handle_id", creator_handle_id)
+    .eq("status", "pending")
+    .limit(1);
+
+  if (existingForHandle && existingForHandle.length > 0) {
+    return NextResponse.json(
+      {
+        error: "A claim for this profile is already under review",
+        status: "pending",
+      },
+      { status: 409 }
+    );
   }
 
   // Create the claim application

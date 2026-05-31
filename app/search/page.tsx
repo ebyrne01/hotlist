@@ -15,6 +15,7 @@ import BookCard from "@/components/books/BookCard";
 import SearchFeedback from "@/components/search/SearchFeedback";
 import MissingBookRequest from "@/components/search/MissingBookRequest";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import type { BookDetail } from "@/lib/types";
 import { randomUUID } from "crypto";
 
@@ -72,7 +73,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     if (intent.type === "title_author") {
       books = await findBook(intent.query);
     } else if (intent.type === "video_url") {
-      books = [];
+      redirect(`/booktok?url=${encodeURIComponent(intent.url)}`);
     } else {
       // discovery / comparison / question → Haiku intent parsing
       try {
