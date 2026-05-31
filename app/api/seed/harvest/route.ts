@@ -348,7 +348,7 @@ export async function POST(request: Request) {
       !isRomantasyDiscoveryCandidate({
         title: book.title,
         author: book.author,
-        context: book.source,
+        context: [book.source, book.seriesName].filter(Boolean).join(" "),
       })
     ) {
       skippedOutOfFocus++;
