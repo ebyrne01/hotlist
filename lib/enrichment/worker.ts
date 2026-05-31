@@ -101,6 +101,8 @@ async function upsertGoodreadsRating(
 
 const JOB_DELAY_MS = 300; // Delay between scraping jobs to respect rate limits
 const CONCURRENCY = 5; // Max parallel jobs within a tier
+const PAID_SERPER_JOB_TYPES = new Set(["amazon_rating", "romance_io_spice"]);
+const P0_CANON_LIMIT = 250;
 
 // AI-based job types that don't risk IP blocking — safe for faster throughput
 const STUCK_JOB_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes — reset jobs stuck in "running"
@@ -109,6 +111,37 @@ const STUCK_JOB_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes — reset jobs stuck 
 // Each book = 2 Spotify API calls (with 5s rate limit between calls),
 // so 3 books ≈ 30s of Spotify work. Prevents rate limit blowouts.
 const SPOTIFY_PER_TICK_CAP = 3;
+let p0CanonTargetIds: Set<string> | null = null;
+
+async function getP0CanonTargetIds(): Promise<Set<string>> {
+  if (p0CanonTargetIds) return p0CanonTargetIds;
+
+  const supabase = getAdminClient();
+  const { data, error } = await supabase.rpc("get_p0_canon_enrichment_targets", {
+    p_limit: P0_CANON_LIMIT,
+  });
+
+  if (error) {
+    console.warn(
+      "[enrichment-worker] Failed to load P0 canon targets; paid Serper jobs will be skipped:",
+      error.message
+    );
+    p0CanonTargetIds = new Set();
+    return p0CanonTargetIds;
+  }
+
+  p0CanonTargetIds = new Set(
+    ((data ?? []) as Array<{ book_id: string }>).map((row) => row.book_id)
+  );
+  return p0CanonTargetIds;
+}
+
+async function isAllowedPaidSerperJob(job: QueuedJob): Promise<boolean> {
+  if (!PAID_SERPER_JOB_TYPES.has(job.job_type)) return true;
+
+  const targetIds = await getP0CanonTargetIds();
+  return targetIds.has(job.book_id);
+}
 
 /**
  * Fetch genres for a book and upsert a genre_bucketing spice signal.
@@ -228,6 +261,15 @@ export async function processEnrichmentQueue(
   // Helper to run a single job with proper outcome tracking
   async function runJob(job: QueuedJob): Promise<boolean> {
     try {
+      if (!(await isAllowedPaidSerperJob(job))) {
+        await markJobCompleted(job.id, "no_data");
+        console.log(
+          `[enrichment-worker] Skipping paid ${job.job_type} for non-P0 book "${job.book_title}"`
+        );
+        await updateBookEnrichmentStatus(job.book_id);
+        return false;
+      }
+
       const result = await processJob(job);
       if (result === "no-data") {
         if (job.attempts >= job.max_attempts) {
