@@ -38,7 +38,7 @@ export default function SearchFeedback({ analyticsId }: SearchFeedbackProps) {
       <button
         onClick={() => sendFeedback(1)}
         className={clsx(
-          "inline-flex min-h-10 min-w-10 items-center justify-center rounded hover:bg-green-50 hover:text-green-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire transition-colors",
+          "inline-flex min-h-11 min-w-11 items-center justify-center rounded hover:bg-green-50 hover:text-green-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire transition-colors",
           "text-muted-a11y"
         )}
         aria-label="Yes, good results"
@@ -48,7 +48,7 @@ export default function SearchFeedback({ analyticsId }: SearchFeedbackProps) {
       <button
         onClick={() => sendFeedback(-1)}
         className={clsx(
-          "inline-flex min-h-10 min-w-10 items-center justify-center rounded hover:bg-red-50 hover:text-red-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire transition-colors",
+          "inline-flex min-h-11 min-w-11 items-center justify-center rounded hover:bg-red-50 hover:text-red-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire transition-colors",
           "text-muted-a11y"
         )}
         aria-label="No, wrong results"

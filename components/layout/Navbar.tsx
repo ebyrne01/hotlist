@@ -35,7 +35,7 @@ export default function Navbar() {
         {/* Wordmark */}
         <Link
           href="/"
-          className="flex items-center gap-2 text-ink shrink-0"
+          className="flex min-h-11 items-center gap-2 text-ink shrink-0"
           aria-label="Hotlist home"
         >
           <HotlistMark className="h-8 w-8 text-fire [--mark-cutout:#faf7f2]" />
@@ -203,14 +203,14 @@ export default function Navbar() {
           <div className="flex flex-col gap-2">
             <Link
               href="/booktok"
-              className="text-sm font-mono text-fire/80 font-medium hover:text-fire transition-colors"
+              className="inline-flex min-h-11 items-center text-sm font-mono font-medium text-fire/80 transition-colors hover:text-fire"
               onClick={() => setMenuOpen(false)}
             >
               BookTok
             </Link>
             <Link
               href="/discover"
-              className="text-sm font-mono text-muted hover:text-ink transition-colors"
+              className="inline-flex min-h-11 items-center text-sm font-mono text-muted transition-colors hover:text-ink"
               onClick={() => setMenuOpen(false)}
             >
               Creators
@@ -219,21 +219,21 @@ export default function Navbar() {
               <>
                 <Link
                   href="/lists"
-                  className="text-sm font-mono text-fire font-medium hover:text-fire/80 transition-colors"
+                  className="inline-flex min-h-11 items-center text-sm font-mono font-medium text-fire transition-colors hover:text-fire/80"
                   onClick={() => setMenuOpen(false)}
                 >
                   My Hotlists
                 </Link>
                 <Link
                   href="/reading"
-                  className="text-sm font-mono text-muted hover:text-ink transition-colors"
+                  className="inline-flex min-h-11 items-center text-sm font-mono text-muted transition-colors hover:text-ink"
                   onClick={() => setMenuOpen(false)}
                 >
                   Reading List
                 </Link>
                 <Link
                   href="/profile"
-                  className="text-sm font-mono text-muted hover:text-ink transition-colors"
+                  className="inline-flex min-h-11 items-center text-sm font-mono text-muted transition-colors hover:text-ink"
                   onClick={() => setMenuOpen(false)}
                 >
                   Profile
@@ -243,21 +243,21 @@ export default function Navbar() {
                     <div className="border-t border-border my-1" />
                     <Link
                       href="/admin/creators"
-                      className="text-sm font-mono text-muted hover:text-ink transition-colors"
+                      className="inline-flex min-h-11 items-center text-sm font-mono text-muted transition-colors hover:text-ink"
                       onClick={() => setMenuOpen(false)}
                     >
                       Creator Apps
                     </Link>
                     <Link
                       href="/admin/quality"
-                      className="text-sm font-mono text-muted hover:text-ink transition-colors"
+                      className="inline-flex min-h-11 items-center text-sm font-mono text-muted transition-colors hover:text-ink"
                       onClick={() => setMenuOpen(false)}
                     >
                       Quality
                     </Link>
                     <Link
                       href="/admin/harvest"
-                      className="text-sm font-mono text-muted hover:text-ink transition-colors"
+                      className="inline-flex min-h-11 items-center text-sm font-mono text-muted transition-colors hover:text-ink"
                       onClick={() => setMenuOpen(false)}
                     >
                       Harvest
@@ -269,7 +269,7 @@ export default function Navbar() {
                     signOut();
                     setMenuOpen(false);
                   }}
-                  className="text-left text-sm font-mono text-muted hover:text-ink transition-colors"
+                  className="inline-flex min-h-11 items-center text-left text-sm font-mono text-muted transition-colors hover:text-ink"
                 >
                   Sign Out
                 </button>
@@ -280,7 +280,7 @@ export default function Navbar() {
                   openSignIn();
                   setMenuOpen(false);
                 }}
-                className="text-left text-sm font-mono text-muted hover:text-ink transition-colors"
+                className="inline-flex min-h-11 items-center text-left text-sm font-mono text-muted transition-colors hover:text-ink"
               >
                 Sign In
               </button>

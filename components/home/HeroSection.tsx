@@ -37,7 +37,7 @@ export default function HeroSection() {
 
         <a
           href="#booktok-grab"
-          className="mt-4 text-[11px] font-mono uppercase tracking-[0.12em] text-aged-gold/80 hover:text-aged-gold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire rounded"
+          className="mt-3 inline-flex min-h-11 items-center rounded px-2 text-[11px] font-mono uppercase tracking-[0.12em] text-aged-gold/80 transition-colors hover:text-aged-gold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire"
         >
           or paste a BookTok link &darr;
         </a>

@@ -61,7 +61,7 @@ export default function BookTokGrabCta() {
             />
             <button
               type="submit"
-              className="px-5 py-3 rounded-md bg-oxblood text-white font-mono text-xs uppercase tracking-wide font-semibold hover:bg-blackberry transition-colors shrink-0"
+              className="min-h-11 rounded-md bg-oxblood px-5 py-3 font-mono text-xs font-semibold uppercase tracking-wide text-white transition-colors hover:bg-blackberry shrink-0"
             >
               Grab books &rarr;
             </button>

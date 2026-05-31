@@ -60,12 +60,14 @@ export default function DnaResults() {
           }
 
           // Fetch For You recommendations (async, non-blocking)
-          setForYouLoading(true);
-          fetch("/api/homepage/for-you")
-            .then((r) => (r.ok ? r.json() : { books: [] }))
-            .then((d) => setForYouBooks(d.books ?? []))
-            .catch(() => {})
-            .finally(() => setForYouLoading(false));
+          if (data.dna) {
+            setForYouLoading(true);
+            fetch("/api/homepage/for-you")
+              .then((r) => (r.ok ? r.json() : { books: [] }))
+              .then((d) => setForYouBooks(d.books ?? []))
+              .catch(() => {})
+              .finally(() => setForYouLoading(false));
+          }
         }
       } catch {
         // Fail gracefully — show static fallback
