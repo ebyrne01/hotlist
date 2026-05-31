@@ -30,6 +30,7 @@
     "audit:authors": "npx tsx scripts/audit-harness.ts --authors-only",
     "audit:push": "npx tsx scripts/audit-harness.ts --quick --push-to-db",
     "audit:top-list": "npx tsx scripts/top-list-coverage-audit.ts",
+    "repair:top-list-gaps": "npx tsx scripts/repair-top-list-gaps.ts",
     "booktok:eval": "node --import tsx scripts/booktok-grab-eval.ts",
     "booktok:eval:live": "BOOKTOK_EVAL_ALLOW_LIVE=1 node --import tsx scripts/booktok-grab-eval.ts --live",
     "db:check-schema": "node scripts/check-db-schema-coverage.mjs",
