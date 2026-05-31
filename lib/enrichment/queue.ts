@@ -197,6 +197,7 @@ export async function markJobCompleted(
       status: "completed",
       completed_at: new Date().toISOString(),
       outcome,
+      updated_at: new Date().toISOString(),
     })
     .eq("id", jobId);
 }
@@ -228,6 +229,7 @@ export async function markJobFailed(
       error_message: errorMessage,
       outcome: "error",
       next_retry_at: new Date(Date.now() + backoffMs).toISOString(),
+      updated_at: new Date().toISOString(),
     })
     .eq("id", jobId);
 }
