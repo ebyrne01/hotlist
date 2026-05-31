@@ -53,6 +53,8 @@ export interface QueuedJob {
   book_goodreads_id?: string;
 }
 
+export type EnrichmentProfile = "full" | "core";
+
 /**
  * Queue enrichment jobs for a book.
  * Called when a new book enters the DB (from search, Grab, seeding, etc.)
@@ -62,6 +64,7 @@ export async function queueEnrichmentJobs(
   title: string,
   author: string,
   skipJobTypes?: Set<string>,
+  profile: EnrichmentProfile = "full",
 ): Promise<void> {
   const supabase = getAdminClient();
 
@@ -75,9 +78,15 @@ export async function queueEnrichmentJobs(
     "metadata", "spotify_playlists", "reddit_buzz", "discussion_links",
   ];
 
-  const jobs = skipJobTypes
-    ? allJobs.filter((j) => !skipJobTypes.has(j))
+  const profileJobs = profile === "core"
+    ? allJobs.filter((j) =>
+        ["goodreads_detail", "goodreads_rating", "amazon_rating", "romance_io_spice", "metadata"].includes(j)
+      )
     : allJobs;
+
+  const jobs = skipJobTypes
+    ? profileJobs.filter((j) => !skipJobTypes.has(j))
+    : profileJobs;
 
   // Serper-dependent jobs get more retries — transient Google index misses are common
   const SERPER_JOBS = new Set<JobType>(["romance_io_spice", "amazon_rating", "goodreads_rating", "reddit_buzz", "discussion_links"]);
@@ -98,7 +107,7 @@ export async function queueEnrichmentJobs(
   if (error) {
     console.warn(`[enrichment-queue] Failed to queue jobs for "${title}":`, error.message);
   } else {
-    console.log(`[enrichment-queue] Queued ${jobs.length} jobs for "${title}" by ${author}`);
+    console.log(`[enrichment-queue] Queued ${jobs.length} ${profile} jobs for "${title}" by ${author}`);
   }
 }
 

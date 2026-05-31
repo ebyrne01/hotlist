@@ -227,6 +227,13 @@ export default function SearchBar({ variant = "navbar", className, inputId, onSe
                     Browse by trope instead &rarr;
                   </a>
                   <a
+                    href={`/search?q=${encodeURIComponent(query)}`}
+                    className="text-xs font-mono text-fire hover:underline inline-block"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    Request this book with a URL &rarr;
+                  </a>
+                  <a
                     href="/booktok"
                     className="text-xs font-mono text-fire hover:underline inline-block"
                     onClick={() => setIsOpen(false)}

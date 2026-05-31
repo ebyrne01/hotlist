@@ -13,6 +13,8 @@ import { saveGoodreadsBookToCache } from "./cache";
 import { queueEnrichmentJobs } from "@/lib/enrichment/queue";
 import { scheduleMetadataEnrichment } from "./metadata-enrichment";
 import { isJunkTitle } from "./romance-filter";
+import { recordDiscoveryCandidate } from "./discovery-candidates";
+import { isRomantasyDiscoveryCandidate } from "./discovery-focus";
 
 const OL_DELAY_MS = 1000; // 1 req/sec for Open Library
 const GOODREADS_DELAY_MS = 1500;
@@ -23,12 +25,12 @@ function sleep(ms: number) {
 
 /** All romance-adjacent subjects to crawl. */
 export const OL_SUBJECTS = [
-  "romance",
-  "love_stories",
-  "romantic_fiction",
   "fantasy_romance",
-  "romantic_suspense",
   "paranormal_romance",
+  "dark_romance",
+  "gothic_romance",
+  "vampire_romance",
+  "sci_fi_romance",
 ] as const;
 
 export type OLSubject = (typeof OL_SUBJECTS)[number];
@@ -195,6 +197,16 @@ export async function processOLWorks(
         progress.errors++;
         continue;
       }
+      if (
+        !isRomantasyDiscoveryCandidate({
+          title: detail.title,
+          author: detail.author,
+          context: `${(detail.genres ?? []).join(" ")} ${detail.description ?? ""}`,
+        })
+      ) {
+        progress.skipped++;
+        continue;
+      }
 
       const book = await saveGoodreadsBookToCache({
         title: detail.title,
@@ -214,8 +226,16 @@ export async function processOLWorks(
         progress.added++;
         existingGoodreadsIds.add(goodreadsId);
         existingTitles.add(title.toLowerCase());
+        await recordDiscoveryCandidate({
+          title: book.title,
+          author: book.author,
+          source: "open_library_subject",
+          category: "romantasy_adjacent",
+          demandScore: 30,
+          metadata: { open_library_work_key: work.key },
+        });
         scheduleMetadataEnrichment(book.id, book.title, book.author, book.isbn);
-        await queueEnrichmentJobs(book.id, book.title, book.author);
+        await queueEnrichmentJobs(book.id, book.title, book.author, undefined, "core");
         onProgress?.(
           `[ol-discovery] Saved "${book.title}" by ${book.author} (${progress.processed}/${progress.total})`,
           progress

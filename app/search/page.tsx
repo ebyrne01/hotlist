@@ -9,9 +9,11 @@ import { createClient } from "@/lib/supabase/server";
 import { getDna } from "@/lib/reading-dna";
 import { reRankByDna } from "@/lib/reading-dna/score";
 import { logSearchAnalytics } from "@/lib/search/analytics";
+import { captureSearchDemand } from "@/lib/search/demand-capture";
 import { Video } from "lucide-react";
 import BookCard from "@/components/books/BookCard";
 import SearchFeedback from "@/components/search/SearchFeedback";
+import MissingBookRequest from "@/components/search/MissingBookRequest";
 import Link from "next/link";
 import type { BookDetail } from "@/lib/types";
 import { randomUUID } from "crypto";
@@ -98,6 +100,14 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
       filters,
       resultCount: books.length,
       latencyMs,
+    });
+
+    captureSearchDemand({
+      query,
+      intentType,
+      books,
+    }).catch((err) => {
+      console.warn("[search] Failed to capture demand signal:", err);
     });
   }
 
@@ -254,6 +264,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
             <Video size={14} className="inline -mt-0.5" aria-hidden="true" />
             Paste a BookTok link to find books from a video &rarr;
           </a>
+          {!isSmartSearch && <MissingBookRequest initialTitle={query} />}
         </div>
       )}
 

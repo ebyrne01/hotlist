@@ -18,6 +18,9 @@
     "app/api/cron/amazon-bestsellers/route.ts": {
       "maxDuration": 300
     },
+    "app/api/cron/book-request-resolver/route.ts": {
+      "maxDuration": 120
+    },
     "app/api/cron/reddit-discovery/route.ts": {
       "maxDuration": 300
     },
@@ -64,6 +67,22 @@
     {
       "path": "/api/cron/quality-scanner",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/amazon-bestsellers",
+      "schedule": "0 11 * * *"
+    },
+    {
+      "path": "/api/cron/book-request-resolver",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/openlibrary-discovery",
+      "schedule": "0 12 * * 6"
+    },
+    {
+      "path": "/api/cron/spice-gap-monitor",
+      "schedule": "0 13 1 * *"
     }
   ]
 }

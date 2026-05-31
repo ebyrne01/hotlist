@@ -8,7 +8,7 @@
  * Amazon blocks direct scraping (503), so we lean on Google's
  * indexing of Amazon bestseller pages via Serper search results.
  *
- * Cost: ~$0.005 per run (5 Serper queries × $0.001 each).
+ * Cost: ~$0.007 per run (7 Serper queries x ~$0.001 each).
  */
 
 import { getAdminClient } from "@/lib/supabase/admin";
@@ -18,6 +18,8 @@ import { queueEnrichmentJobs } from "@/lib/enrichment/queue";
 import { scheduleMetadataEnrichment } from "./metadata-enrichment";
 import { isJunkTitle, isRomanceByGenres } from "./romance-filter";
 import { recordBuzzSignalsBatch } from "./buzz-signals";
+import { recordDiscoveryCandidate } from "./discovery-candidates";
+import { isRomantasyDiscoveryCandidate } from "./discovery-focus";
 
 const GOODREADS_DELAY_MS = 1500;
 
@@ -25,18 +27,51 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Serper queries that surface Amazon romance bestseller titles */
+/** Serper queries that surface Amazon romantasy and adjacent bestseller titles. */
 const BESTSELLER_QUERIES = [
-  'site:amazon.com "Best Sellers in Romance" books',
-  'site:amazon.com "Best Sellers in Fantasy Romance" books',
-  'site:amazon.com "Best Sellers in Romantic Suspense" books',
-  'site:amazon.com "Best Sellers in Contemporary Romance" books',
-  'site:amazon.com "Best Sellers in Paranormal Romance" books',
+  {
+    query: 'site:amazon.com "Best Sellers in Fantasy Romance" books',
+    category: "fantasy_romance",
+    demandScore: 85,
+  },
+  {
+    query: 'site:amazon.com "Best Sellers in Paranormal Romance" books',
+    category: "paranormal_romance",
+    demandScore: 80,
+  },
+  {
+    query: 'site:amazon.com "Best Sellers in Dark Fantasy Romance" books',
+    category: "dark_fantasy_romance",
+    demandScore: 85,
+  },
+  {
+    query: 'site:amazon.com "Best Sellers in Dark Romance" books',
+    category: "dark_romance",
+    demandScore: 70,
+  },
+  {
+    query: 'site:amazon.com "Best Sellers in Vampire Romances" books',
+    category: "vampire_romance",
+    demandScore: 75,
+  },
+  {
+    query: 'site:amazon.com "Best Sellers in Werewolf & Shifter Romance" books',
+    category: "shifter_romance",
+    demandScore: 75,
+  },
+  {
+    query: 'site:amazon.com "Hot New Releases in Fantasy Romance" books',
+    category: "fantasy_romance_new_releases",
+    demandScore: 90,
+  },
 ];
 
 interface DiscoveredBook {
   title: string;
   author: string;
+  sourceUrl?: string;
+  category: string;
+  demandScore: number;
 }
 
 interface DiscoveryProgress {
@@ -55,18 +90,27 @@ interface DiscoveryProgress {
  *   "#1 Best Seller in Romance | Book Title by Author Name"
  */
 function extractBooksFromResults(
-  results: { title?: string; snippet?: string; link?: string }[]
+  results: { title?: string; snippet?: string; link?: string }[],
+  category: string,
+  demandScore: number
 ): DiscoveredBook[] {
   const books: DiscoveredBook[] = [];
   const seen = new Set<string>();
 
   for (const result of results) {
-    const extracted = extractFromResult(result);
+    const extracted = extractFromResult(result, category, demandScore);
     for (const book of extracted) {
       const key = `${book.title.toLowerCase()}::${book.author.toLowerCase()}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      if (!isJunkTitle(book.title)) {
+      if (
+        !isJunkTitle(book.title, book.author) &&
+        isRomantasyDiscoveryCandidate({
+          title: book.title,
+          author: book.author,
+          context: `${result.title ?? ""} ${result.snippet ?? ""} ${category.replace(/_/g, " ")}`,
+        })
+      ) {
         books.push(book);
       }
     }
@@ -79,7 +123,7 @@ function extractFromResult(result: {
   title?: string;
   snippet?: string;
   link?: string;
-}): DiscoveredBook[] {
+}, category: string, demandScore: number): DiscoveredBook[] {
   const books: DiscoveredBook[] = [];
 
   // Amazon product page URLs contain the title in the path:
@@ -101,7 +145,13 @@ function extractFromResult(result: {
     const bookTitle = cleanTitle(match[1]);
     const author = cleanAuthor(match[2]);
     if (bookTitle.length > 2 && author.length > 2) {
-      books.push({ title: bookTitle, author });
+      books.push({
+        title: bookTitle,
+        author,
+        sourceUrl: result.link,
+        category,
+        demandScore,
+      });
     }
   }
 
@@ -122,7 +172,13 @@ function extractFromResult(result: {
       !bookTitle.toLowerCase().includes("best seller") &&
       !bookTitle.toLowerCase().includes("amazon")
     ) {
-      books.push({ title: bookTitle, author });
+      books.push({
+        title: bookTitle,
+        author,
+        sourceUrl: result.link,
+        category,
+        demandScore,
+      });
     }
   }
 
@@ -204,14 +260,14 @@ export async function discoverAmazonBestsellers(
   const allBooks: DiscoveredBook[] = [];
 
   // Step 1: Search Serper for Amazon bestseller pages
-  for (const query of BESTSELLER_QUERIES) {
+  for (const { query, category, demandScore } of BESTSELLER_QUERIES) {
     if (timeBudgetMs > 0 && Date.now() - startTime > timeBudgetMs * 0.3) break;
 
     try {
       const results = await searchSerper(apiKey, query);
       progress.queriesRun++;
 
-      const extracted = extractBooksFromResults(results);
+      const extracted = extractBooksFromResults(results, category, demandScore);
       allBooks.push(...extracted);
       onProgress?.(
         `[amazon-bestsellers] Query "${query.slice(0, 50)}..." → ${extracted.length} titles`
@@ -234,6 +290,20 @@ export async function discoverAmazonBestsellers(
   progress.titlesExtracted = unique.length;
   onProgress?.(
     `[amazon-bestsellers] ${unique.length} unique titles extracted from ${progress.queriesRun} queries`
+  );
+
+  await Promise.all(
+    unique.map((book) =>
+      recordDiscoveryCandidate({
+        title: book.title,
+        author: book.author,
+        source: "amazon_bestseller",
+        sourceUrl: book.sourceUrl ?? null,
+        category: book.category,
+        demandScore: book.demandScore,
+        metadata: { discovery_mode: "serper_index" },
+      })
+    )
   );
 
   // Step 2: Check which titles are already in our database — record buzz for existing books
@@ -329,7 +399,7 @@ export async function discoverAmazonBestsellers(
         ]);
         progress.added++;
         scheduleMetadataEnrichment(saved.id, saved.title, saved.author, saved.isbn);
-        await queueEnrichmentJobs(saved.id, saved.title, saved.author);
+        await queueEnrichmentJobs(saved.id, saved.title, saved.author, undefined, "core");
         onProgress?.(
           `[amazon-bestsellers] Added "${saved.title}" by ${saved.author}`
         );

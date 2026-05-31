@@ -20,6 +20,8 @@ import { saveGoodreadsBookToCache } from "@/lib/books/cache";
 import { queueEnrichmentJobs } from "@/lib/enrichment/queue";
 import { scheduleMetadataEnrichment } from "@/lib/books/metadata-enrichment";
 import { isJunkTitle, isKnownRomanceAuthor } from "@/lib/books/romance-filter";
+import { isRomantasyDiscoveryCandidate } from "@/lib/books/discovery-focus";
+import { recordDiscoveryCandidate } from "@/lib/books/discovery-candidates";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -32,9 +34,10 @@ const NYT_LISTS = [
 
 const GOOGLE_BOOKS_URL = "https://www.googleapis.com/books/v1/volumes";
 const GOOGLE_QUERIES = [
-  "subject:romance",
   "subject:fantasy+romance",
-  "subject:romantic+fiction",
+  "subject:paranormal+romance",
+  "romantasy",
+  "dark+fantasy+romance",
 ] as const;
 
 const TIME_BUDGET_MS = 55_000; // 55 seconds
@@ -105,6 +108,15 @@ export async function GET(request: NextRequest) {
 
             const grDetail = await getGoodreadsBookById(goodreadsId);
             if (!grDetail) continue;
+            if (
+              !isRomantasyDiscoveryCandidate({
+                title: grDetail.title,
+                author: grDetail.author,
+                context: `${(grDetail.genres ?? []).join(" ")} ${grDetail.description ?? ""}`,
+              })
+            ) {
+              continue;
+            }
 
             const saved = await saveGoodreadsBookToCache({
               title: grDetail.title,
@@ -124,7 +136,15 @@ export async function GET(request: NextRequest) {
 
             if (saved) {
               booksAdded++;
-              await queueEnrichmentJobs(saved.id, saved.title, saved.author);
+              await recordDiscoveryCandidate({
+                title: saved.title,
+                author: saved.author,
+                source: "nyt_bestseller",
+                category: "known_romance_author",
+                demandScore: 75,
+                metadata: { nyt_list: listName },
+              });
+              await queueEnrichmentJobs(saved.id, saved.title, saved.author, undefined, "core");
               scheduleMetadataEnrichment(saved.id, saved.title, saved.author, saved.isbn);
             }
           }
@@ -178,6 +198,15 @@ export async function GET(request: NextRequest) {
               ["romance", "love story", "romantic", "enemies to lovers"].some((kw) => descLower.includes(kw)) ||
               isKnownRomanceAuthor(author);
             if (!isRomance) continue;
+            if (
+              !isRomantasyDiscoveryCandidate({
+                title,
+                author,
+                context: `${query} ${categories.join(" ")} ${info.description ?? ""}`,
+              })
+            ) {
+              continue;
+            }
 
             // Published in last 30 days?
             const pubDate = info.publishedDate;
@@ -226,7 +255,15 @@ export async function GET(request: NextRequest) {
 
             if (saved) {
               booksAdded++;
-              await queueEnrichmentJobs(saved.id, saved.title, saved.author);
+              await recordDiscoveryCandidate({
+                title: saved.title,
+                author: saved.author,
+                source: "google_books_new_release",
+                category: "romantasy_adjacent",
+                demandScore: 45,
+                metadata: { query },
+              });
+              await queueEnrichmentJobs(saved.id, saved.title, saved.author, undefined, "core");
               scheduleMetadataEnrichment(saved.id, saved.title, saved.author, saved.isbn);
             }
           }
@@ -241,10 +278,10 @@ export async function GET(request: NextRequest) {
     // ── PART 3: Google Books Subject Discovery (older popular books) ──
 
     const GB_DISCOVERY_QUERIES = [
-      "subject:romance",
-      "subject:romantic fiction",
-      "subject:love stories",
       "subject:fantasy romance",
+      "subject:paranormal romance",
+      "romantasy",
+      "dark fantasy romance",
     ];
 
     if (timeRemaining() > 12_000) {
@@ -305,6 +342,15 @@ export async function GET(request: NextRequest) {
               ].some((kw) => descLower.includes(kw)) ||
               isKnownRomanceAuthor(author);
             if (!isRomance) continue;
+            if (
+              !isRomantasyDiscoveryCandidate({
+                title,
+                author,
+                context: `${discoveryQuery} ${categories.join(" ")} ${info.description ?? ""}`,
+              })
+            ) {
+              continue;
+            }
 
             // Check if already in DB by title
             const { data: existing } = await supabase
@@ -345,7 +391,15 @@ export async function GET(request: NextRequest) {
 
             if (saved) {
               booksAdded++;
-              await queueEnrichmentJobs(saved.id, saved.title, saved.author);
+              await recordDiscoveryCandidate({
+                title: saved.title,
+                author: saved.author,
+                source: "google_books_subject_discovery",
+                category: "romantasy_adjacent",
+                demandScore: 35,
+                metadata: { query: discoveryQuery },
+              });
+              await queueEnrichmentJobs(saved.id, saved.title, saved.author, undefined, "core");
               scheduleMetadataEnrichment(
                 saved.id,
                 saved.title,

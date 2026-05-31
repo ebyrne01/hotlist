@@ -551,7 +551,12 @@ export async function saveProvisionalBook(bookData: BookData): Promise<Book | nu
     publisher: bookData.publisher ?? null,
     description: bookData.description ?? null,
     goodreads_id: null, // Will be resolved by enrichment queue
-    metadata_source: "google_books",
+    amazon_asin: bookData.amazonAsin ?? null,
+    romance_io_slug: bookData.romanceIoSlug ?? null,
+    romance_io_heat_label: bookData.romanceIoHeatLabel ?? null,
+    genres: bookData.genres ?? [],
+    subgenre: bookData.subgenre ?? null,
+    metadata_source: bookData.googleBooksId ? "google_books" : "manual",
     slug,
     enrichment_status: "pending",
     updated_at: new Date().toISOString(),

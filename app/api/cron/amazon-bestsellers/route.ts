@@ -1,10 +1,10 @@
 /**
  * CRON JOB — Amazon Bestseller Discovery
  *
- * Discovers new romance books from Amazon bestseller lists via Serper.
+ * Discovers new romantasy/adjacent books from Amazon bestseller lists via Serper.
  * Runs daily, resolves titles through Goodreads, saves to DB.
  *
- * Cost: ~$0.005 per run (5 Serper queries).
+ * Cost: ~$0.007 per run (7 Serper queries).
  */
 
 import { NextRequest, NextResponse } from "next/server";

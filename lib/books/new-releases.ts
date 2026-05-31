@@ -9,6 +9,8 @@ import { getAdminClient } from "@/lib/supabase/admin";
 import { saveBookToCache, hydrateBookDetail } from "./cache";
 import { queueEnrichmentJobs } from "@/lib/enrichment/queue";
 import { isJunkTitle, isKnownRomanceAuthor, isRomanceByGenres } from "./romance-filter";
+import { recordDiscoveryCandidate } from "./discovery-candidates";
+import { isRomantasyDiscoveryCandidate } from "./discovery-focus";
 import type { BookDetail, BookData } from "@/lib/types";
 
 const CACHE_KEY = "romance_new_releases";
@@ -16,9 +18,10 @@ const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const BASE_URL = "https://www.googleapis.com/books/v1/volumes";
 
 const SEARCH_QUERIES = [
-  "subject:romance",
   "subject:fantasy+romance",
-  "subject:romantic+fiction",
+  "subject:paranormal+romance",
+  "romantasy",
+  "dark+fantasy+romance",
 ] as const;
 
 interface GoogleVolume {
@@ -113,6 +116,15 @@ export async function getRomanceNewReleases(): Promise<BookDetail[]> {
       isKnownRomanceAuthor(author);
 
     if (!isRomance) continue;
+    if (
+      !isRomantasyDiscoveryCandidate({
+        title,
+        author,
+        context: `${SEARCH_QUERIES.join(" ")} ${categories.join(" ")} ${info.description ?? ""}`,
+      })
+    ) {
+      continue;
+    }
 
     const identifiers = info.industryIdentifiers ?? [];
     let coverUrl = info.imageLinks?.thumbnail ?? info.imageLinks?.smallThumbnail ?? null;
@@ -142,8 +154,19 @@ export async function getRomanceNewReleases(): Promise<BookDetail[]> {
   for (const bookData of top) {
     const saved = await saveBookToCache(bookData);
     if (saved) {
+      await recordDiscoveryCandidate({
+        title: saved.title,
+        author: saved.author,
+        source: "google_books_new_release",
+        category: "romantasy_adjacent",
+        demandScore: 45,
+        metadata: {
+          google_books_id: bookData.googleBooksId,
+          published_year: bookData.publishedYear,
+        },
+      });
       bookIds.push(saved.id);
-      await queueEnrichmentJobs(saved.id, saved.title, saved.author);
+      await queueEnrichmentJobs(saved.id, saved.title, saved.author, undefined, "core");
     }
   }
 

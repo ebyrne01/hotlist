@@ -19,6 +19,7 @@
 # misc
 .DS_Store
 *.pem
+.claude/
 
 # debug
 npm-debug.log*
@@ -37,3 +38,14 @@ next-env.d.ts
 
 # audit harness output
 scripts/audit-reports/
+scripts/booktok-grab-eval-results.json
+scripts/search-eval-results.json
+scripts/amazon-enrichment/amazon-results.json
+scripts/amazon-enrichment/bestseller-scrape-results.json
+scripts/amazon-enrichment/books-title-only.json
+scripts/amazon-enrichment/books-to-enrich.json
+scripts/amazon-enrichment/books-with-asin.json
+scripts/amazon-enrichment/books-with-isbn.json
+scripts/amazon-enrichment/priority-asin-targets.json
+scripts/amazon-enrichment/unmatched-books.json
+scripts/amazon-enrichment/validation-report.txt
