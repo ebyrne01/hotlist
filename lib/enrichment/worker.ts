@@ -139,6 +139,28 @@ async function getP0CanonTargetIds(): Promise<Set<string>> {
 async function isAllowedPaidSerperJob(job: QueuedJob): Promise<boolean> {
   if (!PAID_SERPER_JOB_TYPES.has(job.job_type)) return true;
 
+  const supabase = getAdminClient();
+  const { data: queuedJob } = await supabase
+    .from("enrichment_queue")
+    .select("evidence")
+    .eq("id", job.id)
+    .single();
+
+  const evidence = queuedJob?.evidence as
+    | { allow_paid_top_list_spend?: boolean; source?: string; priority?: string; rank?: number }
+    | null
+    | undefined;
+
+  if (
+    evidence?.allow_paid_top_list_spend === true &&
+    evidence.source === "top_list_repair" &&
+    ["P0", "P1"].includes(evidence.priority ?? "") &&
+    typeof evidence.rank === "number" &&
+    evidence.rank <= 200
+  ) {
+    return true;
+  }
+
   const targetIds = await getP0CanonTargetIds();
   return targetIds.has(job.book_id);
 }

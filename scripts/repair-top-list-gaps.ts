@@ -30,6 +30,7 @@ import type { JobType } from "@/lib/enrichment/queue";
 loadEnv({ path: ".env.local", quiet: true });
 
 type Priority = "P0" | "P1" | "P2" | "P3";
+type SpendMode = "canon" | "p0" | "p1";
 
 type AuditRow = {
   rank: number;
@@ -64,6 +65,7 @@ type RepairPlanItem = {
   queueJobs: JobType[];
   upserts: string[];
   directFixes: string[];
+  allowPaidTopListSpend: boolean;
   canonReady: boolean;
   canonBlockers: string[];
   shouldTryPromote: boolean;
@@ -98,6 +100,10 @@ function parseArgs() {
   const apply = args.includes("--apply");
   const directOnly = args.includes("--direct-only");
   const noQueue = args.includes("--no-queue");
+  const spendModeArgIndex = args.indexOf("--spend-mode");
+  const spendMode = (spendModeArgIndex >= 0 ? args[spendModeArgIndex + 1] : "canon") as SpendMode;
+  const maxRankArgIndex = args.indexOf("--max-rank");
+  const maxRank = maxRankArgIndex >= 0 ? Number(args[maxRankArgIndex + 1]) : null;
   const priorityArgIndex = args.indexOf("--priority");
   const priority = (
     priorityArgIndex >= 0 ? args[priorityArgIndex + 1] : "P0"
@@ -113,6 +119,14 @@ function parseArgs() {
     consumed.add("--limit");
     if (args[limitArgIndex + 1]) consumed.add(args[limitArgIndex + 1]);
   }
+  if (spendModeArgIndex >= 0) {
+    consumed.add("--spend-mode");
+    if (args[spendModeArgIndex + 1]) consumed.add(args[spendModeArgIndex + 1]);
+  }
+  if (maxRankArgIndex >= 0) {
+    consumed.add("--max-rank");
+    if (args[maxRankArgIndex + 1]) consumed.add(args[maxRankArgIndex + 1]);
+  }
   const reportPath = args.find(
     (arg) => !consumed.has(arg) && !arg.startsWith("--") && !["P0", "P1", "P2", "P3"].includes(arg)
   );
@@ -121,8 +135,10 @@ function parseArgs() {
     apply,
     priority: ["P0", "P1", "P2", "P3"].includes(priority) ? priority : "P0",
     limit: Number.isFinite(limit) && limit && limit > 0 ? limit : null,
+    maxRank: Number.isFinite(maxRank) && maxRank && maxRank > 0 ? maxRank : null,
     directOnly,
     noQueue,
+    spendMode: ["canon", "p0", "p1"].includes(spendMode) ? spendMode : "canon",
     reportPath: reportPath ?? latestReportPath(),
   };
 }
@@ -311,7 +327,14 @@ async function getActiveJobs(bookId: string): Promise<Set<JobType>> {
   return new Set((data ?? []).map((job) => job.job_type as JobType));
 }
 
-function jobNeeds(row: AuditRow, canonReady: boolean): JobType[] {
+function canQueuePaidJobs(row: AuditRow, canonReady: boolean, spendMode: SpendMode): boolean {
+  if (row.canon === true || canonReady) return true;
+  if (spendMode === "p0") return row.priority === "P0";
+  if (spendMode === "p1") return row.priority === "P0" || row.priority === "P1";
+  return false;
+}
+
+function jobNeeds(row: AuditRow, canonReady: boolean, spendMode: SpendMode): JobType[] {
   const jobs = new Set<JobType>();
 
   if (!row.hasGoodreadsId) {
@@ -322,8 +345,9 @@ function jobNeeds(row: AuditRow, canonReady: boolean): JobType[] {
   }
 
   // Paid jobs should only be queued when the row is already canon or ready to
-  // become canon in this repair pass; the worker has the same spend guard.
-  const canQueuePaid = row.canon === true || canonReady;
+  // become canon in this repair pass, unless the caller explicitly expands
+  // spend-mode for high-demand audit rows.
+  const canQueuePaid = canQueuePaidJobs(row, canonReady, spendMode);
 
   if (canQueuePaid && !row.hasRomanceIoSpice && row.romanceIoHarvestSpice == null) {
     jobs.add("romance_io_spice");
@@ -339,11 +363,14 @@ async function buildPlan(
   rows: AuditRow[],
   maxPriority: Priority,
   limit: number | null,
+  maxRank: number | null,
   directOnly: boolean,
-  noQueue: boolean
+  noQueue: boolean,
+  spendMode: SpendMode
 ) {
   const eligibleRows = rows
     .filter((row) => shouldInclude(row, maxPriority))
+    .filter((row) => maxRank == null || row.rank <= maxRank)
     .sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority) || a.rank - b.rank)
     .slice(0, limit ?? undefined);
 
@@ -355,7 +382,7 @@ async function buildPlan(
       topListDemand: topListDemandFor(row),
     });
     const activeJobs = await getActiveJobs(bookId);
-    const jobs = jobNeeds(row, readiness.ready).filter((job) => !activeJobs.has(job));
+    const jobs = jobNeeds(row, readiness.ready, spendMode).filter((job) => !activeJobs.has(job));
     const upserts: string[] = [];
     const directFixes: string[] = [];
 
@@ -385,6 +412,7 @@ async function buildPlan(
       queueJobs: directOnly || noQueue ? [] : jobs,
       upserts: directOnly ? [] : upserts,
       directFixes,
+      allowPaidTopListSpend: spendMode !== "canon",
       canonReady: readiness.ready,
       canonBlockers: readiness.blockers,
       shouldTryPromote: row.canon === false && readiness.ready,
@@ -653,6 +681,16 @@ async function queueJobs(item: RepairPlanItem) {
       ? 5
       : 3,
     next_retry_at: new Date().toISOString(),
+    evidence: {
+      source: "top_list_repair",
+      priority: item.row.priority,
+      rank: item.row.rank,
+      input_source: item.row.inputSource,
+      allow_paid_top_list_spend:
+        item.allowPaidTopListSpend &&
+        (jobType === "amazon_rating" || jobType === "romance_io_spice"),
+      queued_at: new Date().toISOString(),
+    },
   }));
 
   const { error } = await supabase
@@ -693,9 +731,9 @@ function summarizePlan(plan: RepairPlanItem[]) {
 }
 
 async function main() {
-  const { apply, priority, limit, directOnly, noQueue, reportPath } = parseArgs();
+  const { apply, priority, limit, maxRank, directOnly, noQueue, spendMode, reportPath } = parseArgs();
   const report = JSON.parse(readFileSync(reportPath, "utf8")) as AuditReport;
-  const plan = await buildPlan(report.rows, priority, limit, directOnly, noQueue);
+  const plan = await buildPlan(report.rows, priority, limit, maxRank, directOnly, noQueue, spendMode);
   const summary = summarizePlan(plan);
 
   console.log(
@@ -705,8 +743,10 @@ async function main() {
         reportPath,
         maxPriority: priority,
         limit,
+        maxRank,
         directOnly,
         noQueue,
+        spendMode,
         ...summary,
       },
       null,
