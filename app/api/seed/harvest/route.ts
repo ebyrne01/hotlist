@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/api/require-admin";
 import { isJunkTitle } from "@/lib/books/romance-filter";
+import { isRomantasyDiscoveryCandidate } from "@/lib/books/discovery-focus";
 import { queueEnrichmentJobs } from "@/lib/enrichment/queue";
 import { getCorsHeaders, corsOptions } from "@/lib/api/cors";
 
@@ -37,10 +38,18 @@ type HarvestedBook = z.infer<typeof harvestBookSchema>;
 
 // ── Helpers ──
 
+const FOCUSED_HARVEST_SOURCES = new Set([
+  "amazon_list",
+  "generic_links",
+  "blog_list",
+]);
+
 function normalizeTitle(title: string): string {
   return title
     .toLowerCase()
+    .replace(/:\s+(?:a\s+|an\s+|the\s+)?(?:slow[-\s]?burn|fast[-\s]?paced|epic|dark|steamy|spicy|enemies[-\s]?to[-\s]?lovers|forbidden|romantic|fantasy|romantasy|paranormal|vampire|wolf|shifter|fae|witch|monster|alien|gothic|high[-\s]?stakes|stunning|immersive|discover|novel|book)\b.*$/i, "")
     .replace(/\(.*?\)/g, "")
+    .replace(/\b(?:book|volume)\s+\d+\b/gi, "")
     .replace(/['']/g, "'")
     .replace(/[^a-z0-9'\s]/g, "")
     .replace(/\s+/g, " ")
@@ -113,7 +122,14 @@ async function findExistingBook(
       .limit(30);
 
     const match = candidates?.find(
-      (c) => normalizeTitle(c.title) === normTitle
+      (c) => {
+        const candidateTitle = normalizeTitle(c.title);
+        return (
+          candidateTitle === normTitle ||
+          (candidateTitle.length >= 8 && normTitle.startsWith(candidateTitle)) ||
+          (normTitle.length >= 8 && candidateTitle.startsWith(normTitle))
+        );
+      }
     );
     if (match) return { id: match.id, needsUpdate: computeUpdates(match, book) };
   }
@@ -258,6 +274,7 @@ export async function POST(request: Request) {
   let skipped = 0;
   let skippedAudiobooks = 0;
   let skippedJunk = 0;
+  let skippedOutOfFocus = 0;
   let enrichmentJobsQueued = 0;
   const newBooks: string[] = [];
   const updatedBooks: string[] = [];
@@ -280,11 +297,27 @@ export async function POST(request: Request) {
       continue;
     }
 
-    // 3. Check for existing book
+    // 3. Skip broad/non-focus titles from high-noise harvest sources.
+    // Amazon category pages can drift into general fiction, kids, and broad
+    // contemporary romance. Keep these pulls focused on romantasy-adjacent demand.
+    if (
+      FOCUSED_HARVEST_SOURCES.has(book.source) &&
+      !isRomantasyDiscoveryCandidate({
+        title: book.title,
+        author: book.author,
+        context: book.source,
+      })
+    ) {
+      skippedOutOfFocus++;
+      skipped++;
+      continue;
+    }
+
+    // 4. Check for existing book
     const existing = await findExistingBook(supabase, book);
 
     if (existing) {
-      // 4. Existing book — merge new data
+      // 5. Existing book — merge new data
       const updates = existing.needsUpdate;
       if (Object.keys(updates).length > 0) {
         await supabase.from("books").update(updates).eq("id", existing.id);
@@ -300,7 +333,7 @@ export async function POST(request: Request) {
       // Write pre-captured ratings for existing books too
       await writeHarvestRatings(supabase, existing.id, book);
     } else {
-      // 5. New book — create record
+      // 6. New book — create record
       const { data: newBook, error } = await supabase
         .from("books")
         .insert({
@@ -342,7 +375,7 @@ export async function POST(request: Request) {
     }
   }
 
-  // 7. Log the harvest
+  // 8. Log the harvest
   await supabase.from("harvest_log").insert({
     user_id: userId,
     books_submitted: books.length,
@@ -353,7 +386,7 @@ export async function POST(request: Request) {
   });
 
   console.log(
-    `[harvest] Processed ${books.length} books: ${added} added, ${updated} updated, ${skipped} skipped (${skippedAudiobooks} audiobooks, ${skippedJunk} junk)`
+    `[harvest] Processed ${books.length} books: ${added} added, ${updated} updated, ${skipped} skipped (${skippedAudiobooks} audiobooks, ${skippedJunk} junk, ${skippedOutOfFocus} out of focus)`
   );
 
   return NextResponse.json({
@@ -363,6 +396,7 @@ export async function POST(request: Request) {
     skipped,
     skippedAudiobooks,
     skippedJunk,
+    skippedOutOfFocus,
     enrichmentJobsQueued,
     details: { newBooks, updatedBooks },
   }, { headers });

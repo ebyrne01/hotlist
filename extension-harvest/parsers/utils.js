@@ -79,8 +79,10 @@ function cleanTitle(title) {
   return title
     // Strip trailing format labels like "(Kindle Edition)", "(Hardcover)", etc.
     .replace(/\s*\((Kindle Edition|Hardcover|Paperback|Mass Market Paperback|Audio CD|Audible Audiobook)\)\s*$/i, "")
+    // Strip Amazon series suffixes like "(The Wolves of Ruin Book 1)"
+    .replace(/\s*\(([^)]*?\b(?:book|volume)\s+\d+[^)]*?)\)\s*$/i, "")
     // Strip marketing subtitles after colon (e.g., "Heir of Prophecy: A stunning new romantasy from...")
-    .replace(/:\s*(?:A\s+)?(?:stunning|brand.new|new|bestselling|sunday\s+times|nyt|from\s+the|the\s+#?\d).*$/i, "")
+    .replace(/:\s*(?:A\s+|An\s+|The\s+)?(?:slow[-\s]?burn|fast[-\s]?paced|epic|dark|steamy|spicy|enemies[-\s]?to[-\s]?lovers|forbidden|romantic|fantasy|romantasy|paranormal|vampire|wolf|shifter|fae|witch|monster|alien|gothic|high[-\s]?stakes|stunning|immersive|discover|brand.new|new|bestselling|sunday\s+times|nyt|from\s+the|the\s+#?\d).*$/i, "")
     .trim();
 }
 
