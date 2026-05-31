@@ -16,6 +16,7 @@ import { getDna } from "@/lib/reading-dna";
 import { reRankByDna } from "@/lib/reading-dna/score";
 import type { BookDetail } from "@/lib/types";
 import { NextRequest, NextResponse } from "next/server";
+import { isCompilationTitle } from "@/lib/books/utils";
 
 export async function GET(request: NextRequest) {
   const query = request.nextUrl.searchParams.get("q");
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest) {
         query,
         intent: "title_author",
         total: books.length,
-        books: shapeResults(books),
+        books: shapeResults(books, query),
       });
     }
 
@@ -59,7 +60,7 @@ export async function GET(request: NextRequest) {
         query,
         intent: "quick",
         total: books.length,
-        books: shapeResults(books),
+        books: shapeResults(books, query),
       });
     }
 
@@ -80,7 +81,7 @@ export async function GET(request: NextRequest) {
         query,
         intent: "title_author_fallback",
         total: books.length,
-        books: shapeResults(books),
+        books: shapeResults(books, query),
       });
     }
 
@@ -107,7 +108,7 @@ export async function GET(request: NextRequest) {
       intent: intent.type,
       filters,
       total: results.length,
-      books: shapeResults(results),
+      books: shapeResults(results, query),
     });
   } catch (err) {
     // If anything in the smart path fails, fall back to keyword search
@@ -118,7 +119,7 @@ export async function GET(request: NextRequest) {
         query,
         intent: "title_author_fallback",
         total: books.length,
-        books: shapeResults(books),
+        books: shapeResults(books, query),
       });
     } catch (fallbackErr) {
       console.error("Book search failed completely:", fallbackErr);
@@ -131,7 +132,7 @@ export async function GET(request: NextRequest) {
 }
 
 /** Shape BookDetail[] into the lean search result format for the frontend */
-function shapeResults(books: BookDetail[]) {
+function shapeResults(books: BookDetail[], query: string) {
   const seenTitles = new Set<string>();
 
   return books
@@ -157,11 +158,70 @@ function shapeResults(books: BookDetail[]) {
         subgenre: book.subgenre,
       };
     })
+    .filter((r) => !isCompilationTitle(r.title))
     .filter((r) => {
       // Deduplicate by normalized title+author
       const key = `${r.title.toLowerCase().replace(/[^\w\s]/g, "").trim()}::${r.author.toLowerCase().trim()}`;
       if (seenTitles.has(key)) return false;
       seenTitles.add(key);
       return true;
-    });
+    })
+    .sort((a, b) => searchResultScore(b, query) - searchResultScore(a, query));
+}
+
+function searchResultScore(
+  result: {
+    title: string;
+    author: string;
+    seriesName: string | null;
+    goodreadsRating: number | null;
+    ratingCount: number | null;
+  },
+  query: string
+) {
+  const normalizedQuery = normalizeSearchText(query);
+  const words = normalizedQuery
+    .split(/\s+/)
+    .filter((word) => word.length > 1 && !SEARCH_STOP_WORDS.has(word));
+
+  const titleText = normalizeSearchText(`${result.title} ${result.seriesName ?? ""}`);
+  const authorText = normalizeSearchText(result.author);
+
+  let score = 0;
+  if (titleText === normalizedQuery) score += 300;
+  if (titleText.startsWith(normalizedQuery)) score += 240;
+  if (titleText.includes(normalizedQuery)) score += 220;
+
+  const titleMatches = words.filter((word) => titleText.includes(word)).length;
+  const authorMatches = words.filter((word) => authorText.includes(word)).length;
+
+  score += titleMatches * 60;
+  score += authorMatches * 25;
+  if (titleMatches > 0 && authorMatches > 0) score += 60;
+  if (titleMatches >= Math.min(2, words.length)) score += 30;
+
+  score += Math.min((result.ratingCount ?? 0) / 100_000, 10);
+  if (result.goodreadsRating) score += 2;
+
+  return score;
+}
+
+const SEARCH_STOP_WORDS = new Set([
+  "the",
+  "a",
+  "an",
+  "and",
+  "of",
+  "by",
+  "book",
+  "novel",
+]);
+
+function normalizeSearchText(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
