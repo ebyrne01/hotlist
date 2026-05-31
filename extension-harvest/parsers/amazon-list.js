@@ -13,7 +13,9 @@
       /^\d(?:\.\d)? out of 5 stars$/i.test(normalized) ||
       /^[\d,]+ (?:ratings?|reviews?)$/i.test(normalized) ||
       /\bfree delivery\b/i.test(normalized) ||
-      /^tomorrowfree delivery/i.test(normalized)
+      /^tomorrowfree delivery/i.test(normalized) ||
+      /^overnightfree delivery/i.test(normalized) ||
+      /^amazon business card$/i.test(normalized)
     );
   }
 
