@@ -68,6 +68,14 @@ function cleanHarvestTitle(title: string): {
   };
 }
 
+function stripAuthorFromTitle(title: string, author?: string | null): string {
+  if (!author) return title;
+  const suffix = ` by ${author}`.toLowerCase().replace(/\s+/g, " ");
+  const normalizedTitle = title.toLowerCase().replace(/\s+/g, " ");
+  if (!normalizedTitle.endsWith(suffix)) return title;
+  return title.slice(0, title.length - suffix.length).trim();
+}
+
 function cleanHarvestCoverUrl(coverUrl?: string | null): string | null {
   if (!coverUrl || coverUrl.includes("placeholder.png")) return null;
   return coverUrl;
@@ -82,7 +90,7 @@ function sanitizeHarvestBook(book: HarvestedBook): HarvestedBook {
   const cleaned = cleanHarvestTitle(book.title);
   return {
     ...book,
-    title: cleaned.title,
+    title: stripAuthorFromTitle(cleaned.title, book.author),
     coverUrl: cleanHarvestCoverUrl(book.coverUrl),
     romanceIoSlug: normalizeRomanceIoSlug(book.romanceIoSlug),
     seriesName: book.seriesName ?? cleaned.seriesName,
