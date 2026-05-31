@@ -323,7 +323,11 @@ export async function searchBooksInCache(query: string): Promise<BookDetail[]> {
       }
     }
 
-    return Math.max(titleScore, authorScore);
+    const hasTitleSignal = titleScore > 0;
+    const hasAuthorSignal = authorScore > 0;
+    const combinedSignalBonus = hasTitleSignal && hasAuthorSignal ? 35 : 0;
+
+    return titleScore + authorScore + combinedSignalBonus;
   }
 
   // Sort by relevance score descending, then tiebreak
