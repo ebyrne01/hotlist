@@ -51,7 +51,13 @@ const ROMANCE_TROPE_SLUGS = new Set([
 ]);
 
 const JUNK_TITLE_PATTERNS =
-  /\b(box\s*set|boxed set|collection set|bundle|omnibus|books?\s+\d+-\d+|\d+-book|complete\s+series|the\s+complete|books?\s+\d+\s*[-–&]\s*\d+|volumes?\s+\d+\s*[-–]\s*\d+|\d+\s+to\s+\d+\s+book\s+series|book\s+series\b.+\bby\b|study guide|summary of|trivia|journal|workbook|coloring book|conversation starters|supersummary|bookhabits|untitled|cliff\s*notes|hardcover box|paperback box|omnibus edition|deluxe\s+limited\s+edition|special\s+edition|collector'?s?\s+edition|anniversary\s+edition|illustrated\s+edition|how well do you know|quiz|test your knowledge|unofficial guide|companion guide|discussion questions|reading guide|reader.?s guide|book club questions|essay|analysis of|literary analysis|critical analysis|study companion|bi-centenary|centenary|proceedings|symposium|conference|dissertation|thesis|municipal|township|genealogy|census|dramatized\s+adaptation|abridged\s+edition|leather\s+bound|complete\s+guide\s+to|reading\s+companion|real-time\s+reading|novel\s+unit|teacher.?s?\s+guide|lesson\s+plans?|curriculum\s+guide|classroom\s+guide|educator.?s?\s+guide|podcast|audiobook\s+podcast)\b/i;
+  /\b(box\s*set|boxed set|collection set|bundle|omnibus|books?\s+\d+-\d+|\d+-book|complete\s+series|the\s+complete|books?\s+\d+\s*[-–&]\s*\d+|volumes?\s+\d+\s*[-–]\s*\d+|\d+\s+to\s+\d+\s+book\s+series|book\s+series\b.+\bby\b|study guide|summary of|trivia|journal|workbook|coloring book|conversation starters|supersummary|bookhabits|untitled|cliff\s*notes|hardcover box|paperback box|omnibus edition|deluxe\s+limited\s+edition|special\s+edition|collector'?s?\s+edition|anniversary\s+edition|illustrated\s+edition|how well do you know|quiz|test your knowledge|unofficial guide|companion guide|discussion questions|reading guide|reader.?s guide|book club questions|essay|analysis of|literary analysis|critical analysis|study companion|bi-centenary|centenary|proceedings|symposium|conference|dissertation|thesis|municipal|township|genealogy|census|dramatized\s+adaptation|abridged\s+edition|leather\s+bound|complete\s+guide\s+to|reading\s+companion|real-time\s+reading|novel\s+unit|teacher.?s?\s+guide|lesson\s+plans?|curriculum\s+guide|classroom\s+guide|educator.?s?\s+guide|podcast|audiobook\s+podcast|free\s+delivery|tomorrowfree\s+delivery)\b/i;
+
+const SCRAPER_ARTIFACT_TITLE_PATTERNS = [
+  /^\s*\d(?:\.\d)?\s+out\s+of\s+5\s+stars\s*$/i,
+  /^\s*[\d,]+\s+(?:ratings?|reviews?)\s*$/i,
+  /^\s*(?:kindle|paperback|hardcover|audible audiobook)\s*$/i,
+];
 
 // Known study-guide / parasite publishers — checked against AUTHOR field
 const JUNK_AUTHOR_PATTERNS =
@@ -168,6 +174,7 @@ export function isRomanceByGenres(genres: string[]): boolean {
 export function isJunkTitle(title: string, author?: string): boolean {
   if (
     JUNK_TITLE_PATTERNS.test(title) ||
+    SCRAPER_ARTIFACT_TITLE_PATTERNS.some((pattern) => pattern.test(title)) ||
     FOREIGN_EDITION_PATTERN.test(title) ||
     MULTI_TITLE_PATTERN.test(title)
   ) {

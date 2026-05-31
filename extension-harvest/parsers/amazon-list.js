@@ -7,6 +7,16 @@
   const books = [];
   const seenAsins = new Set();
 
+  function isScraperArtifactTitle(title) {
+    const normalized = (title || "").replace(/\s+/g, " ").trim();
+    return (
+      /^\d(?:\.\d)? out of 5 stars$/i.test(normalized) ||
+      /^[\d,]+ (?:ratings?|reviews?)$/i.test(normalized) ||
+      /\bfree delivery\b/i.test(normalized) ||
+      /^tomorrowfree delivery/i.test(normalized)
+    );
+  }
+
   // Step 1: Find all product links with ASINs
   const allLinks = document.querySelectorAll("a[href]");
   const asinLinks = [];
@@ -118,11 +128,12 @@
 
       // Clean title
       const cleaned = cleanTitle(title);
+      if (isScraperArtifactTitle(cleaned)) continue;
       const series = parseSeries(cleaned);
 
       const book = {
         title: series.cleanedTitle || cleaned,
-        author,
+        author: cleanAuthor(author),
         goodreadsId: null,
         asin,
         isbn13: null,
