@@ -127,11 +127,23 @@ export interface CanonGateResult {
   blockers: string[];
 }
 
+export interface CanonGateOptions {
+  topListDemand?: {
+    rank: number;
+    focused: boolean;
+    source?: string | null;
+    hasAmazonEvidence?: boolean;
+  };
+}
+
 /**
  * Evaluate whether a book is ready for canon promotion.
  * Queries the database for the book's current state + related data.
  */
-export async function evaluateCanonReadiness(bookId: string): Promise<CanonGateResult> {
+export async function evaluateCanonReadiness(
+  bookId: string,
+  options?: CanonGateOptions
+): Promise<CanonGateResult> {
   const supabase = getAdminClient();
 
   // Fetch book + related data in parallel
@@ -190,8 +202,18 @@ export async function evaluateCanonReadiness(bookId: string): Promise<CanonGateR
   const hasRomanceTropes = tropeCount > 0; // book_tropes only contains romance tropes
   const grRatingCountForGenre = ratingsResult.data?.rating_count ?? 0;
   const hasAdjacentGenre = isAdjacentGenre(genres) && grRatingCountForGenre >= 500;
+  const hasTopListDemand =
+    options?.topListDemand?.focused === true &&
+    options.topListDemand.rank <= 75 &&
+    options.topListDemand.hasAmazonEvidence === true;
 
-  if (!hasRomanceGenre && !hasRomanceAuthor && !hasRomanceTropes && !hasAdjacentGenre) {
+  if (
+    !hasRomanceGenre &&
+    !hasRomanceAuthor &&
+    !hasRomanceTropes &&
+    !hasAdjacentGenre &&
+    !hasTopListDemand
+  ) {
     blockers.push("not_romance_or_adjacent");
   }
 
@@ -243,6 +265,7 @@ export async function evaluateCanonReadiness(bookId: string): Promise<CanonGateR
   if (book.romance_io_slug || spiceSources.has("romance_io")) score += 2;
   if (book.ai_synopsis) score += 2;
   if (book.amazon_asin) score += 1;
+  if (hasTopListDemand) score += 1;
   if (tropeCount >= 2) score += 1;
   if (grRatingCount >= 500) score += 1;
   if (spiceSources.has("community")) score += 1;
@@ -260,8 +283,11 @@ export async function evaluateCanonReadiness(bookId: string): Promise<CanonGateR
  * Attempt to promote a book to canon if it meets all requirements.
  * Returns true if the book was promoted (or was already canon).
  */
-export async function tryPromoteToCanon(bookId: string): Promise<boolean> {
-  const result = await evaluateCanonReadiness(bookId);
+export async function tryPromoteToCanon(
+  bookId: string,
+  options?: CanonGateOptions
+): Promise<boolean> {
+  const result = await evaluateCanonReadiness(bookId, options);
 
   if (!result.ready) {
     return false;

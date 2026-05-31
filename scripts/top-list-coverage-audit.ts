@@ -301,7 +301,11 @@ async function findByTitleAuthor(row: HarvestRow): Promise<BookRecord | null> {
         dbAuthor === inputAuthor &&
         (dbTitle === inputTitle ||
           (dbTitle.length >= 8 && inputTitle.startsWith(dbTitle)) ||
-          (inputTitle.length >= 8 && dbTitle.startsWith(inputTitle)))
+          (inputTitle.length >= 8 && dbTitle.startsWith(inputTitle)) ||
+          // Amazon often prefixes series names ("Zodiac Academy: The Awakening")
+          // while Goodreads canonical titles may only store the volume title
+          // ("The Awakening"). Treat that as a match when the author is exact.
+          (dbTitle.length >= 8 && inputTitle.includes(dbTitle)))
       );
     }) ?? null
   );
