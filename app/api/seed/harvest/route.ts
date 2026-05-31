@@ -3,7 +3,10 @@ import { z } from "zod";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/api/require-admin";
 import { isJunkTitle } from "@/lib/books/romance-filter";
-import { isRomantasyDiscoveryCandidate } from "@/lib/books/discovery-focus";
+import {
+  isKnownRomantasyFocusAuthor,
+  isRomantasyDiscoveryCandidate,
+} from "@/lib/books/discovery-focus";
 import { queueEnrichmentJobs } from "@/lib/enrichment/queue";
 import { getCorsHeaders, corsOptions } from "@/lib/api/cors";
 
@@ -387,13 +390,20 @@ export async function POST(request: Request) {
     // 3. Skip broad/non-focus titles from high-noise harvest sources.
     // Amazon category pages can drift into general fiction, kids, and broad
     // contemporary romance. Keep these pulls focused on romantasy-adjacent demand.
+    const isFocusedHarvestSource = FOCUSED_HARVEST_SOURCES.has(book.source);
+    const isFocusedDiscoveryCandidate = isRomantasyDiscoveryCandidate({
+      title: book.title,
+      author: book.author,
+      context: [book.source, book.seriesName].filter(Boolean).join(" "),
+    });
+    const isLowDemandGoodreadsCandidate =
+      book.source === "goodreads_list" &&
+      (book.goodreadsRatingCount ?? 0) < 1000 &&
+      !isKnownRomantasyFocusAuthor(book.author);
+
     if (
-      FOCUSED_HARVEST_SOURCES.has(book.source) &&
-      !isRomantasyDiscoveryCandidate({
-        title: book.title,
-        author: book.author,
-        context: [book.source, book.seriesName].filter(Boolean).join(" "),
-      })
+      isFocusedHarvestSource &&
+      (!isFocusedDiscoveryCandidate || isLowDemandGoodreadsCandidate)
     ) {
       skippedOutOfFocus++;
       skipped++;

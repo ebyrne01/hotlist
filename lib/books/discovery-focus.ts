@@ -197,6 +197,12 @@ const BROAD_ROMANCE_TERMS = [
 function normalize(value: string): string {
   return value.toLowerCase().replace(/\s+/g, " ").trim();
 }
+
+export function isKnownRomantasyFocusAuthor(author?: string | null): boolean {
+  const normalizedAuthor = normalize(author ?? "");
+  return FOCUS_AUTHORS.some((name) => normalizedAuthor.includes(name));
+}
+
 export function isRomantasyDiscoveryCandidate(input: {
   title: string;
   author?: string | null;
@@ -207,7 +213,7 @@ export function isRomantasyDiscoveryCandidate(input: {
   );
   const author = normalize(input.author ?? "");
 
-  if (FOCUS_AUTHORS.some((name) => author.includes(name))) {
+  if (isKnownRomantasyFocusAuthor(author)) {
     return true;
   }
 
