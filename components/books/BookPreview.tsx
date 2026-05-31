@@ -12,7 +12,8 @@ interface BookPreviewProps {
  * Google Books Embedded Viewer — shows a "Read Preview" button that opens
  * an inline book preview powered by Google Books. Free, no API key required.
  *
- * Only renders the button if Google Books has a preview for this book.
+ * Google is only touched after a reader clicks, so book pages do not make a
+ * third-party preview lookup on every load.
  */
 export default function BookPreview({
   isbn,
@@ -20,48 +21,9 @@ export default function BookPreview({
   title,
 }: BookPreviewProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [hasPreview, setHasPreview] = useState<boolean | null>(null);
   const [scriptLoaded, setScriptLoaded] = useState(false);
   const viewerRef = useRef<HTMLDivElement>(null);
   const identifier = isbn || googleBooksId;
-
-  // Check if a preview is available via Google Books API
-  useEffect(() => {
-    if (!identifier) {
-      setHasPreview(false);
-      return;
-    }
-
-    const checkPreview = async () => {
-      try {
-        const param = isbn ? `isbn:${isbn}` : `id:${googleBooksId}`;
-        const res = await fetch(
-          `https://www.googleapis.com/books/v1/volumes?q=${param}&maxResults=1`
-        );
-        if (!res.ok) {
-          setHasPreview(false);
-          return;
-        }
-        const data = await res.json();
-        const item = data.items?.[0];
-        if (!item) {
-          setHasPreview(false);
-          return;
-        }
-        // Check if viewability allows preview
-        const viewability = item.accessInfo?.viewability;
-        setHasPreview(
-          viewability === "PARTIAL" ||
-            viewability === "ALL_PAGES" ||
-            viewability === "PARTIAL_PREVIEW"
-        );
-      } catch {
-        setHasPreview(false);
-      }
-    };
-
-    checkPreview();
-  }, [identifier, isbn, googleBooksId]);
 
   // Load the Google Books viewer script
   const loadScript = useCallback(() => {
@@ -113,11 +75,8 @@ export default function BookPreview({
     });
   }, [isOpen, scriptLoaded, identifier, isbn]);
 
-  // Don't render if no identifier or no preview available
-  if (!identifier || hasPreview === false) return null;
-
-  // Still checking — don't flash the button
-  if (hasPreview === null) return null;
+  // Don't render if we have no way to ask Google Books for this title.
+  if (!identifier) return null;
 
   return (
     <>
