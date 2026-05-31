@@ -849,6 +849,7 @@ async function resolveSubmittedBooks(
             .select("*")
             .ilike("title", `%${titleBase}%`)
             .ilike("author", `%${authorLast}%`)
+            .eq("is_canon", true)
             .not("cover_url", "is", null)
             .limit(1)
             .single();

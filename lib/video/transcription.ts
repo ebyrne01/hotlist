@@ -20,7 +20,8 @@ export interface TranscriptionResult {
  * Returns null on failure — never throws.
  */
 export async function transcribeAudio(
-  audioOrVideoUrl: string
+  audioOrVideoUrl: string,
+  signal?: AbortSignal
 ): Promise<TranscriptionResult | null> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -28,9 +29,17 @@ export async function transcribeAudio(
     return null;
   }
 
+  const timeoutController = new AbortController();
+  const timeout = setTimeout(() => timeoutController.abort(), 30_000);
+  const abortFromParent = () => timeoutController.abort();
+  signal?.addEventListener("abort", abortFromParent, { once: true });
+
   try {
-    // Fetch the audio file
-    const response = await fetch(audioOrVideoUrl);
+    // Fetch the audio file with a hard timeout and streaming byte cap.
+    const response = await fetch(audioOrVideoUrl, {
+      signal: timeoutController.signal,
+    });
+
     if (!response.ok) {
       console.error(
         `[transcription] Failed to fetch audio: ${response.status}`
@@ -44,8 +53,10 @@ export async function transcribeAudio(
       return null;
     }
 
+    const buffer = await readResponseWithLimit(response, 25 * 1024 * 1024);
+    if (!buffer) return null;
+
     // Convert response to a File object for the OpenAI SDK
-    const buffer = await response.arrayBuffer();
     const file = new File([buffer], "audio.mp4", { type: "audio/mp4" });
 
     const openai = new OpenAI({ apiKey });
@@ -64,5 +75,49 @@ export async function transcribeAudio(
   } catch (err) {
     console.error("[transcription] Failed:", err);
     return null;
+  } finally {
+    clearTimeout(timeout);
+    signal?.removeEventListener("abort", abortFromParent);
   }
+}
+
+async function readResponseWithLimit(
+  response: Response,
+  maxBytes: number
+): Promise<ArrayBuffer | null> {
+  if (!response.body) {
+    const buffer = await response.arrayBuffer();
+    if (buffer.byteLength > maxBytes) {
+      console.error("[transcription] Audio file too large (>25MB Whisper limit)");
+      return null;
+    }
+    return buffer;
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel();
+      console.error("[transcription] Audio file too large (>25MB Whisper limit)");
+      return null;
+    }
+    chunks.push(value);
+  }
+
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  return merged.buffer;
 }

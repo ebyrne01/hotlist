@@ -73,7 +73,8 @@ function extractCreatorHandle(url: string, platform: string): string | null {
  * For other platforms: uses all-in-one directly.
  */
 export async function getVideoDownloadUrl(
-  url: string
+  url: string,
+  signal?: AbortSignal
 ): Promise<VideoDownloadResult | null> {
   const platform = detectPlatform(url);
   if (platform === "unknown") {
@@ -92,7 +93,7 @@ export async function getVideoDownloadUrl(
     const tiktokHost = process.env.RAPIDAPI_TIKTOK_HOST;
     if (tiktokHost) {
       console.log(`[downloader] Trying specialized TikTok API: ${tiktokHost}`);
-      const result = await downloadViaTikTokApi(url, apiKey, tiktokHost);
+      const result = await downloadViaTikTokApi(url, apiKey, tiktokHost, signal);
       if (result) {
         console.log(`[downloader] Specialized TikTok API succeeded: video=${!!result.videoUrl}, audio=${!!result.audioUrl}, duration=${result.durationSeconds}s`);
         return result;
@@ -102,7 +103,7 @@ export async function getVideoDownloadUrl(
   }
 
   // All platforms: all-in-one downloader
-  return downloadViaAllInOne(url, platform, apiKey);
+  return downloadViaAllInOne(url, platform, apiKey, signal);
 }
 
 /**
@@ -118,7 +119,8 @@ export async function getVideoDownloadUrl(
 async function downloadViaTikTokApi(
   url: string,
   apiKey: string,
-  apiHost: string
+  apiHost: string,
+  signal?: AbortSignal
 ): Promise<VideoDownloadResult | null> {
   const platform = "tiktok" as const;
   const creatorHandle = extractCreatorHandle(url, platform);
@@ -137,6 +139,7 @@ async function downloadViaTikTokApi(
       try {
         const response = await fetch(endpoint, {
           method: "GET",
+          signal,
           headers: {
             "x-rapidapi-key": apiKey,
             "x-rapidapi-host": apiHost,
@@ -291,7 +294,8 @@ function parseTikTokResponse(
 async function downloadViaAllInOne(
   url: string,
   platform: "tiktok" | "instagram" | "youtube",
-  apiKey: string
+  apiKey: string,
+  signal?: AbortSignal
 ): Promise<VideoDownloadResult | null> {
   const apiHost =
     process.env.RAPIDAPI_VIDEO_HOST ??
@@ -304,6 +308,7 @@ async function downloadViaAllInOne(
       `https://${apiHost}/v1/social/autolink`,
       {
         method: "POST",
+        signal,
         headers: {
           "x-rapidapi-key": apiKey,
           "x-rapidapi-host": apiHost,

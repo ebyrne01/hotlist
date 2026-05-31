@@ -6,6 +6,15 @@ import {
   type GrabStatus,
 } from "@/lib/video";
 import { getCorsHeaders, corsOptions, checkOrigin } from "@/lib/api/cors";
+import {
+  checkRateLimit,
+  rateLimitHeaders,
+  rateLimitResponse,
+} from "@/lib/api/rate-limit";
+import { createClient } from "@/lib/supabase/server";
+
+const RATE_LIMIT_MAX = 4;
+const RATE_LIMIT_WINDOW_SECONDS = 60 * 60;
 
 export function OPTIONS(req: Request) {
   return corsOptions(req.headers.get("origin"));
@@ -70,6 +79,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(cached, { headers });
   }
 
+  const rateLimit = await checkRateLimit(req, {
+    bucket: "grab:process",
+    limit: RATE_LIMIT_MAX,
+    windowSeconds: RATE_LIMIT_WINDOW_SECONDS,
+  });
+  if (!rateLimit.allowed) {
+    return rateLimitResponse(rateLimit, RATE_LIMIT_MAX, headers);
+  }
+
+  let userId: string | undefined;
+  try {
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    userId = user?.id;
+  } catch {
+    // Anonymous grabs are allowed; auth is only for attribution/history.
+  }
+
   // Stream progress updates
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -84,7 +113,7 @@ export async function POST(req: NextRequest) {
         const result = await grabBooksFromVideo(
           body.url,
           sendStatus,
-          undefined, // userId
+          userId,
           debug
         );
         if (debug && result.success && result.diagnostics) {
@@ -118,6 +147,7 @@ export async function POST(req: NextRequest) {
       "Content-Type": "text/plain; charset=utf-8",
       "Transfer-Encoding": "chunked",
       "Cache-Control": "no-cache",
+      ...rateLimitHeaders(rateLimit, RATE_LIMIT_MAX),
       ...headers,
     },
   });

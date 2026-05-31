@@ -1,0 +1,62 @@
+[
+  {
+    "id": "sample-series-video",
+    "description": "Fixture-only smoke case for a multi-book BookTok result.",
+    "expected": {
+      "minMatched": 2,
+      "mustInclude": [
+        { "title": "Fourth Wing", "author": "Rebecca Yarros" },
+        { "title": "Iron Flame", "author": "Rebecca Yarros" }
+      ],
+      "mustNotInclude": [
+        { "title": "Prepped", "author": "Penelope Douglas" }
+      ]
+    },
+    "result": {
+      "success": true,
+      "platform": "tiktok",
+      "creatorHandle": "@sample",
+      "thumbnailUrl": null,
+      "videoTitle": "romantasy series I still think about",
+      "booksFound": 2,
+      "transcript": "Fourth Wing and Iron Flame are everywhere for a reason.",
+      "processingTimeMs": 0,
+      "books": [
+        {
+          "matched": true,
+          "creatorSentiment": "loved",
+          "creatorQuote": "everywhere for a reason",
+          "confidence": "high",
+          "book": {
+            "id": "fixture-fourth-wing",
+            "title": "Fourth Wing",
+            "author": "Rebecca Yarros",
+            "slug": "fourth-wing-fixture",
+            "goodreadsId": "61431922",
+            "ratings": [],
+            "spice": [],
+            "compositeSpice": null,
+            "tropes": []
+          }
+        },
+        {
+          "matched": true,
+          "creatorSentiment": "loved",
+          "creatorQuote": "everywhere for a reason",
+          "confidence": "high",
+          "book": {
+            "id": "fixture-iron-flame",
+            "title": "Iron Flame",
+            "author": "Rebecca Yarros",
+            "slug": "iron-flame-fixture",
+            "goodreadsId": "90202302",
+            "ratings": [],
+            "spice": [],
+            "compositeSpice": null,
+            "tropes": []
+          }
+        }
+      ]
+    }
+  }
+]

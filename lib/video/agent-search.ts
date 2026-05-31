@@ -117,12 +117,14 @@ async function searchLocalDb(query: string): Promise<AgentSearchResult[]> {
   // Run word-based ilike on title and author in parallel
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let titleQuery = supabase.from("books").select("id, title, author, goodreads_id, series_name, series_position") as any;
+  titleQuery = titleQuery.eq("is_canon", true);
   for (const word of words) {
     titleQuery = titleQuery.ilike("title", `%${word}%`);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let authorQuery = supabase.from("books").select("id, title, author, goodreads_id, series_name, series_position") as any;
+  authorQuery = authorQuery.eq("is_canon", true);
   for (const word of words) {
     authorQuery = authorQuery.ilike("author", `%${word}%`);
   }
@@ -130,6 +132,7 @@ async function searchLocalDb(query: string): Promise<AgentSearchResult[]> {
   // Also search by series_name — critical for "Flame Cursed Fae", "Hades Trials", etc.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let seriesQuery = supabase.from("books").select("id, title, author, goodreads_id, series_name, series_position") as any;
+  seriesQuery = seriesQuery.eq("is_canon", true);
   for (const word of words) {
     seriesQuery = seriesQuery.ilike("series_name", `%${word}%`);
   }

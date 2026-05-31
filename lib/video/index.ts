@@ -210,16 +210,31 @@ export async function grabBooksFromVideo(
   const cached = await getCachedGrab(url);
   if (cached) return cached;
 
-  // Race the rest of the pipeline against a timeout
-  return Promise.race([
-    grabPipeline(url, platform, onStatus, userId, debug),
-    new Promise<GrabResult>((resolve) =>
-      setTimeout(() => {
+  const abortController = new AbortController();
+
+  // Race the rest of the pipeline against a timeout. The abort signal prevents
+  // late side effects (cache writes, creator mentions) after the user receives
+  // a timeout response.
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const pipeline = grabPipeline(
+    url,
+    platform,
+    onStatus,
+    userId,
+    debug,
+    abortController.signal
+  ).finally(() => {
+    if (timeout) clearTimeout(timeout);
+  });
+  const timeoutResult = new Promise<GrabResult>((resolve) => {
+    timeout = setTimeout(() => {
         console.error(`[grab] Pipeline timed out after ${PIPELINE_TIMEOUT_MS / 1000}s for ${url}`);
+        abortController.abort();
         resolve({ success: false, error: "video_unavailable" });
-      }, PIPELINE_TIMEOUT_MS)
-    ),
-  ]);
+      }, PIPELINE_TIMEOUT_MS);
+  });
+
+  return Promise.race([pipeline, timeoutResult]);
 }
 
 async function grabPipeline(
@@ -227,7 +242,8 @@ async function grabPipeline(
   platform: "tiktok" | "instagram" | "youtube",
   onStatus?: (status: GrabStatus) => void,
   userId?: string,
-  debug?: boolean
+  debug?: boolean,
+  signal?: AbortSignal
 ): Promise<GrabResult> {
   const start = Date.now();
   const timing = {
@@ -243,8 +259,9 @@ async function grabPipeline(
   // Step 3: Download video/audio
   onStatus?.("downloading");
   const tDownload = Date.now();
-  const download = await getVideoDownloadUrl(url);
+  const download = await getVideoDownloadUrl(url, signal);
   timing.downloadMs = Date.now() - tDownload;
+  if (signal?.aborted) return { success: false, error: "video_unavailable" };
   if (!download) {
     return { success: false, error: "video_unavailable" };
   }
@@ -315,13 +332,14 @@ async function grabPipeline(
 
   // For carousel posts without audio, skip transcription
   const transcriptionPipeline = mediaUrl
-    ? transcribeAudio(mediaUrl)
+    ? transcribeAudio(mediaUrl, signal)
     : Promise.resolve(null);
 
   const [transcription, frames] = await Promise.all([
     transcriptionPipeline,
     framePipeline,
   ]);
+  if (signal?.aborted) return { success: false, error: "video_unavailable" };
   timing.transcriptionMs = Date.now() - tTranscribe;
 
   const transcript = transcription?.text?.trim() ?? "";
@@ -371,6 +389,7 @@ async function grabPipeline(
       durationSeconds: download.durationSeconds ?? undefined,
     });
   }
+  if (signal?.aborted) return { success: false, error: "video_unavailable" };
   // Update timing from agent diagnostics if available
   if (agentDiag) {
     timing.observeMs = agentDiag.observeMs;
@@ -403,11 +422,11 @@ async function grabPipeline(
     }
   }
 
-  if (resolved.length === 0 && transcript) {
+  if (resolved.length === 0) {
     return {
       success: false,
       error: "no_books_found",
-      transcript,
+      transcript: transcript || undefined,
     };
   }
 
@@ -464,6 +483,7 @@ async function grabPipeline(
     diagnostics,
   };
 
+  if (signal?.aborted) return { success: false, error: "video_unavailable" };
   // Step 7: Cache result
   const grabId = await cacheGrabResult(url, result, userId);
 
