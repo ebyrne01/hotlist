@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useSignInModal } from "@/lib/auth/useSignInModal";
 
@@ -176,7 +177,10 @@ export default function GoodreadsImporter() {
         </div>
 
         <div
-          className={`border-2 border-dashed rounded-xl p-12 text-center transition-colors cursor-pointer ${
+          role="button"
+          tabIndex={0}
+          aria-label="Upload Goodreads CSV file"
+          className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire sm:p-12 ${
             isDragging
               ? "border-fire bg-fire/5"
               : "border-border hover:border-fire/30"
@@ -188,12 +192,17 @@ export default function GoodreadsImporter() {
           onDragLeave={() => setIsDragging(false)}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              fileInputRef.current?.click();
+            }
+          }}
         >
-          <div className="text-3xl mb-3">📄</div>
           <p className="text-sm font-mono text-ink mb-1">
             Drop your Goodreads CSV here
           </p>
-          <p className="text-xs font-mono text-muted">
+          <p className="text-xs font-mono text-muted-a11y">
             or click to browse files
           </p>
           <input
@@ -314,9 +323,12 @@ export default function GoodreadsImporter() {
               >
                 {/* Cover */}
                 {book.coverUrl ? (
-                  <img
+                  <Image
                     src={book.coverUrl}
                     alt=""
+                    width={32}
+                    height={48}
+                    unoptimized
                     className="w-8 h-12 rounded object-cover shrink-0"
                   />
                 ) : (

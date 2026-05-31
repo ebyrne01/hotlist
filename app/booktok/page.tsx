@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useSignInModal } from "@/lib/auth/useSignInModal";
 import { createClient } from "@/lib/supabase/client";
@@ -320,53 +321,72 @@ function BookTokPageInner() {
       : 0;
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-10">
+    <div className="max-w-5xl mx-auto px-4 py-8 sm:py-12">
       {/* Header */}
-      <h1 className="font-display text-2xl sm:text-3xl font-bold text-ink italic">
-        {"BookTok \u2192 Hotlist"}
-      </h1>
-      <p className="text-sm font-body text-muted mt-2 max-w-lg">
-        Paste a BookTok, Instagram, or YouTube link and we&apos;ll find every
-        book recommendation for you.
-      </p>
-      <p className="text-xs font-mono text-muted/70 mt-1">
-        Works with TikTok, Instagram Reels, and YouTube
-      </p>
+      <section className="surface-parchment -mx-4 -mt-8 border-b border-aged-gold/30 px-4 py-10 sm:mx-0 sm:mt-0 sm:rounded-3xl sm:border sm:px-8 sm:py-12">
+        <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.24em] text-fire">
+              BookTok to Hotlist
+            </p>
+            <h1 className="mt-2 font-display text-4xl font-bold leading-tight text-ink sm:text-5xl">
+              Turn a video rec list into a comparison table.
+            </h1>
+            <p className="mt-4 max-w-xl text-base font-body leading-7 text-muted-a11y">
+              Paste a TikTok, Instagram Reel, or YouTube link. Hotlist finds the
+              books, confirms editions, and lets you compare ratings, spice, and
+              tropes side by side.
+            </p>
+            <div className="mt-5 flex flex-wrap gap-2">
+              {["TikTok", "Instagram", "YouTube"].map((platform) => (
+                <span
+                  key={platform}
+                  className="rounded-full border border-aged-gold/40 bg-white/70 px-3 py-1.5 text-xs font-mono text-muted-a11y"
+                >
+                  {platform}
+                </span>
+              ))}
+            </div>
+          </div>
 
-      {/* Input section */}
-      <div className="mt-6 flex gap-2">
-        <input
-          type="url"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="Paste a BookTok or video link..."
-          className="flex-1 text-sm font-body border border-border rounded-lg px-4 py-3 focus:outline-none focus:border-fire/50 bg-white"
-          onKeyDown={(e) => e.key === "Enter" && !processing && handleGrab()}
-          disabled={processing}
-        />
-        <button
-          onClick={() => handleGrab()}
-          disabled={processing || !url.trim()}
-          className="px-5 py-3 bg-fire text-white text-sm font-mono font-medium rounded-lg hover:bg-fire/90 transition-colors disabled:opacity-50 shrink-0"
-        >
-          {processing ? "Finding..." : "Find Books \u2192"}
-        </button>
-      </div>
-
-      {/* Platform icons */}
-      <div className="flex items-center gap-3 mt-3 text-xs font-mono text-muted/70">
-        <span>Supported:</span>
-        <span>TikTok</span>
-        <span>&middot;</span>
-        <span>Instagram</span>
-        <span>&middot;</span>
-        <span>YouTube</span>
-      </div>
+          {/* Input section */}
+          <div className="rounded-2xl border border-aged-gold/30 bg-white p-4 shadow-sm sm:p-5">
+            <label
+              htmlFor="booktok-url"
+              className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-a11y"
+            >
+              Video link
+            </label>
+            <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
+              <input
+                id="booktok-url"
+                type="url"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="Paste a BookTok or video link..."
+                className="min-h-[48px] w-full rounded-lg border border-border bg-cream px-4 py-3 text-sm font-body text-ink placeholder:text-muted/60 focus:border-fire/50 focus:outline-none focus:ring-2 focus:ring-fire/20"
+                onKeyDown={(e) => e.key === "Enter" && !processing && handleGrab()}
+                disabled={processing}
+              />
+              <button
+                onClick={() => handleGrab()}
+                disabled={processing || !url.trim()}
+                className="inline-flex min-h-[48px] items-center justify-center rounded-lg bg-fire px-5 py-3 text-sm font-mono font-medium text-white transition-colors hover:bg-fire/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire disabled:opacity-50"
+              >
+                {processing ? "Finding..." : "Find books"}
+              </button>
+            </div>
+            <p className="mt-3 text-xs font-body leading-5 text-muted-a11y">
+              Works for videos and TikTok photo/carousel posts. Private or
+              expired links may not be available.
+            </p>
+          </div>
+        </div>
+      </section>
 
       {/* Processing state */}
       {processing && status && (
-        <div className="mt-8 py-8">
-          <div className="text-3xl mb-3 text-center animate-pulse">🔥</div>
+        <div className="mt-8 rounded-2xl border border-aged-gold/30 bg-white px-4 py-8 shadow-sm">
           <p className="text-sm font-mono text-ink font-medium text-center">
             {STATUS_MESSAGES[status]}
           </p>
@@ -411,12 +431,12 @@ function BookTokPageInner() {
 
       {/* Error state */}
       {error && !processing && (
-        <div className="mt-8 p-4 border border-fire/20 rounded-lg bg-white text-center">
+        <div className="mt-8 rounded-2xl border border-fire/20 bg-white p-5 text-center shadow-sm">
           <p className="text-sm font-body text-ink">{error}</p>
           {result && !result.success && "transcript" in result && result.transcript && (
             <button
               onClick={() => setShowTranscript(true)}
-              className="mt-2 text-xs font-mono text-fire hover:text-fire/80 transition-colors"
+              className="mt-3 inline-flex min-h-11 items-center rounded-lg border border-fire/25 bg-fire/5 px-4 py-2 text-xs font-mono uppercase tracking-[0.14em] text-fire transition-colors hover:bg-fire/10"
             >
               Show transcript
             </button>
@@ -430,11 +450,14 @@ function BookTokPageInner() {
         return (
         <div className="mt-8">
           {/* Source video card */}
-          <div className="flex items-center gap-3 p-3 bg-white border border-border rounded-lg mb-4">
+          <div className="mb-4 flex items-center gap-3 rounded-2xl border border-aged-gold/30 bg-white p-3 shadow-sm">
             {result.thumbnailUrl && (
-              <img
+              <Image
                 src={result.thumbnailUrl}
                 alt="Video thumbnail"
+                width={64}
+                height={64}
+                unoptimized
                 className="w-16 h-16 rounded object-cover shrink-0"
               />
             )}
@@ -483,7 +506,7 @@ function BookTokPageInner() {
               {addedHotlistSlug ? (
                 <Link
                   href={`/lists/${addedHotlistSlug}`}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-fire text-white text-sm font-mono font-medium rounded-lg hover:bg-fire/90 transition-colors"
+                  className="inline-flex min-h-[48px] items-center gap-2 rounded-lg bg-fire px-5 py-2.5 text-sm font-mono font-medium text-white transition-colors hover:bg-fire/90"
                 >
                   {"View Hotlist — see ratings & spice \u2192"}
                 </Link>
@@ -492,7 +515,7 @@ function BookTokPageInner() {
                   <button
                     onClick={handleAddAllToHotlist}
                     disabled={addingAll}
-                    className="px-5 py-2.5 bg-fire text-white text-sm font-mono font-medium rounded-lg hover:bg-fire/90 transition-colors disabled:opacity-50"
+                    className="min-h-[48px] rounded-lg bg-fire px-5 py-2.5 text-sm font-mono font-medium text-white transition-colors hover:bg-fire/90 disabled:opacity-50"
                   >
                     {addingAll
                       ? "Creating..."
@@ -524,7 +547,7 @@ function BookTokPageInner() {
           <div className="mt-8 border-t border-border pt-4">
             <button
               onClick={() => setShowTranscript(!showTranscript)}
-              className="text-xs font-mono text-muted/70 hover:text-ink transition-colors"
+              className="inline-flex min-h-11 items-center text-xs font-mono text-muted-a11y hover:text-ink transition-colors"
             >
               {showTranscript
                 ? "Hide transcript \u25B4"

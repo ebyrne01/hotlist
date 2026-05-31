@@ -11,6 +11,7 @@ interface BookDetailClientProps {
   bookTitle?: string;
   bookAuthor?: string;
   enrichmentStatus?: "pending" | "partial" | "complete" | null;
+  ctaLabel?: string;
 }
 
 export default function BookDetailClient({
@@ -19,14 +20,15 @@ export default function BookDetailClient({
   bookTitle,
   bookAuthor,
   enrichmentStatus,
+  ctaLabel,
 }: BookDetailClientProps) {
   switch (section) {
     case "reading-status":
       return <ReaderResponse bookId={bookId} bookTitle={bookTitle} />;
     case "add-to-hotlist":
-      return <AddToHotlistPopover bookId={bookId} variant="button" />;
+      return <AddToHotlistPopover bookId={bookId} variant="button" buttonLabel={ctaLabel} />;
     case "mobile-cta":
-      return <AddToHotlistPopover bookId={bookId} variant="button" className="w-full" />;
+      return <AddToHotlistPopover bookId={bookId} variant="button" className="w-full" buttonLabel={ctaLabel} />;
     case "enrichment-poller":
       return (
         <EnrichmentPoller

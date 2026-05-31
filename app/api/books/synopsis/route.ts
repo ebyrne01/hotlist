@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { generateSynopsis } from "@/lib/books/ai-synopsis";
+import {
+  checkRateLimit,
+  rateLimitHeaders,
+  rateLimitResponse,
+} from "@/lib/api/rate-limit";
+
+const RATE_LIMIT_MAX = 12;
+const RATE_LIMIT_WINDOW_SECONDS = 60 * 60;
 
 /**
  * On-demand AI synopsis generation.
@@ -8,6 +16,15 @@ import { generateSynopsis } from "@/lib/books/ai-synopsis";
  * Returns the generated synopsis or a status indicating it was skipped.
  */
 export async function POST(req: NextRequest) {
+  const rateLimit = await checkRateLimit(req, {
+    bucket: "books:synopsis",
+    limit: RATE_LIMIT_MAX,
+    windowSeconds: RATE_LIMIT_WINDOW_SECONDS,
+  });
+  if (!rateLimit.allowed) {
+    return rateLimitResponse(rateLimit, RATE_LIMIT_MAX);
+  }
+
   const { bookId } = await req.json();
 
   if (!bookId || typeof bookId !== "string") {
@@ -28,17 +45,26 @@ export async function POST(req: NextRequest) {
 
   // Already has a synopsis — return it
   if (book.ai_synopsis) {
-    return NextResponse.json({ synopsis: book.ai_synopsis });
+    return NextResponse.json(
+      { synopsis: book.ai_synopsis },
+      { headers: rateLimitHeaders(rateLimit, RATE_LIMIT_MAX) }
+    );
   }
 
   // Need a description to generate from
   if (!book.description || book.description.length < 20) {
-    return NextResponse.json({ synopsis: null, reason: "no_description" });
+    return NextResponse.json(
+      { synopsis: null, reason: "no_description" },
+      { headers: rateLimitHeaders(rateLimit, RATE_LIMIT_MAX) }
+    );
   }
 
   // Only generate for canon books
   if (book.is_canon === false) {
-    return NextResponse.json({ synopsis: null, reason: "not_canon" });
+    return NextResponse.json(
+      { synopsis: null, reason: "not_canon" },
+      { headers: rateLimitHeaders(rateLimit, RATE_LIMIT_MAX) }
+    );
   }
 
   // Get tropes for better synopsis context
@@ -63,8 +89,14 @@ export async function POST(req: NextRequest) {
   });
 
   if (synopsis) {
-    return NextResponse.json({ synopsis });
+    return NextResponse.json(
+      { synopsis },
+      { headers: rateLimitHeaders(rateLimit, RATE_LIMIT_MAX) }
+    );
   }
 
-  return NextResponse.json({ synopsis: null, reason: "limit_reached" });
+  return NextResponse.json(
+    { synopsis: null, reason: "limit_reached" },
+    { headers: rateLimitHeaders(rateLimit, RATE_LIMIT_MAX) }
+  );
 }

@@ -15,8 +15,15 @@ import { getVideoDownloadUrl, detectPlatform } from "@/lib/video/downloader";
 import { transcribeAudio } from "@/lib/video/transcription";
 import { extractFrames } from "@/lib/video/frame-extractor";
 import { getCorsHeaders, corsOptions, checkOrigin } from "@/lib/api/cors";
+import {
+  checkRateLimit,
+  rateLimitHeaders,
+  rateLimitResponse,
+} from "@/lib/api/rate-limit";
 
 export const maxDuration = 60;
+const RATE_LIMIT_MAX = 6;
+const RATE_LIMIT_WINDOW_SECONDS = 60 * 60;
 
 const bodySchema = z.object({
   url: z
@@ -49,6 +56,15 @@ export async function POST(req: NextRequest) {
       { error: "Unauthorized origin" },
       { status: 403, headers }
     );
+  }
+
+  const rateLimit = await checkRateLimit(req, {
+    bucket: "grab:diagnose",
+    limit: RATE_LIMIT_MAX,
+    windowSeconds: RATE_LIMIT_WINDOW_SECONDS,
+  });
+  if (!rateLimit.allowed) {
+    return rateLimitResponse(rateLimit, RATE_LIMIT_MAX, headers);
   }
 
   let body: { url: string };
@@ -124,7 +140,7 @@ export async function POST(req: NextRequest) {
         frameCount,
         timing,
       },
-      { headers }
+      { headers: { ...headers, ...rateLimitHeaders(rateLimit, RATE_LIMIT_MAX) } }
     );
   } catch (err) {
     console.error("[/api/grab/diagnose] Pipeline error:", err);

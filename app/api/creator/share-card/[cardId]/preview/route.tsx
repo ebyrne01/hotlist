@@ -83,8 +83,13 @@ export async function GET(
           }}
         >
           <div style={{ display: "flex", alignItems: "center" }}>
-            <svg width="14" height="14" viewBox="0 0 16 16" style={{ marginRight: "6px" }}>
-              <path d="M8 1c1.5 2.5 4 4 4 7.5a4 4 0 0 1-8 0C4 5 6.5 3.5 8 1z" fill={C.coral} />
+            <svg width="14" height="14" viewBox="0 0 64 64" style={{ marginRight: "6px" }}>
+              <path d="M31.2 56.6C25.1 50.7 18 48 8.8 49.4C14.2 43.1 23.8 42.7 30.1 49.5C30.4 51.7 30.8 54 31.2 56.6Z" fill={C.coral} />
+              <path d="M32.8 56.6C38.9 50.7 46 48 55.2 49.4C49.8 43.1 40.2 42.7 33.9 49.5C33.6 51.7 33.2 54 32.8 56.6Z" fill={C.coral} />
+              <path d="M30.5 48.5C20.7 41.7 19.1 31.1 26.1 21.5C30.2 15.9 33.5 11 34.3 5.7C43.2 17.6 42.8 30.6 34.9 41.5C32.9 44.2 31.7 46.4 30.5 48.5Z" fill={C.coral} />
+              <path d="M36.2 48.2C45 44.3 48.2 36 44.5 27.8C42.8 24 41 20.9 41.5 16.8C48.7 22.2 54.5 31.1 52.2 40.4C50.5 47.4 44.6 52.1 36.2 48.2Z" fill={C.coral} />
+              <path d="M33.3 11.9C32.1 23.8 26.8 29.7 28.7 39.3C29.2 41.9 30.6 44.3 32 47.6C29.1 44 25.4 40.4 24.8 34.9C24.1 28.1 28.5 23.3 31 18.4C32.1 16.2 32.8 14.2 33.3 11.9Z" fill={C.darkest} />
+              <path d="M40.8 22.4C41.9 28.3 39.5 34.5 35 40.9C37.4 37.1 37.8 32.8 36.4 29C38.2 27.1 39.6 24.9 40.8 22.4Z" fill={C.darkest} />
             </svg>
             <span style={{ fontSize: "13px", fontStyle: "italic", color: C.warmCream }}>
               Hotlist

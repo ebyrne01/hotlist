@@ -9,6 +9,7 @@ import BookCover from "@/components/ui/BookCover";
 import RatingBadge from "@/components/ui/RatingBadge";
 import { PepperRow } from "@/components/ui/PepperIcon";
 import type { BookDetail } from "@/lib/types";
+import { ArrowRight, BadgeCheck, Users } from "lucide-react";
 
 interface BookWithMention extends BookDetail {
   creatorSentiment: string | null;
@@ -109,24 +110,27 @@ export default function CreatorDiscoveryClient({ creator, books }: Props) {
     .slice(0, 6);
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-8">
+    <div className="max-w-5xl mx-auto px-4 py-8 sm:py-12">
       {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-start justify-between gap-4">
+      <section className="surface-parchment -mx-4 -mt-8 mb-8 border-b border-aged-gold/30 px-4 py-8 sm:mx-0 sm:mt-0 sm:rounded-3xl sm:border sm:px-8">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 className="text-2xl font-display font-bold text-ink">
+            <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-fire">
+              Creator shelf
+            </p>
+            <h1 className="mt-2 font-display text-4xl font-bold text-ink sm:text-5xl">
               {handle}
             </h1>
-            <p className="text-sm font-mono text-muted mt-1">
+            <p className="mt-2 text-sm font-mono text-muted-a11y">
               {platform} · {bookCount} book{bookCount !== 1 ? "s" : ""} recommended · {grabCount} video{grabCount !== 1 ? "s" : ""} processed
             </p>
           </div>
           <button
             onClick={toggleFollow}
             disabled={followLoading}
-            className={`px-4 py-2 rounded-lg text-xs font-mono transition-colors shrink-0 disabled:opacity-40 ${
+            className={`min-h-[48px] rounded-lg px-5 py-3 text-sm font-mono transition-colors shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire disabled:opacity-40 ${
               isFollowing
-                ? "bg-cream border border-border text-muted hover:border-fire"
+                ? "bg-white border border-fire/25 text-fire hover:bg-fire/5"
                 : "bg-fire text-white hover:bg-fire/90"
             }`}
           >
@@ -139,7 +143,8 @@ export default function CreatorDiscoveryClient({ creator, books }: Props) {
         )}
 
         {followerCount > 0 && (
-          <p className="text-xs font-mono text-muted/70 mt-2">
+          <p className="mt-3 inline-flex items-center gap-1.5 text-xs font-mono text-muted-a11y">
+            <Users size={12} aria-hidden="true" />
             {followerCount} Hotlist {followerCount === 1 ? "reader" : "readers"} following
           </p>
         )}
@@ -147,9 +152,10 @@ export default function CreatorDiscoveryClient({ creator, books }: Props) {
         {isClaimed && (creator.vanity_slug as string) && (
           <Link
             href={`/${creator.vanity_slug as string}`}
-            className="inline-flex items-center gap-1 text-sm font-mono text-fire hover:text-fire/80 transition-colors mt-2"
+            className="mt-3 inline-flex min-h-10 items-center gap-1 rounded-lg border border-fire/25 bg-white px-3 py-2 text-sm font-mono text-fire transition-colors hover:bg-fire/5"
           >
-            Visit full profile &rarr;
+            <BadgeCheck size={14} aria-hidden="true" />
+            Visit full profile
           </Link>
         )}
 
@@ -160,7 +166,7 @@ export default function CreatorDiscoveryClient({ creator, books }: Props) {
               <Link
                 key={t.slug}
                 href={`/tropes/${t.slug}`}
-                className="text-xs font-mono text-muted/70 px-2 py-0.5 border border-border rounded-full hover:border-fire/30 transition-colors"
+                className="inline-flex min-h-8 items-center rounded-full border border-aged-gold/40 bg-white/70 px-2.5 py-1 text-xs font-mono text-muted-a11y transition-colors hover:border-fire/30 hover:text-fire"
               >
                 {t.name}
               </Link>
@@ -170,7 +176,7 @@ export default function CreatorDiscoveryClient({ creator, books }: Props) {
 
         {/* Claim banner */}
         {!isClaimed && claimStatus !== "submitted" && (
-          <div className="mt-4 p-3 bg-fire/5 border border-fire/10 rounded-lg flex items-center justify-between">
+          <div className="mt-5 flex flex-col gap-3 rounded-2xl border border-fire/15 bg-white/70 p-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs font-body text-ink">
               Are you <span className="font-semibold">{handle}</span>?{" "}
               Claim this profile to customize it and see analytics.
@@ -199,7 +205,7 @@ export default function CreatorDiscoveryClient({ creator, books }: Props) {
                 }
               }}
               disabled={claimStatus === "loading"}
-              className="ml-3 shrink-0 px-3 py-1.5 bg-fire text-white text-xs font-mono rounded-lg hover:bg-fire/90 transition-colors disabled:opacity-40"
+              className="min-h-11 shrink-0 rounded-lg bg-fire px-4 py-2 text-xs font-mono uppercase tracking-[0.14em] text-white transition-colors hover:bg-fire/90 disabled:opacity-40"
             >
               {claimStatus === "loading" ? "..." : "Claim"}
             </button>
@@ -215,18 +221,35 @@ export default function CreatorDiscoveryClient({ creator, books }: Props) {
         {claimError && claimStatus === "error" && (
           <div className="mt-2 text-xs text-red-600 font-body">{claimError}</div>
         )}
-      </div>
+      </section>
 
       {/* Book list */}
       {books.length === 0 ? (
-        <p className="text-sm text-muted font-body">
-          No books found yet. This page updates when someone grabs one of {handle}&apos;s videos on Hotlist.
-        </p>
+        <div className="rounded-2xl border border-aged-gold/30 bg-white p-8 text-center shadow-sm">
+          <p className="font-display text-2xl font-bold text-ink">
+            No books found yet.
+          </p>
+          <p className="mx-auto mt-2 max-w-md text-sm text-muted-a11y font-body">
+            This page updates when someone grabs one of {handle}&apos;s videos on Hotlist.
+          </p>
+          <Link
+            href="/booktok"
+            className="mt-5 inline-flex min-h-[48px] items-center gap-2 rounded-lg bg-fire px-5 py-3 text-sm font-mono text-white transition-colors hover:bg-fire/90"
+          >
+            Grab a video
+            <ArrowRight size={14} aria-hidden="true" />
+          </Link>
+        </div>
       ) : (
         <div className="space-y-3">
-          <h2 className="text-xs font-mono text-muted uppercase tracking-wide">
-            Books recommended by {handle}
-          </h2>
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-fire">
+              Books recommended by {handle}
+            </p>
+            <h2 className="font-display text-2xl font-bold text-ink">
+              Their shelf, decoded
+            </h2>
+          </div>
           {books.map((book) => {
             const grRating = book.ratings.find((r) => r.source === "goodreads");
             const spice = book.spice.find(
@@ -237,8 +260,8 @@ export default function CreatorDiscoveryClient({ creator, books }: Props) {
             );
 
             return (
-              <div key={book.id} className="flex gap-3 p-3 bg-white border border-border rounded-lg hover:border-fire/20 transition-colors">
-                <Link href={`/book/${book.slug}`} className="shrink-0">
+              <div key={book.id} className="flex gap-3 rounded-2xl border border-aged-gold/30 bg-white p-3 shadow-sm transition-colors hover:border-fire/25">
+                <Link href={`/book/${book.slug}`} className="min-h-[88px] shrink-0">
                   <BookCover
                     title={book.title}
                     coverUrl={book.coverUrl}
@@ -281,7 +304,7 @@ export default function CreatorDiscoveryClient({ creator, books }: Props) {
                         <Link
                           key={t.slug}
                           href={`/tropes/${t.slug}`}
-                          className="text-xs font-mono text-muted/70 px-1.5 py-0.5 border border-border rounded-full hover:border-fire/30 transition-colors"
+                          className="inline-flex min-h-7 items-center rounded-full border border-border px-2 py-0.5 text-xs font-mono text-muted-a11y transition-colors hover:border-fire/30 hover:text-fire"
                         >
                           {t.name}
                         </Link>

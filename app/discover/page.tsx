@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { Metadata } from "next";
 import Link from "next/link";
 import { getAdminClient } from "@/lib/supabase/admin";
+import { ArrowRight, Sparkles, Users } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "BookTok Creators — Hotlist",
@@ -58,28 +59,52 @@ export default async function DiscoverPage() {
   const hasCreators = allCreators && allCreators.length > 0;
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-display font-bold text-ink mb-2">
-        BookTok Creators
-      </h1>
-      <p className="text-sm font-body text-muted mb-8">
-        Every time a reader grabs books from a BookTok video, we catalog the
-        creator and their recommendations. Browse creators to find your next
-        favorite book source.
-      </p>
+    <div className="max-w-5xl mx-auto px-4 py-8 sm:py-12">
+      <header className="surface-parchment -mx-4 -mt-8 border-b border-aged-gold/30 px-4 py-10 sm:mx-0 sm:mt-0 sm:rounded-3xl sm:border sm:px-8 sm:py-12">
+        <div className="grid gap-6 sm:grid-cols-[1fr_auto] sm:items-end">
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.24em] text-fire">
+              Creator discovery
+            </p>
+            <h1 className="mt-2 font-display text-4xl font-bold leading-tight text-ink sm:text-5xl">
+              Find the BookTok taste-makers behind your TBR.
+            </h1>
+            <p className="mt-4 max-w-2xl text-base font-body leading-7 text-muted-a11y">
+              Every time a reader grabs books from a video, Hotlist catalogs the
+              creator and their recommendations. Follow creators whose picks
+              match your mood.
+            </p>
+          </div>
+          <Link
+            href="/booktok"
+            className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-lg bg-fire px-5 py-3 text-sm font-mono text-white transition-colors hover:bg-fire/90"
+          >
+            Grab a video
+            <ArrowRight size={14} aria-hidden="true" />
+          </Link>
+        </div>
+      </header>
 
       {/* Trending section */}
       {hasTrending && (
-        <section className="mb-10">
-          <h2 className="text-xs font-mono text-muted uppercase tracking-wide mb-4">
-            Trending This Month
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <section className="mt-8 mb-10">
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-fire">
+                Trending this month
+              </p>
+              <h2 className="font-display text-2xl font-bold text-ink">
+                Creators readers keep grabbing
+              </h2>
+            </div>
+            <Sparkles className="hidden text-fire sm:block" size={20} aria-hidden="true" />
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {trending.map((creator: Record<string, unknown>) => (
               <Link
                 key={creator.id as string}
                 href={`/discover/${encodeURIComponent(creator.handle as string)}`}
-                className="flex items-center gap-3 p-3 bg-white border border-border rounded-lg hover:border-fire/30 transition-colors"
+                className="flex min-h-[88px] items-center gap-3 rounded-2xl border border-aged-gold/30 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-fire/30"
               >
                 <div className="w-10 h-10 rounded-full bg-fire/10 flex items-center justify-center text-fire font-mono text-sm font-bold shrink-0">
                   {((creator.handle as string).replace("@", "").charAt(0)).toUpperCase()}
@@ -92,6 +117,7 @@ export default async function DiscoverPage() {
                     {creator.book_count as number} book{(creator.book_count as number) !== 1 ? "s" : ""} · {creator.platform as string}
                   </p>
                 </div>
+                <ArrowRight className="text-fire/60" size={16} aria-hidden="true" />
               </Link>
             ))}
           </div>
@@ -101,17 +127,20 @@ export default async function DiscoverPage() {
       {/* All creators */}
       {hasCreators && (
         <section>
-          <h2 className="text-xs font-mono text-muted uppercase tracking-wide mb-4">
-            All Creators
-          </h2>
-          <div className="space-y-2">
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-a11y">
+            All creators
+          </p>
+          <div className="mt-4 space-y-2">
             {allCreators.map((creator: Record<string, unknown>) => (
               <Link
                 key={creator.id as string}
                 href={`/discover/${encodeURIComponent(creator.handle as string)}`}
-                className="flex items-center justify-between p-3 bg-white border border-border rounded-lg hover:border-fire/30 transition-colors"
+                className="flex min-h-[64px] flex-col gap-2 rounded-xl border border-border bg-white p-3 transition-colors hover:border-fire/30 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="flex items-center gap-3">
+                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-fire/10 text-fire">
+                    <Users size={16} aria-hidden="true" />
+                  </span>
                   <span className="text-sm font-mono text-ink font-semibold">
                     {creator.handle as string}
                   </span>
@@ -134,13 +163,16 @@ export default async function DiscoverPage() {
 
       {/* Empty state */}
       {!hasCreators && (
-        <div className="text-center py-12">
-          <p className="text-sm font-body text-muted">
+        <div className="mt-8 rounded-2xl border border-aged-gold/30 bg-white p-8 text-center shadow-sm">
+          <p className="font-display text-2xl font-bold text-ink">
+            No creators yet.
+          </p>
+          <p className="mx-auto mt-2 max-w-md text-sm font-body text-muted-a11y">
             No creators yet. Grab a BookTok video to start discovering creators!
           </p>
           <Link
             href="/booktok"
-            className="inline-block mt-4 text-sm font-mono text-fire hover:text-fire/80 transition-colors"
+            className="mt-5 inline-flex min-h-[48px] items-center justify-center rounded-lg bg-fire px-5 py-3 text-sm font-mono text-white transition-colors hover:bg-fire/90"
           >
             Try BookTok &rarr;
           </Link>

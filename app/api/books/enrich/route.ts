@@ -2,27 +2,14 @@ import { queueEnrichmentJobs } from "@/lib/enrichment/queue";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import {
+  checkRateLimit,
+  rateLimitHeaders,
+  rateLimitResponse,
+} from "@/lib/api/rate-limit";
 
-// In-memory rate limiter: 10 requests per IP per minute
-const rateLimitMap = new Map<string, number[]>();
 const RATE_LIMIT_MAX = 10;
-const RATE_LIMIT_WINDOW_MS = 60_000;
-
-function isRateLimited(ip: string): boolean {
-  const now = Date.now();
-  const timestamps = rateLimitMap.get(ip) ?? [];
-  // Remove timestamps older than the window
-  const recent = timestamps.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
-
-  if (recent.length >= RATE_LIMIT_MAX) {
-    rateLimitMap.set(ip, recent);
-    return true;
-  }
-
-  recent.push(now);
-  rateLimitMap.set(ip, recent);
-  return false;
-}
+const RATE_LIMIT_WINDOW_SECONDS = 60;
 
 const enrichSchema = z.object({
   bookId: z.string().uuid(),
@@ -32,13 +19,13 @@ const enrichSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
-  const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-  if (isRateLimited(ip)) {
-    return NextResponse.json(
-      { error: "Too many requests. Try again later." },
-      { status: 429 }
-    );
+  const rateLimit = await checkRateLimit(request, {
+    bucket: "books:enrich",
+    limit: RATE_LIMIT_MAX,
+    windowSeconds: RATE_LIMIT_WINDOW_SECONDS,
+  });
+  if (!rateLimit.allowed) {
+    return rateLimitResponse(rateLimit, RATE_LIMIT_MAX);
   }
 
   try {
@@ -67,7 +54,10 @@ export async function POST(request: NextRequest) {
       await queueEnrichmentJobs(bookId, title, author);
     }
 
-    return NextResponse.json({ status: "enrichment_started", bookId });
+    return NextResponse.json(
+      { status: "enrichment_started", bookId },
+      { headers: rateLimitHeaders(rateLimit, RATE_LIMIT_MAX) }
+    );
   } catch {
     return NextResponse.json(
       { error: "Failed to start enrichment" },

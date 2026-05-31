@@ -149,7 +149,7 @@ export default async function ReadingPage({ searchParams }: PageProps) {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
-      <h1 className="font-display text-2xl sm:text-3xl font-bold text-ink italic">
+      <h1 className="font-display text-2xl sm:text-3xl font-bold text-ink">
         My Reading List
       </h1>
 

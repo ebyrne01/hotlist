@@ -158,7 +158,25 @@ export default function HotlistTable({
   return (
     <>
       {/* ── Mobile: Card layout ──────────────────────── */}
-      <div className="sm:hidden space-y-3 -mx-2">
+      <div className="sm:hidden -mx-2 border-y border-aged-gold/30 bg-aged-gold/30">
+        <div className="bg-parchment px-3 py-3">
+          <p className="mb-2 text-[10px] font-mono uppercase tracking-[0.16em] text-muted/70">
+            Compare by
+          </p>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            <MobileSortChip label="Original" active={sortKey === null} onClick={() => setSortKey(null)} />
+            <MobileSortChip label="Goodreads" active={sortKey === "goodreads"} dir={sortDir} onClick={() => handleSort("goodreads")} />
+            {hasAnyAmazon && (
+              <MobileSortChip label="Amazon" active={sortKey === "amazon"} dir={sortDir} onClick={() => handleSort("amazon")} />
+            )}
+            {hasAnyRomanceIo && (
+              <MobileSortChip label="romance.io" active={sortKey === "romance_io"} dir={sortDir} onClick={() => handleSort("romance_io")} />
+            )}
+            <MobileSortChip label="Spice" active={sortKey === "spice"} dir={sortDir} onClick={() => handleSort("spice")} />
+          </div>
+        </div>
+
+        <div className="space-y-px">
         {sortedBooks.map((hb) => {
           const gr = getRating(hb.book.ratings, "goodreads");
           const amz = getRating(hb.book.ratings, "amazon");
@@ -170,15 +188,15 @@ export default function HotlistTable({
           const noRatings = !hasAnyRatings(hb);
 
           return (
-            <div key={hb.id} className="bg-white rounded-lg border border-border/60 p-3">
+            <div key={hb.id} className="bg-cream p-3.5">
               <div className="flex gap-3">
                 {/* Cover + title */}
-                <Link href={`/book/${slug}`} className="shrink-0">
+                <Link href={`/book/${slug}`} className="flex min-w-[44px] shrink-0 justify-center">
                   <BookCover title={hb.book.title} coverUrl={hb.book.coverUrl} size="sm" isAudiobook={hb.book.isAudiobook} />
                 </Link>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
-                    <Link href={`/book/${slug}`} className="min-w-0">
+                    <Link href={`/book/${slug}`} className="min-h-[44px] min-w-0">
                       <p className="font-display font-bold text-ink text-sm leading-tight truncate">
                         {hb.book.title}
                       </p>
@@ -187,8 +205,9 @@ export default function HotlistTable({
                     {isOwner && (
                       <button
                         onClick={() => onRemoveBook?.(hb.bookId)}
-                        className="text-muted/70 hover:text-fire transition-colors p-1 shrink-0"
+                        className="-mr-2 -mt-2 flex min-h-[44px] min-w-[44px] items-center justify-center text-muted/70 hover:text-fire transition-colors shrink-0"
                         title="Remove"
+                        aria-label={`Remove ${hb.book.title} from Hotlist`}
                       >
                         <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                           <line x1="3" y1="3" x2="11" y2="11" />
@@ -199,53 +218,47 @@ export default function HotlistTable({
                   </div>
 
                   {/* Ratings row */}
-                  <div className="flex items-center gap-3 mt-2 font-mono">
+                  <div className="mt-3 grid grid-cols-3 gap-1.5 font-mono">
                     {gr !== null && hb.book.goodreadsId ? (
                       <a
                         href={goodreadsUrl(hb.book.goodreadsId)!}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-baseline gap-1 hover:text-fire transition-colors"
+                        className="rounded-lg border border-border/70 bg-white px-2 py-2 text-center hover:text-fire transition-colors"
                         aria-label={`Goodreads rating: ${gr.toFixed(1)}`}
                       >
-                        <span className="text-[10px] uppercase tracking-wide text-muted/70">GR</span>
-                        <span className="text-sm text-ink">{gr.toFixed(1)}</span>
+                        <span className="block text-[10px] uppercase tracking-wide text-muted/70">GR</span>
+                        <span className="block text-sm text-ink">{gr.toFixed(1)}</span>
                       </a>
                     ) : (
-                      <span className="inline-flex items-baseline gap-1" aria-label={`Goodreads rating: ${gr !== null ? gr.toFixed(1) : 'not available'}`}>
-                        <span className="text-[10px] uppercase tracking-wide text-muted/70">GR</span>
-                        <span className="text-sm"><RatingCell value={gr} isEnriching={isEnriching && noRatings} /></span>
+                      <span className="rounded-lg border border-border/70 bg-white px-2 py-2 text-center" aria-label={`Goodreads rating: ${gr !== null ? gr.toFixed(1) : 'not available'}`}>
+                        <span className="block text-[10px] uppercase tracking-wide text-muted/70">GR</span>
+                        <span className="block text-sm"><RatingCell value={gr} isEnriching={isEnriching && noRatings} /></span>
                       </span>
                     )}
                     {amz !== null && (
-                      <>
-                        <span className="text-border" aria-hidden="true">&middot;</span>
-                        <a
-                          href={amazonProductUrl(hb.book.amazonAsin, hb.book.title, hb.book.author, tag)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-baseline gap-1 hover:text-fire transition-colors"
-                          aria-label={`Amazon rating: ${amz.toFixed(1)}`}
-                        >
-                          <span className="text-[10px] uppercase tracking-wide text-muted/70">AMZ</span>
-                          <span className="text-sm text-ink">{amz.toFixed(1)}</span>
-                        </a>
-                      </>
+                      <a
+                        href={amazonProductUrl(hb.book.amazonAsin, hb.book.title, hb.book.author, tag)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded-lg border border-border/70 bg-white px-2 py-2 text-center hover:text-fire transition-colors"
+                        aria-label={`Amazon rating: ${amz.toFixed(1)}`}
+                      >
+                        <span className="block text-[10px] uppercase tracking-wide text-muted/70">AMZ</span>
+                        <span className="block text-sm text-ink">{amz.toFixed(1)}</span>
+                      </a>
                     )}
                     {rio !== null && (
-                      <>
-                        <span className="text-border" aria-hidden="true">&middot;</span>
-                        <a
-                          href={romanceIoUrl(hb.book.romanceIoSlug, hb.book.title, hb.book.author)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-baseline gap-1 hover:text-fire transition-colors"
-                          aria-label={`romance.io rating: ${rio.toFixed(1)}`}
-                        >
-                          <span className="text-[10px] uppercase tracking-wide text-muted/70">RIO</span>
-                          <span className="text-sm text-ink">{rio.toFixed(1)}</span>
-                        </a>
-                      </>
+                      <a
+                        href={romanceIoUrl(hb.book.romanceIoSlug, hb.book.title, hb.book.author)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded-lg border border-border/70 bg-white px-2 py-2 text-center hover:text-fire transition-colors"
+                        aria-label={`romance.io rating: ${rio.toFixed(1)}`}
+                      >
+                        <span className="block text-[10px] uppercase tracking-wide text-muted/70">RIO</span>
+                        <span className="block text-sm text-ink">{rio.toFixed(1)}</span>
+                      </a>
                     )}
                   </div>
 
@@ -280,7 +293,7 @@ export default function HotlistTable({
                             href={romanceIoUrl(hb.book.romanceIoSlug, hb.book.title, hb.book.author)}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="hover:opacity-80 transition-opacity"
+                            className="inline-flex min-h-[44px] items-center hover:opacity-80 transition-opacity"
                           >
                             {mobileSpice}
                           </a>
@@ -309,14 +322,15 @@ export default function HotlistTable({
             </div>
           );
         })}
+        </div>
       </div>
 
       {/* ── Desktop: Table layout ────────────────────── */}
-      <div className="hidden sm:block overflow-x-auto">
+      <div className="hidden sm:block overflow-x-auto border-y border-aged-gold/30">
         <table className="w-full min-w-[700px] text-sm">
-          <thead>
-            <tr className="border-b border-border">
-              <th className="text-left px-3 py-2 font-mono text-xs text-muted uppercase tracking-wide min-w-[260px]">
+          <thead className="bg-blackberry text-cream">
+            <tr className="border-b border-aged-gold/30">
+              <th className="text-left px-3 py-3 font-mono text-xs text-cream/70 uppercase tracking-wide min-w-[260px]">
                 Book
               </th>
               <SortHeader label="Goodreads" sortKey="goodreads" currentKey={sortKey} dir={sortDir} onClick={handleSort} />
@@ -327,13 +341,13 @@ export default function HotlistTable({
                 <SortHeader label="romance.io" sortKey="romance_io" currentKey={sortKey} dir={sortDir} onClick={handleSort} />
               )}
               <SortHeader label="Spice" sortKey="spice" currentKey={sortKey} dir={sortDir} onClick={handleSort} />
-              <th className="text-center px-3 py-2 font-mono text-xs text-muted uppercase tracking-wide">
+              <th className="text-center px-3 py-2 font-mono text-xs text-cream/70 uppercase tracking-wide">
                 My Rating
               </th>
-              <th className="text-center px-3 py-2 font-mono text-xs text-muted uppercase tracking-wide">
+              <th className="text-center px-3 py-2 font-mono text-xs text-cream/70 uppercase tracking-wide">
                 Status
               </th>
-              <th className="text-center px-3 py-2 font-mono text-xs text-muted uppercase tracking-wide">
+              <th className="text-center px-3 py-2 font-mono text-xs text-cream/70 uppercase tracking-wide">
                 Buy
               </th>
               {isOwner && (
@@ -353,7 +367,7 @@ export default function HotlistTable({
               const noRatings = !hasAnyRatings(hb);
 
               return (
-                <tr key={hb.id} className="border-b border-border/50 hover:bg-white/60 transition-colors">
+                <tr key={hb.id} className="border-b border-aged-gold/20 bg-cream hover:bg-parchment transition-colors">
                   <td className="px-3 py-3">
                     <Link href={`/book/${slug}`} className="flex items-center gap-3 group">
                       <BookCover title={hb.book.title} coverUrl={hb.book.coverUrl} size="table" isAudiobook={hb.book.isAudiobook} />
@@ -537,7 +551,7 @@ function SortHeader({
       <button
         onClick={() => onClick(sortKey)}
         className={`font-mono text-xs uppercase tracking-wide transition-colors ${
-          isActive ? "text-fire" : "text-muted hover:text-ink"
+          isActive ? "text-fire" : "text-cream/70 hover:text-cream"
         }`}
       >
         {label}
@@ -546,6 +560,37 @@ function SortHeader({
         </span>
       </button>
     </th>
+  );
+}
+
+function MobileSortChip({
+  label,
+  active,
+  dir,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  dir?: SortDir;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`min-h-[44px] shrink-0 rounded-full border px-3 py-2 text-xs font-mono transition-colors ${
+        active
+          ? "border-fire bg-fire text-white"
+          : "border-border bg-white text-muted hover:border-fire/30 hover:text-ink"
+      }`}
+    >
+      {label}
+      {active && dir && (
+        <span className="ml-1" aria-hidden="true">
+          {dir === "asc" ? "\u2191" : "\u2193"}
+        </span>
+      )}
+    </button>
   );
 }
 
@@ -606,7 +651,7 @@ function BuyDropdown({
     <div ref={ref} className="relative inline-block">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="text-xs font-mono text-fire hover:underline whitespace-nowrap"
+        className="inline-flex min-h-[44px] items-center rounded-md px-2 text-xs font-mono text-fire hover:underline whitespace-nowrap"
       >
         Buy &rarr;
       </button>
@@ -616,7 +661,7 @@ function BuyDropdown({
             href={amazonUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="block px-3 py-1.5 text-xs font-mono text-ink hover:bg-cream transition-colors"
+            className="block px-3 py-2.5 text-xs font-mono text-ink hover:bg-cream transition-colors"
             onClick={() => setOpen(false)}
           >
             Amazon
@@ -625,7 +670,7 @@ function BuyDropdown({
             href={bnUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="block px-3 py-1.5 text-xs font-mono text-ink hover:bg-cream transition-colors"
+            className="block px-3 py-2.5 text-xs font-mono text-ink hover:bg-cream transition-colors"
             onClick={() => setOpen(false)}
           >
             B&amp;N
@@ -634,7 +679,7 @@ function BuyDropdown({
             href={bookshopUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="block px-3 py-1.5 text-xs font-mono text-ink hover:bg-cream transition-colors"
+            className="block px-3 py-2.5 text-xs font-mono text-ink hover:bg-cream transition-colors"
             onClick={() => setOpen(false)}
           >
             Bookshop
@@ -677,9 +722,10 @@ function InlineStarRating({
           key={star}
           onMouseEnter={() => setHovering(star)}
           onClick={() => onRate?.(bookId, star)}
-          className={`text-sm transition-colors ${
+          className={`flex min-h-[32px] min-w-[32px] items-center justify-center rounded transition-colors sm:min-h-0 sm:min-w-0 sm:px-0 ${
             star <= display ? "text-gold" : "text-muted/40"
           } hover:scale-110`}
+          aria-label={`Rate ${star} out of 5`}
         >
           ★
         </button>

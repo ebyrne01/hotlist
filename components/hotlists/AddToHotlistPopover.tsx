@@ -11,6 +11,7 @@ interface AddToHotlistPopoverProps {
   /** "button" renders the full CTA; "icon" renders a compact + icon */
   variant?: "button" | "icon";
   className?: string;
+  buttonLabel?: string;
 }
 
 interface HotlistItem {
@@ -24,6 +25,7 @@ export default function AddToHotlistPopover({
   bookId,
   variant = "button",
   className = "",
+  buttonLabel = "Add to Hotlist",
 }: AddToHotlistPopoverProps) {
   const { user } = useAuth();
   const { openSignIn } = useSignInModal();
@@ -260,6 +262,7 @@ export default function AddToHotlistPopover({
       onClick={handleOpen}
       className={`w-8 h-8 flex items-center justify-center rounded-full border border-border bg-white text-muted hover:text-fire hover:border-fire/30 transition-colors ${className}`}
       title="Add to Hotlist"
+      aria-label="Add to Hotlist"
     >
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
         <line x1="7" y1="2" x2="7" y2="12" />
@@ -271,7 +274,7 @@ export default function AddToHotlistPopover({
       onClick={handleOpen}
       className={`inline-flex items-center justify-center gap-2 rounded-lg bg-fire text-white font-body font-medium text-base px-6 min-h-[48px] hover:bg-fire/90 transition-colors w-full sm:w-auto ${className}`}
     >
-      Add to Hotlist
+      {buttonLabel}
     </button>
   );
 

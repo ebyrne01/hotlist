@@ -136,7 +136,7 @@ export default function GenreFilterClient({
   const visibleBooks = sortedBooks.slice(0, visibleCount);
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8">
+    <div className="max-w-6xl mx-auto px-4 py-8 sm:py-12">
       {/* Breadcrumb */}
       <nav
         className="mb-3 text-xs font-mono text-muted"
@@ -149,8 +149,11 @@ export default function GenreFilterClient({
         <span>{genre.label}</span>
       </nav>
 
-      <header className="mb-6">
-        <h1 className="font-display text-3xl sm:text-4xl font-bold text-ink italic">
+      <header className="mb-7 border-b border-aged-gold/30 pb-5">
+        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-fire">
+          Choose your realm
+        </p>
+        <h1 className="mt-1 font-display text-4xl sm:text-5xl font-bold text-ink">
           {genre.label}
         </h1>
         <p className="mt-2 text-sm font-body text-muted max-w-lg">
@@ -164,7 +167,7 @@ export default function GenreFilterClient({
           <p className="text-xs font-mono text-muted uppercase tracking-wide mb-2">
             Refine by trope
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex max-h-32 flex-wrap gap-2 overflow-y-auto pb-1 sm:max-h-none sm:overflow-visible">
             {/* Genre pill (always selected, not toggleable) */}
             <span className="px-3 py-1.5 rounded-full text-xs font-mono bg-fire/10 border border-fire/30 text-fire">
               {genre.label}
@@ -242,7 +245,7 @@ export default function GenreFilterClient({
                   setSortBy(e.target.value);
                   setVisibleCount(PAGE_SIZE);
                 }}
-                className="text-xs font-mono border border-border rounded-lg px-2 py-1.5 bg-white text-ink focus:ring-2 focus:ring-fire/30 focus:border-fire/40 focus:outline-none"
+                className="text-xs font-mono border border-border rounded-md px-2 py-1.5 bg-parchment text-ink focus:ring-2 focus:ring-fire/30 focus:border-fire/40 focus:outline-none"
               >
                 <option value="popular">Most Popular</option>
                 <option value="rating">Highest Rated</option>
@@ -252,12 +255,12 @@ export default function GenreFilterClient({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-px border-y border-aged-gold/30 bg-aged-gold/30 sm:grid-cols-2 lg:grid-cols-3">
             {visibleBooks.map((book) => (
               <Link
                 key={book.id}
                 href={`/book/${book.slug}`}
-                className="flex gap-3 p-3 bg-white border border-border rounded-lg hover:border-muted/40 transition-colors"
+                className="group flex gap-3 bg-cream p-3.5 hover:bg-parchment transition-colors"
               >
                 <div className="w-14 h-[84px] shrink-0 overflow-hidden">
                   <BookCover
@@ -268,10 +271,10 @@ export default function GenreFilterClient({
                   />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <h3 className="font-display text-sm font-bold text-ink leading-tight truncate">
+                  <h3 className="font-display text-base font-bold text-ink leading-tight truncate group-hover:text-oxblood transition-colors">
                     {book.title}
                   </h3>
-                  <p className="text-xs font-body text-muted mt-0.5">
+                  <p className="text-xs font-body text-muted-a11y mt-0.5">
                     {book.author}
                   </p>
                   <div className="flex items-center gap-2 mt-1.5">

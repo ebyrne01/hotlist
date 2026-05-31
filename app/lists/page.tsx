@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { createClient } from "@/lib/supabase/client";
 
@@ -322,10 +323,13 @@ export default function MyHotlistsPage() {
                     {hl.coverUrls.length > 0 && (
                       <div className="hidden sm:flex shrink-0 -space-x-3">
                         {hl.coverUrls.map((url, i) => (
-                          <img
+                          <Image
                             key={i}
                             src={url}
                             alt=""
+                            width={32}
+                            height={48}
+                            unoptimized
                             className="w-[32px] h-[48px] rounded-sm shadow-sm border border-white object-cover"
                             style={{ zIndex: hl.coverUrls.length - i }}
                           />

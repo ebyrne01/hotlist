@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
@@ -31,7 +31,7 @@ interface CreatorSettings {
 
 export default function CreatorSettingsPage() {
   const { user, profile, isLoading } = useAuth();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   // Application state
   const [application, setApplication] = useState<CreatorApplication | null>(
@@ -85,7 +85,7 @@ export default function CreatorSettingsPage() {
     }
 
     fetchApplication();
-  }, [user, isCreator]);
+  }, [user, isCreator, supabase]);
 
   // Fetch creator settings (verified creator)
   useEffect(() => {
@@ -116,7 +116,7 @@ export default function CreatorSettingsPage() {
     }
 
     fetchSettings();
-  }, [user, isCreator]);
+  }, [user, isCreator, supabase]);
 
   // Submit application
   async function handleApply(e: React.FormEvent) {

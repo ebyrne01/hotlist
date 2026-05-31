@@ -30,7 +30,9 @@
     "audit:authors": "npx tsx scripts/audit-harness.ts --authors-only",
     "audit:push": "npx tsx scripts/audit-harness.ts --quick --push-to-db",
     "booktok:eval": "node --import tsx scripts/booktok-grab-eval.ts",
-    "booktok:eval:live": "BOOKTOK_EVAL_ALLOW_LIVE=1 node --import tsx scripts/booktok-grab-eval.ts --live"
+    "booktok:eval:live": "BOOKTOK_EVAL_ALLOW_LIVE=1 node --import tsx scripts/booktok-grab-eval.ts --live",
+    "db:check-schema": "node scripts/check-db-schema-coverage.mjs",
+    "db:check-schema:warn": "node scripts/check-db-schema-coverage.mjs --warn"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
@@ -63,5 +65,10 @@
     "tsx": "^4.22.3",
     "typescript": "^5",
     "vitest": "^4.1.2"
+  },
+  "overrides": {
+    "@next/eslint-plugin-next": {
+      "glob": "^13.0.6"
+    }
   }
 }

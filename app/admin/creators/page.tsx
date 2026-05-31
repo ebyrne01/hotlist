@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import Image from "next/image";
 
 interface Application {
   id: string;
@@ -142,9 +143,12 @@ export default function AdminCreatorsPage() {
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-center gap-3">
                   {app.applicantAvatar ? (
-                    <img
+                    <Image
                       src={app.applicantAvatar}
                       alt=""
+                      width={40}
+                      height={40}
+                      unoptimized
                       className="w-10 h-10 rounded-full object-cover"
                     />
                   ) : (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -33,15 +33,19 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
   // We check for actual missing data rather than enrichmentStatus, because
   // bonus jobs (Spotify, booktrack) can leave status at "partial" even
   // when all user-visible data is present.
-  const enrichingBookIds = new Set(
-    books
-      .filter((b) => {
-        if (b.book.enrichmentStatus === "complete" || b.book.enrichmentStatus === null) return false;
-        const hasRatings = b.book.ratings.length > 0;
-        const hasSpice = b.book.compositeSpice !== null || b.book.spice.length > 0;
-        return !hasRatings || !hasSpice;
-      })
-      .map((b) => b.bookId)
+  const enrichingBookIds = useMemo(
+    () =>
+      new Set(
+        books
+          .filter((b) => {
+            if (b.book.enrichmentStatus === "complete" || b.book.enrichmentStatus === null) return false;
+            const hasRatings = b.book.ratings.length > 0;
+            const hasSpice = b.book.compositeSpice !== null || b.book.spice.length > 0;
+            return !hasRatings || !hasSpice;
+          })
+          .map((b) => b.bookId)
+      ),
+    [books]
   );
   const hasEnrichingBooks = enrichingBookIds.size > 0;
 
@@ -305,7 +309,7 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8">
+    <div className="max-w-5xl mx-auto px-4 py-8 sm:py-10">
       {/* Non-owner banner */}
       {!isOwner && (
         <div className="mb-6 px-4 py-3 bg-fire/5 border border-fire/15 rounded-lg flex items-center justify-between flex-wrap gap-2">
@@ -314,7 +318,7 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
           </p>
           <Link
             href="/"
-            className="inline-flex items-center gap-1 text-xs font-mono text-fire hover:text-fire/80 transition-colors font-semibold"
+            className="inline-flex min-h-[44px] items-center gap-1 text-xs font-mono text-fire hover:text-fire/80 transition-colors font-semibold"
           >
             Build your own Hotlist &rarr;
           </Link>
@@ -322,7 +326,8 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
       )}
 
       {/* Header */}
-      <div className="flex items-start justify-between mb-6 flex-wrap gap-3">
+      <div className="surface-night relative -mx-4 mb-6 flex flex-wrap items-start justify-between gap-3 overflow-hidden px-5 py-6 text-cream sm:mx-0 sm:px-7 sm:py-7">
+        <div className="absolute inset-0 surface-night-stars opacity-30" />
         <div className="flex-1 min-w-0">
           {isOwner && editing ? (
             <input
@@ -335,13 +340,13 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
                 if (e.key === "Enter") handleNameSave();
                 if (e.key === "Escape") { setName(hotlist.name); setEditing(false); }
               }}
-              className="font-display text-2xl font-bold text-ink bg-transparent border-b-2 border-fire/50 focus:outline-none w-full"
+              className="relative font-display text-3xl font-bold text-cream bg-transparent border-b-2 border-fire/50 focus:outline-none w-full"
               autoFocus
             />
           ) : (
-            <div className="flex items-center gap-2">
+            <div className="relative flex items-center gap-2">
               <h1
-                className={`font-display text-2xl font-bold text-ink line-clamp-2 ${isOwner ? "cursor-pointer hover:text-fire/80 transition-colors" : ""}`}
+                className={`font-display text-3xl font-bold text-cream line-clamp-2 ${isOwner ? "cursor-pointer hover:text-fire transition-colors" : ""}`}
                 onClick={() => {
                   if (isOwner) {
                     setEditing(true);
@@ -358,7 +363,7 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
                     setEditing(true);
                     setTimeout(() => nameInputRef.current?.focus(), 0);
                   }}
-                  className="shrink-0 text-muted/50 hover:text-fire transition-colors p-1"
+                  className="shrink-0 text-cream/50 hover:text-fire transition-colors p-1"
                   title="Edit name"
                 >
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -368,7 +373,7 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
               )}
             </div>
           )}
-          <p className="text-xs font-mono text-muted mt-1">
+          <p className="relative text-xs font-mono text-aged-gold mt-2">
             {hotlist.sourceCreatorHandle && (
               <>
                 <Link
@@ -385,14 +390,14 @@ export default function HotlistDetailClient({ hotlist, isOwner, currentUserId }:
         </div>
 
         {isOwner && (
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative flex items-center gap-2 flex-wrap">
             {/* Privacy toggle — clickable badge */}
             <button
               onClick={handleTogglePublic}
               className={`inline-flex items-center gap-1.5 text-xs font-mono px-3 py-1.5 rounded-full border transition-all ${
                 isPublic
                   ? "text-green-700 bg-green-50 border-green-200 hover:bg-green-100"
-                  : "text-muted bg-cream border-border hover:border-fire/30 hover:text-ink"
+                  : "text-cream/80 bg-cream/10 border-cream/20 hover:border-fire/60 hover:text-cream"
               }`}
               title={isPublic ? "Click to make private" : "Click to make public & shareable"}
             >

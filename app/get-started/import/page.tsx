@@ -10,11 +10,13 @@ export default function ImportPage() {
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
       <div className="text-center mb-8">
-        <div className="text-4xl mb-4">📚</div>
-        <h1 className="font-display text-2xl font-bold text-ink">
-          Import from Goodreads
+        <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-fire">
+          Power reader path
+        </p>
+        <h1 className="mt-2 font-display text-3xl font-bold text-ink">
+          Bring your Goodreads shelves with you.
         </h1>
-        <p className="text-sm font-body text-muted mt-3 max-w-md mx-auto">
+        <p className="text-sm font-body leading-6 text-muted-a11y mt-3 max-w-md mx-auto">
           Upload your Goodreads export CSV and we&apos;ll match your books, map your
           ratings, and create your first Hotlist.
         </p>

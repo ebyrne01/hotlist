@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useCallback, useState } from "react";
+import HotlistMark from "@/components/ui/HotlistMark";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useSignInModal } from "@/lib/auth/useSignInModal";
 
@@ -72,8 +73,9 @@ export default function SignInModal() {
 
         {/* Header */}
         <div className="text-center mb-8">
-          <h2 className="font-display text-2xl font-bold text-ink italic">
-            Hotlist 🔥
+          <h2 className="inline-flex items-center justify-center gap-2 font-display text-2xl font-bold text-ink">
+            <HotlistMark className="h-9 w-9 text-fire [--mark-cutout:#faf7f2]" />
+            <span>Hotlist</span>
           </h2>
           <p className="font-display text-lg font-semibold text-ink mt-3">
             Save books. Build your Hotlist.

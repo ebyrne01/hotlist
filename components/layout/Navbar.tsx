@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import SearchBar from "@/components/search/SearchBar";
+import HotlistMark from "@/components/ui/HotlistMark";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useSignInModal } from "@/lib/auth/useSignInModal";
 
@@ -33,9 +35,13 @@ export default function Navbar() {
         {/* Wordmark */}
         <Link
           href="/"
-          className="font-display text-xl font-bold text-ink italic shrink-0"
+          className="flex items-center gap-2 text-ink shrink-0"
+          aria-label="Hotlist home"
         >
-          Hotlist
+          <HotlistMark className="h-8 w-8 text-fire [--mark-cutout:#faf7f2]" />
+          <span className="font-display text-xl font-bold tracking-[-0.02em]">
+            Hotlist
+          </span>
         </Link>
 
         {/* Desktop search */}
@@ -82,9 +88,12 @@ export default function Navbar() {
             <div className="relative group">
               <button className="flex items-center gap-2">
                 {avatarUrl ? (
-                  <img
+                  <Image
                     src={avatarUrl}
                     alt={displayName}
+                    width={32}
+                    height={32}
+                    unoptimized
                     className="w-8 h-8 rounded-full object-cover border border-border"
                     referrerPolicy="no-referrer"
                   />
@@ -159,7 +168,7 @@ export default function Navbar() {
         {/* Mobile hamburger */}
         <button
           onClick={() => setMenuOpen(!menuOpen)}
-          className="sm:hidden w-10 h-10 flex items-center justify-center text-ink"
+          className="sm:hidden w-11 h-11 flex items-center justify-center text-ink"
           aria-label="Menu"
         >
           <svg

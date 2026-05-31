@@ -10,7 +10,7 @@ import { getDna } from "@/lib/reading-dna";
 import { reRankByDna } from "@/lib/reading-dna/score";
 import { logSearchAnalytics } from "@/lib/search/analytics";
 import { captureSearchDemand } from "@/lib/search/demand-capture";
-import { Video } from "lucide-react";
+import { Search, SlidersHorizontal, Sparkles, Video } from "lucide-react";
 import BookCard from "@/components/books/BookCard";
 import SearchFeedback from "@/components/search/SearchFeedback";
 import MissingBookRequest from "@/components/search/MissingBookRequest";
@@ -28,6 +28,32 @@ function tropeDisplayName(slug: string): string {
     .split("-")
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
+}
+
+const SEARCH_EXAMPLES = [
+  "spicy fae enemies to lovers",
+  "like Fourth Wing but darker",
+  "low spice cozy romantasy",
+  "dark romance standalone",
+];
+
+function filterSummary(filters: SearchFilters | null): string {
+  if (!filters) return "Title, author, trope, or vibe";
+
+  const parts: string[] = [];
+  if (filters.similarTo) parts.push(`similar to ${filters.similarTo}`);
+  if (filters.tropes.length > 0) {
+    parts.push(filters.tropes.map(tropeDisplayName).join(", "));
+  }
+  if (filters.subgenre) parts.push(tropeDisplayName(filters.subgenre));
+  if (filters.spiceMin !== null) parts.push(`${filters.spiceMin}+ spice`);
+  if (filters.spiceMax !== null) parts.push(`spice ${filters.spiceMax} or less`);
+  if (filters.ratingMin !== null) parts.push(`${filters.ratingMin}+ stars`);
+  if (filters.standalone) parts.push("standalone");
+  if (filters.trending) parts.push("trending");
+  if (filters.moods.length > 0) parts.push(filters.moods.slice(0, 2).join(", "));
+
+  return parts.length > 0 ? parts.join(" · ") : "Title, author, trope, or vibe";
 }
 
 export default async function SearchPage({ searchParams }: SearchPageProps) {
@@ -133,11 +159,38 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
       activeFilters.subgenre !== null);
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-6">
+    <div className="max-w-6xl mx-auto px-4 py-8 sm:py-12">
       {query && (
-        <h1 className="font-display text-2xl sm:text-3xl font-bold text-ink mb-4">
-          Results for &ldquo;{query}&rdquo;
-        </h1>
+        <header className="mb-5 border-b border-aged-gold/30 pb-4">
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-fire">
+            Your next obsession
+          </p>
+          <h1 className="mt-1 font-display text-3xl sm:text-4xl font-bold text-ink">
+            Results for &ldquo;{query}&rdquo;
+          </h1>
+          <div className="mt-4 grid gap-3 rounded-2xl border border-aged-gold/30 bg-white/70 p-3 sm:grid-cols-[1fr_auto] sm:items-center">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 rounded-full bg-fire/10 p-2 text-fire">
+                {isSmartSearch ? (
+                  <Sparkles size={16} aria-hidden="true" />
+                ) : (
+                  <Search size={16} aria-hidden="true" />
+                )}
+              </div>
+              <div>
+                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted/70">
+                  {isSmartSearch ? "Hotlist understood" : "Book search"}
+                </p>
+                <p className="mt-0.5 text-sm font-body text-ink">
+                  {filterSummary(activeFilters)}
+                </p>
+              </div>
+            </div>
+            <p className="rounded-full bg-cream px-3 py-1.5 text-center font-mono text-[11px] uppercase tracking-[0.14em] text-muted-a11y">
+              {books.length} {books.length === 1 ? "match" : "matches"}
+            </p>
+          </div>
+        </header>
       )}
 
       {/* ── Parsed filter pills + feedback ── */}
@@ -220,56 +273,97 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
       )}
 
       {!query && (
-        <div className="text-center py-16">
-          <p className="text-lg font-body text-muted">
-            Enter a search to find books
+        <div className="mx-auto max-w-3xl py-14 text-center">
+          <div className="mx-auto inline-flex rounded-full bg-fire/10 p-3 text-fire">
+            <Sparkles size={22} aria-hidden="true" />
+          </div>
+          <p className="mt-5 font-display text-3xl font-bold text-ink">
+            Search by title, trope, spice, or pure reader mood.
           </p>
+          <p className="mx-auto mt-3 max-w-xl text-sm font-body leading-6 text-muted">
+            Hotlist can handle normal book searches and softer requests like
+            &ldquo;cozy romantasy with low spice&rdquo; or &ldquo;like ACOTAR but more
+            grown up.&rdquo;
+          </p>
+          <div className="mt-6 grid gap-2 sm:grid-cols-2">
+            {SEARCH_EXAMPLES.map((example) => (
+              <Link
+                key={example}
+                href={`/search?q=${encodeURIComponent(example)}`}
+                className="inline-flex min-h-12 items-center justify-between rounded-xl border border-aged-gold/30 bg-white px-4 py-3 text-left text-sm font-body text-ink shadow-sm transition-colors hover:border-fire/30 hover:bg-parchment"
+              >
+                <span>{example}</span>
+                <span className="font-mono text-fire" aria-hidden="true">
+                  &rarr;
+                </span>
+              </Link>
+            ))}
+          </div>
         </div>
       )}
 
       {query && books.length === 0 && (
-        <div className="text-center py-16 max-w-md mx-auto">
-          <p className="text-lg font-display font-bold text-ink">
+        <div className="mx-auto max-w-2xl py-12 text-center">
+          <div className="mx-auto inline-flex rounded-full bg-fire/10 p-3 text-fire">
+            <SlidersHorizontal size={22} aria-hidden="true" />
+          </div>
+          <p className="mt-5 text-2xl font-display font-bold text-ink">
             {isSmartSearch
               ? "We couldn\u2019t find books matching all your criteria"
               : <>We don&apos;t have &ldquo;{query}&rdquo; yet</>}
           </p>
-          <div className="mt-4 text-sm font-body text-muted space-y-1.5 text-left">
+          <div className="mx-auto mt-4 max-w-lg text-sm font-body text-muted">
             {isSmartSearch ? (
-              <p>Try being less specific, or search by title or author instead.</p>
+              <p>
+                Your search may be too specific for the books we have enriched
+                so far. Loosen one filter, then add the book to your Hotlist
+                once you find a promising match.
+              </p>
             ) : (
-              <>
-                <p>Try searching for:</p>
-                <ul className="list-disc list-inside space-y-1 text-muted/80">
-                  <li>A different spelling</li>
-                  <li>Just the author&apos;s name</li>
-                  <li>A vibe like &ldquo;spicy fae enemies to lovers&rdquo;</li>
-                  <li>
-                    A trope instead &rarr;{" "}
-                    <a
-                      href="/tropes"
-                      className="text-fire hover:text-fire/80 font-mono text-xs transition-colors"
-                    >
-                      browse tropes
-                    </a>
-                  </li>
-                </ul>
-              </>
+              <p>
+                Try a different spelling, just the author name, or a vibe like
+                &ldquo;spicy fae enemies to lovers.&rdquo; If this is a real book,
+                the request form below helps us prioritize it.
+              </p>
             )}
           </div>
-          <a
+          <div className="mt-6 grid gap-2 sm:grid-cols-3">
+            {(isSmartSearch
+              ? ["spicy romantasy", "enemies to lovers", "highly rated romance"]
+              : ["spicy fae enemies to lovers", "browse tropes", "popular romantasy"]
+            ).map((suggestion) =>
+              suggestion === "browse tropes" ? (
+                <Link
+                  key={suggestion}
+                  href="/tropes"
+                  className="inline-flex min-h-11 items-center justify-center rounded-lg border border-border bg-white px-3 py-2 text-xs font-mono uppercase tracking-[0.14em] text-muted-a11y transition-colors hover:border-fire/30 hover:text-fire"
+                >
+                  Browse tropes
+                </Link>
+              ) : (
+                <Link
+                  key={suggestion}
+                  href={`/search?q=${encodeURIComponent(suggestion)}`}
+                  className="inline-flex min-h-11 items-center justify-center rounded-lg border border-border bg-white px-3 py-2 text-xs font-mono uppercase tracking-[0.14em] text-muted-a11y transition-colors hover:border-fire/30 hover:text-fire"
+                >
+                  {suggestion}
+                </Link>
+              )
+            )}
+          </div>
+          <Link
             href="/booktok"
-            className="inline-flex items-center gap-2 mt-6 text-sm font-mono text-fire hover:text-fire/80 transition-colors"
+            className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-full border border-fire/25 bg-fire/5 px-4 py-2 text-sm font-mono text-fire transition-colors hover:bg-fire/10"
           >
             <Video size={14} className="inline -mt-0.5" aria-hidden="true" />
             Paste a BookTok link to find books from a video &rarr;
-          </a>
+          </Link>
           {!isSmartSearch && <MissingBookRequest initialTitle={query} />}
         </div>
       )}
 
       {books.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-px border-y border-aged-gold/30 bg-aged-gold/30 sm:grid-cols-2 lg:grid-cols-3">
           {books.map((book) => (
             <BookCard key={book.id} book={book} layout="list" />
           ))}

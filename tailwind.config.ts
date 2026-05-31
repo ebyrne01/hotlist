@@ -17,6 +17,12 @@ const config: Config = {
         "muted-a11y": "#5e473d",   // WCAG AA safe (5.3:1 on cream)
         gold: "#b07d2a",
         border: "#e0d2c8",
+        parchment: "#f4ede4",
+        blush: "#ead8d0",
+        oxblood: "#521c26",
+        blackberry: "#24121d",
+        "blackberry-deep": "#160a11",
+        "aged-gold": "#c29a5b",
 
         // ── Semantic token layer ──
         brand: {
@@ -25,6 +31,10 @@ const config: Config = {
           ink: "#12080a",          // primary text
           cream: "#faf7f2",        // page background
           "cream-dk": "#f0ebe2",   // card/surface background
+          parchment: "#f4ede4",
+          oxblood: "#521c26",
+          blackberry: "#24121d",
+          gold: "#c29a5b",
         },
         spice: {
           filled: "#d4430e",       // active pepper
@@ -40,7 +50,7 @@ const config: Config = {
         },
       },
       fontFamily: {
-        display: ['"Playfair Display"', "serif"],
+        display: ['"Fraunces"', "serif"],
         body: ['"Libre Baskerville"', "serif"],
         mono: ['"DM Mono"', "monospace"],
       },

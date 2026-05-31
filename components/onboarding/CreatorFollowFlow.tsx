@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useSignInModal } from "@/lib/auth/useSignInModal";
 
@@ -134,18 +135,22 @@ export default function CreatorFollowFlow() {
       <div>
         {/* Search bar */}
         <div className="flex gap-2 mb-6">
+          <label htmlFor="creator-search" className="sr-only">
+            Search creator handle
+          </label>
           <input
+            id="creator-search"
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSearch()}
             placeholder="Search by handle (e.g. @aaborrego)"
-            className="flex-1 px-4 py-2.5 border border-border rounded-lg text-sm font-mono text-ink bg-white focus:outline-none focus:border-fire/50 placeholder:text-muted/50"
+            className="min-h-11 flex-1 px-4 py-2.5 border border-border rounded-lg text-sm font-mono text-ink bg-white focus:outline-none focus:border-fire/50 focus:ring-2 focus:ring-fire/20 placeholder:text-muted/50"
           />
           <button
             onClick={handleSearch}
             disabled={searching || !query.trim()}
-            className="px-4 py-2.5 bg-fire text-white text-sm font-mono rounded-lg hover:bg-fire/90 transition-colors disabled:opacity-40"
+            className="min-h-11 px-4 py-2.5 bg-fire text-white text-sm font-mono rounded-lg hover:bg-fire/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire transition-colors disabled:opacity-40"
           >
             {searching ? "..." : "Search"}
           </button>
@@ -207,7 +212,8 @@ export default function CreatorFollowFlow() {
                   @{c.handle}
                   <button
                     onClick={() => toggleCreator(c)}
-                    className="hover:text-fire/60"
+                    className="inline-flex min-h-7 min-w-7 items-center justify-center rounded-full hover:text-fire/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire"
+                    aria-label={`Remove @${c.handle}`}
                   >
                     ×
                   </button>
@@ -221,7 +227,7 @@ export default function CreatorFollowFlow() {
         {selectedCreators.size >= 1 && (
           <button
             onClick={handleLoadBooks}
-            className="w-full py-3 bg-fire text-white text-sm font-mono rounded-lg hover:bg-fire/90 transition-colors"
+            className="min-h-[48px] w-full py-3 bg-fire text-white text-sm font-mono rounded-lg hover:bg-fire/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire transition-colors"
           >
             See their top picks →
           </button>
@@ -318,9 +324,12 @@ export default function CreatorFollowFlow() {
                 >
                   {/* Cover */}
                   {book.coverUrl ? (
-                    <img
+                    <Image
                       src={book.coverUrl}
                       alt=""
+                      width={160}
+                      height={240}
+                      unoptimized
                       className="w-full aspect-[2/3] rounded object-cover mb-2"
                     />
                   ) : (
@@ -336,8 +345,8 @@ export default function CreatorFollowFlow() {
                   </p>
 
                   {/* Response buttons */}
-                  <div className="flex gap-1 mt-auto">
-                    {Object.entries(RESPONSE_LABELS).map(([key, { emoji }]) => (
+                  <div className="mt-auto grid grid-cols-3 gap-1">
+                    {Object.entries(RESPONSE_LABELS).map(([key, { label }]) => (
                       <button
                         key={key}
                         onClick={() =>
@@ -350,14 +359,14 @@ export default function CreatorFollowFlow() {
                             return { ...prev, [book.id]: key };
                           })
                         }
-                        className={`flex-1 py-1.5 text-sm rounded transition-colors ${
+                        className={`min-h-9 rounded px-1 py-1.5 text-[10px] font-mono uppercase tracking-[0.08em] transition-colors ${
                           currentResponse === key
                             ? "bg-fire/15 ring-1 ring-fire"
                             : "bg-cream hover:bg-fire/5"
                         }`}
                         title={RESPONSE_LABELS[key].label}
                       >
-                        {emoji}
+                        {label}
                       </button>
                     ))}
                   </div>
@@ -371,7 +380,7 @@ export default function CreatorFollowFlow() {
             <button
               onClick={handleApply}
               disabled={ratedCount === 0}
-              className="w-full py-3 bg-fire text-white text-sm font-mono rounded-lg hover:bg-fire/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="min-h-[48px] w-full py-3 bg-fire text-white text-sm font-mono rounded-lg hover:bg-fire/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {ratedCount === 0
                 ? "Rate at least 1 book to continue"

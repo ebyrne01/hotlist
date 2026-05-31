@@ -12,42 +12,37 @@ export default function HeroSection() {
   }, []);
 
   return (
-    <section className="relative bg-ink overflow-hidden">
-      {/* Subtle radial gradient */}
-      <div
-        className="absolute inset-0 opacity-30"
-        style={{
-          background:
-            "radial-gradient(ellipse at 50% 0%, #d4430e 0%, transparent 60%)",
-        }}
-      />
+    <section className="relative surface-night overflow-hidden">
+      <div className="absolute inset-0 surface-night-stars opacity-60" />
+      <div className="absolute -top-32 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-fire/20 blur-3xl" />
 
-      <div className="relative max-w-2xl mx-auto px-4 py-12 sm:py-20 flex flex-col items-center text-center">
-        <p className="font-display text-2xl sm:text-3xl font-bold text-cream/80 italic">
-          Hotlist 🔥
+      <div className="relative max-w-3xl mx-auto px-4 py-14 sm:py-24 flex flex-col items-center text-center">
+        <p className="editorial-rule w-full max-w-xs font-mono text-[10px] uppercase tracking-[0.28em] text-aged-gold">
+          Romance intelligence
         </p>
-        <h1 className="mt-3 font-display text-4xl sm:text-6xl font-bold text-cream italic leading-tight">
+        <h1 className="mt-5 font-display text-[2.65rem] sm:text-7xl font-bold text-cream leading-[0.98] tracking-[-0.045em]">
           Bring any book.
         </h1>
-        <p className="font-display text-3xl sm:text-5xl font-bold text-fire italic leading-tight mt-1">
+        <p className="font-display text-[2.1rem] sm:text-6xl font-semibold text-fire leading-[1.05] tracking-[-0.035em] mt-2">
           We&apos;ll tell you if it&apos;s hot.
         </p>
-        <p className="mt-3 text-sm sm:text-base font-body text-cream/60 max-w-md">
+        <p className="mt-5 text-sm sm:text-base font-body text-cream/70 max-w-lg leading-relaxed">
           Ratings from Goodreads, Amazon, and Romance.io. Spice levels.
-          Tropes. Everything you need to decide what to read next.
+          Tropes. Everything you need to choose your next obsession.
         </p>
 
-        <div className="mt-8 w-full max-w-lg">
+        <div className="mt-8 w-full max-w-xl">
           <SearchBar variant="hero" inputId="hero-search" />
         </div>
 
         <a
           href="#booktok-grab"
-          className="mt-3 text-xs font-mono text-cream/50 hover:text-cream/70 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire rounded"
+          className="mt-4 text-[11px] font-mono uppercase tracking-[0.12em] text-aged-gold/80 hover:text-aged-gold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire rounded"
         >
           or paste a BookTok link &darr;
         </a>
       </div>
+      <div className="relative h-px bg-gradient-to-r from-transparent via-aged-gold/70 to-transparent" />
     </section>
   );
 }

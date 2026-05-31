@@ -334,8 +334,8 @@ export async function POST(request: Request) {
       if (book.asin && book.amazonRating != null) skipJobs.add("amazon_rating");
       if (book.romanceIoSpice != null) skipJobs.add("romance_io_spice");
 
-      await queueEnrichmentJobs(newBook.id, book.title, book.author || "Unknown", skipJobs);
-      enrichmentJobsQueued += 12 - skipJobs.size;
+      await queueEnrichmentJobs(newBook.id, book.title, book.author || "Unknown", skipJobs, "core");
+      enrichmentJobsQueued += 5 - skipJobs.size;
 
       newBooks.push(`${book.title} by ${book.author}`);
       added++;

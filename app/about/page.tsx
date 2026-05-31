@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 export default function AboutPage() {
   return (
     <main className="max-w-2xl mx-auto px-4 py-16">
-      <h1 className="font-display text-3xl sm:text-4xl font-bold text-ink italic">
+      <h1 className="font-display text-3xl sm:text-4xl font-bold text-ink">
         About Hotlist
       </h1>
 

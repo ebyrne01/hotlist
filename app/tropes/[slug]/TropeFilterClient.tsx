@@ -144,7 +144,7 @@ export default function TropeFilterClient({
       </nav>
 
       <header className="mb-6">
-        <h1 className="font-display text-3xl sm:text-4xl font-bold text-ink italic">
+        <h1 className="font-display text-3xl sm:text-4xl font-bold text-ink">
           {primaryTrope.name}
         </h1>
         {primaryTrope.description && (

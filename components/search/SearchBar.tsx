@@ -144,6 +144,9 @@ export default function SearchBar({ variant = "navbar", className, inputId, onSe
   }, []);
 
   const isHero = variant === "hero";
+  const placeholder = isHero
+    ? "Try: spicy fae enemies to lovers"
+    : "Search books, tropes, or vibes...";
 
   return (
     <div ref={wrapperRef} className={clsx("relative w-full", className)}>
@@ -160,7 +163,7 @@ export default function SearchBar({ variant = "navbar", className, inputId, onSe
             ref={inputRef}
             id={inputId}
             type="text"
-            placeholder="Search by title, author, trope, or vibe..."
+            placeholder={placeholder}
             value={query}
             onChange={(e) => {
               const val = e.target.value;
@@ -184,9 +187,10 @@ export default function SearchBar({ variant = "navbar", className, inputId, onSe
               type="button"
               onClick={() => { setQuery(""); setResults([]); setNoResults(false); setIsOpen(false); }}
               className={clsx(
-                "absolute top-1/2 -translate-y-1/2 text-muted hover:text-ink",
-                isHero ? "right-4" : "right-3"
+                "absolute top-1/2 flex -translate-y-1/2 items-center justify-center text-muted hover:text-ink",
+                isHero ? "right-3 h-10 w-10" : "right-1 h-9 w-9"
               )}
+              aria-label="Clear search"
             >
               <X size={isHero ? 18 : 14} />
             </button>
@@ -206,39 +210,49 @@ export default function SearchBar({ variant = "navbar", className, inputId, onSe
               width: dropdownPos.width,
               zIndex: 9999,
             }}
-            className="bg-white border border-border rounded-lg shadow-xl overflow-hidden"
+            className="bg-white border border-aged-gold/40 rounded-xl shadow-xl overflow-hidden"
           >
             {loading && results.length === 0 && (
-              <div className="px-4 py-3 text-sm font-body text-muted">Searching...</div>
+              <div className="px-4 py-4 text-sm font-body text-muted">
+                Searching the shelves...
+              </div>
             )}
 
             {/* No results state */}
             {noResults && !loading && (
               <div className="px-4 py-4">
-                <p className="text-sm font-body text-muted">
-                  No results for &ldquo;{query}&rdquo;
+                <p className="font-display text-base font-bold text-ink">
+                  No quick match for &ldquo;{query}&rdquo;
                 </p>
-                <div className="flex flex-col gap-1 mt-1">
-                  <a
-                    href="/tropes"
-                    className="text-xs font-mono text-fire hover:underline inline-block"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    Browse by trope instead &rarr;
-                  </a>
+                <p className="mt-1 text-sm font-body text-muted">
+                  Run the full search, try a trope, or request the book with a link.
+                </p>
+                <div className="mt-3 grid gap-2">
                   <a
                     href={`/search?q=${encodeURIComponent(query)}`}
-                    className="text-xs font-mono text-fire hover:underline inline-block"
+                    className="inline-flex min-h-11 items-center justify-between rounded-lg border border-fire/25 bg-fire/5 px-3 py-2 text-xs font-mono uppercase tracking-[0.14em] text-fire transition-colors hover:bg-fire/10"
                     onClick={() => setIsOpen(false)}
                   >
-                    Request this book with a URL &rarr;
+                    Full search
+                    <span aria-hidden="true">&rarr;</span>
+                  </a>
+                  <a
+                    href="/tropes"
+                    className="inline-flex min-h-11 items-center justify-between rounded-lg border border-border bg-cream px-3 py-2 text-xs font-mono uppercase tracking-[0.14em] text-muted-a11y transition-colors hover:border-fire/30 hover:text-fire"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    Browse tropes
+                    <span aria-hidden="true">&rarr;</span>
                   </a>
                   <a
                     href="/booktok"
-                    className="text-xs font-mono text-fire hover:underline inline-block"
+                    className="inline-flex min-h-11 items-center justify-between rounded-lg border border-border bg-cream px-3 py-2 text-xs font-mono uppercase tracking-[0.14em] text-muted-a11y transition-colors hover:border-fire/30 hover:text-fire"
                     onClick={() => setIsOpen(false)}
                   >
-                    <Video size={12} className="inline -mt-0.5" aria-hidden="true" /> Or paste a BookTok link &rarr;
+                    <span className="inline-flex items-center gap-1.5">
+                      <Video size={12} aria-hidden="true" /> BookTok link
+                    </span>
+                    <span aria-hidden="true">&rarr;</span>
                   </a>
                 </div>
               </div>
@@ -248,7 +262,7 @@ export default function SearchBar({ variant = "navbar", className, inputId, onSe
               <button
                 key={book.id}
                 onClick={() => handleSelect(book)}
-                className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-cream transition-colors text-left"
+                className="w-full flex min-h-[76px] items-center gap-3 px-3 py-2.5 hover:bg-cream transition-colors text-left"
               >
                 <BookCover title={book.title} coverUrl={book.coverUrl} size="sm" />
                 <div className="flex-1 min-w-0">
@@ -281,9 +295,10 @@ export default function SearchBar({ variant = "navbar", className, inputId, onSe
             {query.trim() && (
               <button
                 onClick={() => { setIsOpen(false); router.push(`/search?q=${encodeURIComponent(query)}`); }}
-                className="w-full px-4 py-2.5 text-xs font-mono text-fire hover:bg-cream transition-colors text-left border-t border-border"
+                className="flex min-h-11 w-full items-center justify-between border-t border-aged-gold/30 bg-cream/70 px-4 py-2 text-left text-xs font-mono uppercase tracking-[0.14em] text-fire transition-colors hover:bg-parchment"
               >
-                See all results for &ldquo;{query}&rdquo; &rarr;
+                <span>See all results</span>
+                <span aria-hidden="true">&rarr;</span>
               </button>
             )}
           </div>,

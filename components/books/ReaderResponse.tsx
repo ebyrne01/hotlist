@@ -12,16 +12,16 @@ import { PepperRow } from "@/components/ui/PepperIcon";
 
 // ── Response definitions ───────────────────────────
 
-const PRE_READ_OPTIONS: { value: ReaderResponseType; emoji: string; label: string }[] = [
-  { value: "must_read", emoji: "🔥", label: "Must Read" },
-  { value: "on_the_shelf", emoji: "📚", label: "Shelf" },
-  { value: "not_for_me", emoji: "🤷", label: "Pass" },
+const PRE_READ_OPTIONS: { value: ReaderResponseType; label: string }[] = [
+  { value: "must_read", label: "Must read" },
+  { value: "on_the_shelf", label: "Shelf" },
+  { value: "not_for_me", label: "Pass" },
 ];
 
-const POST_READ_OPTIONS: { value: ReaderResponseType; emoji: string; label: string }[] = [
-  { value: "loved_it", emoji: "❤️", label: "Loved It" },
-  { value: "it_was_fine", emoji: "👍", label: "Fine" },
-  { value: "didnt_finish", emoji: "💬", label: "DNF" },
+const POST_READ_OPTIONS: { value: ReaderResponseType; label: string }[] = [
+  { value: "loved_it", label: "Loved it" },
+  { value: "it_was_fine", label: "Fine" },
+  { value: "didnt_finish", label: "DNF" },
 ];
 
 const RESPONSE_DNA_WEIGHTS: Record<ReaderResponseType, number> = {
@@ -301,7 +301,7 @@ export default function ReaderResponse({ bookId }: ReaderResponseProps) {
   // ── Render ────────────────────────────────────
 
   function renderResponseButton(
-    opt: { value: ReaderResponseType; emoji: string; label: string },
+    opt: { value: ReaderResponseType; label: string },
     isActive: boolean
   ) {
     return (
@@ -318,7 +318,6 @@ export default function ReaderResponse({ bookId }: ReaderResponseProps) {
           saving && "opacity-50"
         )}
       >
-        <span>{opt.emoji}</span>
         <span>{opt.label}</span>
       </button>
     );
@@ -331,6 +330,9 @@ export default function ReaderResponse({ bookId }: ReaderResponseProps) {
       </h3>
 
       {/* Pre-read row */}
+      <p className="text-[11px] font-mono uppercase tracking-[0.12em] text-muted/60">
+        Before reading
+      </p>
       <div className="flex gap-1.5">
         {PRE_READ_OPTIONS.map((opt) =>
           renderResponseButton(opt, response === opt.value)
@@ -348,11 +350,13 @@ export default function ReaderResponse({ bookId }: ReaderResponseProps) {
             : "bg-white text-muted border-border hover:border-fire/30 hover:text-ink"
         )}
       >
-        <span>📖</span>
         <span>Reading</span>
       </button>
 
       {/* Post-read row */}
+      <p className="text-[11px] font-mono uppercase tracking-[0.12em] text-muted/60">
+        After reading
+      </p>
       <div className="flex gap-1.5">
         {POST_READ_OPTIONS.map((opt) =>
           renderResponseButton(opt, response === opt.value)

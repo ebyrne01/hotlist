@@ -103,7 +103,7 @@ export default async function Home() {
     <>
       <HeroSection />
 
-      <div className="max-w-6xl mx-auto px-4 space-y-2">
+      <div className="max-w-6xl mx-auto px-4">
         <BookTokGrabCta />
         <ShowcaseGrid books={showcaseBooks} />
         <ValuePropCards />

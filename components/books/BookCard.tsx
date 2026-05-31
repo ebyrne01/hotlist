@@ -41,16 +41,16 @@ export default function BookCard({ book, layout = "grid", className }: BookCardP
       <Link
         href={`/book/${slug}`}
         className={clsx(
-          "flex gap-3 rounded-lg border border-border bg-white p-3 hover:shadow-md hover:border-fire/30 transition-all overflow-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire",
+          "group flex gap-3 border-b border-aged-gold/30 bg-cream px-3 py-4 hover:bg-parchment transition-colors overflow-hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire",
           className
         )}
       >
         <BookCover title={book.title} coverUrl={book.coverUrl} size="md" isAudiobook={book.isAudiobook} />
         <div className="flex flex-col gap-1 flex-1 min-w-0 py-0.5">
-          <h3 className="font-display font-bold text-ink text-sm leading-tight truncate">
+          <h3 className="font-display font-bold text-ink text-base leading-tight truncate group-hover:text-oxblood transition-colors">
             {book.title}
           </h3>
-          <p className="text-xs font-body text-muted truncate">{book.author}</p>
+          <p className="text-xs font-body text-muted-a11y truncate">{book.author}</p>
           <div className="flex items-center gap-3 mt-auto">
             {grRating !== null && (
               <span className="text-xs font-mono">

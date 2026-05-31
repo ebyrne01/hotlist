@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { generateRecommendations } from "@/lib/books/ai-recommendations";
+import {
+  checkRateLimit,
+  rateLimitHeaders,
+  rateLimitResponse,
+} from "@/lib/api/rate-limit";
+
+const RATE_LIMIT_MAX = 8;
+const RATE_LIMIT_WINDOW_SECONDS = 60 * 60;
 
 /**
  * On-demand AI recommendations generation.
@@ -8,6 +16,15 @@ import { generateRecommendations } from "@/lib/books/ai-recommendations";
  * next visit will have cached AI recommendations.
  */
 export async function POST(req: NextRequest) {
+  const rateLimit = await checkRateLimit(req, {
+    bucket: "books:recommendations",
+    limit: RATE_LIMIT_MAX,
+    windowSeconds: RATE_LIMIT_WINDOW_SECONDS,
+  });
+  if (!rateLimit.allowed) {
+    return rateLimitResponse(rateLimit, RATE_LIMIT_MAX);
+  }
+
   const { bookId } = await req.json();
 
   if (!bookId || typeof bookId !== "string") {
@@ -23,7 +40,10 @@ export async function POST(req: NextRequest) {
     .eq("book_id", bookId);
 
   if (count && count > 0) {
-    return NextResponse.json({ status: "exists" });
+    return NextResponse.json(
+      { status: "exists" },
+      { headers: rateLimitHeaders(rateLimit, RATE_LIMIT_MAX) }
+    );
   }
 
   const { data: book } = await supabase
@@ -33,7 +53,10 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (!book || book.is_canon === false) {
-    return NextResponse.json({ status: "skipped" });
+    return NextResponse.json(
+      { status: "skipped" },
+      { headers: rateLimitHeaders(rateLimit, RATE_LIMIT_MAX) }
+    );
   }
 
   // Fetch tropes and spice for context
@@ -70,5 +93,8 @@ export async function POST(req: NextRequest) {
     spiceLevel,
   });
 
-  return NextResponse.json({ status: "generated" });
+  return NextResponse.json(
+    { status: "generated" },
+    { headers: rateLimitHeaders(rateLimit, RATE_LIMIT_MAX) }
+  );
 }

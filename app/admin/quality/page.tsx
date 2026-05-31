@@ -149,6 +149,8 @@ const PRIORITY_COLORS: Record<string, string> = {
   P3: "bg-gray-100 text-gray-600",
 };
 
+const JSON_HEADERS = { "Content-Type": "application/json" };
+
 // ── Component ─────────────────────────────────────────
 
 export default function QualityDashboard() {
@@ -168,8 +170,6 @@ export default function QualityDashboard() {
   const [recentFixes, setRecentFixes] = useState<RecentAutoFix[]>([]);
   const limit = 50;
 
-  const jsonHeaders = { "Content-Type": "application/json" };
-
   const fetchFlags = useCallback(async () => {
     setLoading(true);
     try {
@@ -182,7 +182,7 @@ export default function QualityDashboard() {
       if (priorityFilter) params.set("priority", priorityFilter);
 
       const res = await fetch(`/api/admin/quality/flags?${params}`, {
-        headers: jsonHeaders,
+        headers: JSON_HEADERS,
       });
       if (!res.ok) throw new Error(`${res.status}`);
       const data: FlagResponse = await res.json();
@@ -272,7 +272,7 @@ export default function QualityDashboard() {
 
       const res = await fetch(`/api/admin/quality/flags/${flagId}/resolve`, {
         method: "POST",
-        headers: jsonHeaders,
+        headers: JSON_HEADERS,
         body: JSON.stringify(payload),
       });
       if (res.ok) {
@@ -296,7 +296,7 @@ export default function QualityDashboard() {
     try {
       const res = await fetch(`/api/admin/quality/flags/${flagId}/retag`, {
         method: "POST",
-        headers: jsonHeaders,
+        headers: JSON_HEADERS,
         body: JSON.stringify({ issueType: newIssueType }),
       });
       if (res.ok) {
@@ -318,7 +318,7 @@ export default function QualityDashboard() {
     try {
       const res = await fetch("/api/admin/quality/flags/bulk-resolve", {
         method: "POST",
-        headers: jsonHeaders,
+        headers: JSON_HEADERS,
         body: JSON.stringify({
           flagIds: fixableFlags.map((f) => f.id),
           action: "confirm",
@@ -339,7 +339,7 @@ export default function QualityDashboard() {
     try {
       await fetch("/api/admin/quality/scan", {
         method: "POST",
-        headers: jsonHeaders,
+        headers: JSON_HEADERS,
         body: JSON.stringify({ scope: "all" }),
       });
     } catch (err) {

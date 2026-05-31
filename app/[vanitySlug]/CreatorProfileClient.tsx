@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import BookCover from "@/components/ui/BookCover";
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -77,9 +78,12 @@ export default function CreatorProfileClient({ profile, hotlists, stats }: Props
       {/* ── Header ────────────────────────────────────────────── */}
       <div className="flex items-center gap-4 mb-6">
         {profile.avatarUrl ? (
-          <img
+          <Image
             src={profile.avatarUrl}
             alt={profile.displayName}
+            width={64}
+            height={64}
+            unoptimized
             className="w-16 h-16 rounded-full object-cover border-2 border-border"
             referrerPolicy="no-referrer"
           />
@@ -274,9 +278,12 @@ export default function CreatorProfileClient({ profile, hotlists, stats }: Props
               {/* Video thumbnail if available */}
               {hotlist.sourceVideoThumbnail && (
                 <div className="mt-3 relative rounded overflow-hidden">
-                  <img
+                  <Image
                     src={hotlist.sourceVideoThumbnail}
                     alt={`Video for ${hotlist.name}`}
+                    width={320}
+                    height={80}
+                    unoptimized
                     className="w-full h-20 object-cover rounded"
                   />
                   <div className="absolute inset-0 bg-black/20 flex items-center justify-center">

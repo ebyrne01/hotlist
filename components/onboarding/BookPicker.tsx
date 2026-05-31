@@ -14,16 +14,16 @@ interface PickerBook {
   slug: string;
 }
 
-const PRE_READ_OPTIONS: { response: ReaderResponse; label: string; emoji: string }[] = [
-  { response: "must_read", label: "Must Read", emoji: "🔥" },
-  { response: "on_the_shelf", label: "Shelf", emoji: "📚" },
-  { response: "not_for_me", label: "Pass", emoji: "🤷" },
+const PRE_READ_OPTIONS: { response: ReaderResponse; label: string }[] = [
+  { response: "must_read", label: "Must read" },
+  { response: "on_the_shelf", label: "Shelf" },
+  { response: "not_for_me", label: "Pass" },
 ];
 
-const POST_READ_OPTIONS: { response: ReaderResponse; label: string; emoji: string }[] = [
-  { response: "loved_it", label: "Loved It", emoji: "❤️" },
-  { response: "it_was_fine", label: "Fine", emoji: "👍" },
-  { response: "didnt_finish", label: "DNF", emoji: "💬" },
+const POST_READ_OPTIONS: { response: ReaderResponse; label: string }[] = [
+  { response: "loved_it", label: "Loved it" },
+  { response: "it_was_fine", label: "Fine" },
+  { response: "didnt_finish", label: "DNF" },
 ];
 
 const MIN_RESPONSES = 10;
@@ -106,9 +106,9 @@ export default function BookPicker({ books }: { books: PickerBook[] }) {
   }
 
   return (
-    <div>
+    <div className={canContinue ? "pb-24 sm:pb-0" : ""}>
       {/* Progress bar */}
-      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm border-b border-border px-4 py-3 -mx-4 mb-6">
+      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm border-b border-aged-gold/30 px-4 py-3 -mx-4 mb-6">
         <div className="flex items-center justify-between mb-1.5">
           <span className="text-sm font-mono text-ink">
             {responseCount} of {MIN_RESPONSES} books rated
@@ -117,7 +117,7 @@ export default function BookPicker({ books }: { books: PickerBook[] }) {
             <button
               onClick={handleSubmit}
               disabled={submitting}
-              className="text-sm font-mono px-4 py-1.5 rounded-full bg-fire text-white hover:bg-fire/90 transition-colors disabled:opacity-50"
+              className="min-h-10 text-sm font-mono px-4 py-1.5 rounded-full bg-fire text-white hover:bg-fire/90 transition-colors disabled:opacity-50"
             >
               {submitting ? "Saving..." : "Continue →"}
             </button>
@@ -132,7 +132,7 @@ export default function BookPicker({ books }: { books: PickerBook[] }) {
       </div>
 
       {/* Book grid */}
-      <div className="grid grid-cols-3 sm:grid-cols-4 gap-4 sm:gap-5">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 sm:gap-5">
         {books.map((book) => {
           const currentResponse = responses.get(book.id);
           const isPostRead = showPostRead.has(book.id);
@@ -163,7 +163,7 @@ export default function BookPicker({ books }: { books: PickerBook[] }) {
               </p>
 
               {/* Response buttons */}
-              <div className="flex gap-1 mt-1.5">
+              <div className="mt-2 grid w-full grid-cols-3 gap-1">
                 {options.map((opt) => {
                   const isActive = currentResponse === opt.response;
                   return (
@@ -171,13 +171,13 @@ export default function BookPicker({ books }: { books: PickerBook[] }) {
                       key={opt.response}
                       onClick={() => handleResponse(book.id, opt.response)}
                       title={opt.label}
-                      className={`text-xs px-1.5 py-1 rounded-md border transition-all ${
+                      className={`min-h-9 rounded-md border px-1.5 py-1 text-[10px] font-mono uppercase tracking-[0.08em] transition-all ${
                         isActive
                           ? "border-fire bg-fire/10 text-fire"
-                          : "border-border text-muted/60 hover:border-muted/40"
+                          : "border-border bg-white text-muted-a11y hover:border-muted/40"
                       }`}
                     >
-                      {opt.emoji}
+                      {opt.label}
                     </button>
                   );
                 })}
@@ -186,7 +186,12 @@ export default function BookPicker({ books }: { books: PickerBook[] }) {
               {/* Toggle pre/post-read */}
               <button
                 onClick={() => togglePostRead(book.id)}
-                className="text-[10px] font-mono text-muted/40 hover:text-fire transition-colors mt-1"
+                className="mt-1 inline-flex min-h-9 items-center justify-center px-2 text-[10px] font-mono text-muted-a11y hover:text-fire focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire transition-colors"
+                aria-label={
+                  isPostRead
+                    ? `Switch ${book.title} to not yet read options`
+                    : `Show read options for ${book.title}`
+                }
               >
                 {isPostRead ? "haven't read" : "I've read this"}
               </button>
@@ -201,7 +206,7 @@ export default function BookPicker({ books }: { books: PickerBook[] }) {
           <button
             onClick={handleSubmit}
             disabled={submitting}
-            className="w-full text-sm font-mono py-3 rounded-full bg-fire text-white hover:bg-fire/90 transition-colors disabled:opacity-50"
+            className="min-h-[48px] w-full text-sm font-mono py-3 rounded-full bg-fire text-white hover:bg-fire/90 transition-colors disabled:opacity-50"
           >
             {submitting ? "Saving..." : `Continue with ${responseCount} picks →`}
           </button>

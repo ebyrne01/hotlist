@@ -58,11 +58,15 @@ export default async function RateBooksPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-8 sm:py-12">
       <div className="text-center mb-8">
-        <h1 className="font-display text-2xl sm:text-3xl font-bold text-ink">
-          Rate some books you know
+        <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-fire">
+          Recommended path
+        </p>
+        <h1 className="mt-2 font-display text-3xl sm:text-4xl font-bold text-ink">
+          Rate a few books you know.
         </h1>
-        <p className="text-sm font-body text-muted mt-2 max-w-md mx-auto">
-          Tap to tell us how you feel about each book. We&apos;ll use your picks to build your first Hotlist.
+        <p className="text-sm font-body leading-6 text-muted-a11y mt-3 max-w-lg mx-auto">
+          Favorites, hard passes, and maybes all count. Ten quick taps gives
+          Hotlist enough signal to start shaping your Reading DNA.
         </p>
       </div>
 

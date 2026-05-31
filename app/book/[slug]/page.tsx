@@ -302,6 +302,7 @@ export default async function BookPage({ params }: PageProps) {
     : bookshopTag
       ? `https://bookshop.org/a/${bookshopTag}/books/search?keywords=${searchTerms}`
       : `https://bookshop.org/books/search?keywords=${searchTerms}`;
+  const similarSearchUrl = `/search?q=${encodeURIComponent(`like ${book.title}`)}`;
 
   // Romance.io URL with fallback for slugs without full path
   const romanceIoUrl = book.romanceIoSlug?.includes("/")
@@ -341,7 +342,7 @@ export default async function BookPage({ params }: PageProps) {
       <div className="max-w-5xl mx-auto px-4 py-6 sm:py-10 pb-24 sm:pb-10">
 
         {/* ── 1. IDENTITY — Hero Header ── */}
-        <div className="flex flex-col sm:flex-row gap-5 sm:gap-8 pb-6 sm:pb-8 border-b border-border">
+        <div className="surface-parchment -mx-4 -mt-6 flex flex-col gap-5 border-b border-aged-gold/30 px-4 py-7 sm:mx-0 sm:mt-0 sm:flex-row sm:gap-8 sm:px-7 sm:py-8">
 
           {/* Cover — fixed width on desktop, centered on mobile */}
           <div className="flex justify-center sm:justify-start shrink-0">
@@ -359,7 +360,10 @@ export default async function BookPage({ params }: PageProps) {
 
             {/* Title + Author + Series */}
             <div>
-              <h1 className="font-display text-2xl sm:text-3xl font-bold text-ink leading-tight">
+              <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.2em] text-fire">
+                Is it hot?
+              </p>
+              <h1 className="font-display text-3xl sm:text-4xl font-bold text-ink leading-tight">
                 {book.title}
               </h1>
               <p className="mt-1 text-sm font-body">
@@ -427,7 +431,7 @@ export default async function BookPage({ params }: PageProps) {
             )}
 
             {/* Ratings row — ALL sources inline with user rating */}
-            <div data-rating-row className="flex flex-wrap items-start gap-4 sm:gap-6 mt-4 pb-4 border-b border-border">
+            <div data-rating-row className="flex flex-wrap items-start gap-4 sm:gap-6 mt-4 border-y border-aged-gold/30 py-4">
               {book.goodreadsId ? (
                 <a
                   href={`https://www.goodreads.com/book/show/${book.goodreadsId}`}
@@ -486,6 +490,10 @@ export default async function BookPage({ params }: PageProps) {
                 <InlineUserRating bookId={book.id} />
               </div>
             </div>
+            <p className="mt-2 max-w-md text-[11px] font-mono leading-relaxed text-muted-a11y">
+              Ratings link to their original sources; spice is sourced from romance.io,
+              Hotlist readers, or clearly marked estimates.
+            </p>
 
             {/* Compact spice in hero with source attribution */}
             {(() => {
@@ -542,8 +550,15 @@ export default async function BookPage({ params }: PageProps) {
                   section="add-to-hotlist"
                   bookId={book.id}
                   bookTitle={book.title}
+                  ctaLabel="Compare in a Hotlist"
                 />
               </div>
+              <a
+                href="#get-this-book"
+                className="hidden sm:inline-flex min-h-[48px] items-center justify-center rounded-lg border border-fire/25 bg-white px-5 text-sm font-mono uppercase tracking-[0.14em] text-fire transition-colors hover:bg-fire/5"
+              >
+                Buy options
+              </a>
 
               {/* Reading status — right-aligned on desktop, full-width on mobile */}
               <div className="sm:ml-auto">
@@ -572,6 +587,46 @@ export default async function BookPage({ params }: PageProps) {
             )}
           </div>
         </div>
+
+        {/* ── Decision helper ── */}
+        <section className="mt-4 rounded-2xl border border-aged-gold/30 bg-white p-4 shadow-sm sm:p-5">
+          <div className="grid gap-4 sm:grid-cols-[1.1fr_0.9fr] sm:items-center">
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-fire">
+                Trying to decide?
+              </p>
+              <h2 className="mt-1 font-display text-2xl font-bold text-ink">
+                Compare it before you commit.
+              </h2>
+              <p className="mt-2 text-sm font-body leading-6 text-muted-a11y">
+                Save this book to a Hotlist to weigh ratings, spice, tropes, and
+                reader reactions next to your other contenders.
+              </p>
+            </div>
+            <div className="grid gap-2">
+              <BookDetailClient
+                section="add-to-hotlist"
+                bookId={book.id}
+                bookTitle={book.title}
+                ctaLabel="Start comparing"
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <Link
+                  href={similarSearchUrl}
+                  className="inline-flex min-h-11 items-center justify-center rounded-lg border border-border bg-cream px-3 py-2 text-center text-xs font-mono uppercase tracking-[0.14em] text-muted-a11y transition-colors hover:border-fire/30 hover:text-fire"
+                >
+                  Find similar
+                </Link>
+                <a
+                  href="#get-this-book"
+                  className="inline-flex min-h-11 items-center justify-center rounded-lg border border-border bg-cream px-3 py-2 text-center text-xs font-mono uppercase tracking-[0.14em] text-muted-a11y transition-colors hover:border-fire/30 hover:text-fire"
+                >
+                  Buy options
+                </a>
+              </div>
+            </div>
+          </div>
+        </section>
 
         {/* ── 2. WHAT MAKES IT HOT ── */}
         <WhatsHot
@@ -699,18 +754,31 @@ export default async function BookPage({ params }: PageProps) {
         )}
 
         {/* ── 7. GET THIS BOOK ── */}
-        <section className="mt-6 pt-6 border-t border-border space-y-4">
-          <h2 className="text-xs font-mono text-muted-a11y uppercase tracking-wide">
-            Get this book
-          </h2>
+        <section id="get-this-book" className="mt-6 scroll-mt-20 rounded-2xl border border-aged-gold/30 bg-white p-4 shadow-sm sm:p-5">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-mono text-muted-a11y uppercase tracking-wide">
+                Get this book
+              </p>
+              <h2 className="font-display text-2xl font-bold text-ink">
+                Ready when you are.
+              </h2>
+            </div>
+            <Link
+              href={similarSearchUrl}
+              className="mt-2 text-sm font-mono text-fire transition-colors hover:text-fire/80 sm:mt-0"
+            >
+              Not quite? Find similar books &rarr;
+            </Link>
+          </div>
 
           {/* Buy links */}
-          <div className="flex items-center flex-wrap gap-x-4 gap-y-1">
+          <div className="mt-4 grid gap-2 sm:grid-cols-4">
             <a
               href={kindleUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-sm font-mono text-stone-500 hover:text-fire transition-colors"
+              className="inline-flex min-h-11 items-center justify-center rounded-lg bg-fire px-4 py-2 text-center text-sm font-mono text-white transition-colors hover:bg-fire/90"
             >
               Read on Kindle &rarr;
             </a>
@@ -718,7 +786,7 @@ export default async function BookPage({ params }: PageProps) {
               href={amazonDirectUrl ?? amazonSearchUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-sm font-mono text-stone-500 hover:text-fire transition-colors"
+              className="inline-flex min-h-11 items-center justify-center rounded-lg border border-border bg-cream px-4 py-2 text-center text-sm font-mono text-muted-a11y transition-colors hover:border-fire/30 hover:text-fire"
             >
               Amazon
             </a>
@@ -726,7 +794,7 @@ export default async function BookPage({ params }: PageProps) {
               href={bnUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-sm font-mono text-stone-500 hover:text-fire transition-colors"
+              className="inline-flex min-h-11 items-center justify-center rounded-lg border border-border bg-cream px-4 py-2 text-center text-sm font-mono text-muted-a11y transition-colors hover:border-fire/30 hover:text-fire"
             >
               B&amp;N
             </a>
@@ -734,14 +802,14 @@ export default async function BookPage({ params }: PageProps) {
               href={bookshopUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-sm font-mono text-stone-500 hover:text-fire transition-colors"
+              className="inline-flex min-h-11 items-center justify-center rounded-lg border border-border bg-cream px-4 py-2 text-center text-sm font-mono text-muted-a11y transition-colors hover:border-fire/30 hover:text-fire"
             >
               Bookshop
             </a>
           </div>
 
           {/* View on links */}
-          <div className="flex flex-col gap-1">
+          <div className="mt-4 flex flex-col gap-1">
             {book.goodreadsId && (
               <a
                 href={`https://www.goodreads.com/book/show/${book.goodreadsId}`}
@@ -765,11 +833,13 @@ export default async function BookPage({ params }: PageProps) {
           </div>
 
           {/* Google Books preview */}
-          <BookPreview
-            isbn={book.isbn13 ?? book.isbn ?? null}
-            googleBooksId={book.googleBooksId ?? null}
-            title={book.title}
-          />
+          <div className="mt-4">
+            <BookPreview
+              isbn={book.isbn13 ?? book.isbn ?? null}
+              googleBooksId={book.googleBooksId ?? null}
+              title={book.title}
+            />
+          </div>
         </section>
       </div>
 
@@ -779,6 +849,7 @@ export default async function BookPage({ params }: PageProps) {
           section="mobile-cta"
           bookId={book.id}
           bookTitle={book.title}
+          ctaLabel="Compare in Hotlist"
         />
       </div>
     </>

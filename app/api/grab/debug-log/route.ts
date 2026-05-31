@@ -8,8 +8,12 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/supabase/admin";
+import { requireAdmin } from "@/lib/api/require-admin";
 
 export async function GET(request: NextRequest) {
+  const admin = await requireAdmin();
+  if ("error" in admin) return admin.error;
+
   const url = request.nextUrl.searchParams.get("url");
   if (!url) {
     return NextResponse.json({ error: "url param required" }, { status: 400 });

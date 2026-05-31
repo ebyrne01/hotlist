@@ -71,13 +71,13 @@ export default function WhatMightCoolYouOff({
   if (warnings.length === 0) return null;
 
   return (
-    <section className="mt-6 pt-6 border-t border-border">
-      <h2 className="text-xs font-mono text-muted uppercase tracking-wide mb-3">
-        🧊 What Might Cool You Off
+    <section className="mt-3 border-l-2 border-muted/50 bg-brand-cream-dk px-4 py-4">
+      <h2 className="text-xs font-mono text-muted-a11y uppercase tracking-[0.12em] mb-3">
+        What Might Cool You Off
       </h2>
       <div className="space-y-2">
         {warnings.map((warning, i) => (
-          <p key={i} className="text-sm font-body text-muted leading-snug">
+          <p key={i} className="text-sm font-body text-muted-a11y leading-snug">
             {warning}
           </p>
         ))}

@@ -101,9 +101,9 @@ export default function WhatsHot({
   }
 
   return (
-    <section className="mt-6 pt-6 border-t border-border">
-      <h2 className="text-xs font-mono text-muted uppercase tracking-wide mb-3">
-        🔥 What Makes It Hot
+    <section className="mt-6 border-l-2 border-fire bg-parchment px-4 py-4">
+      <h2 className="text-xs font-mono text-fire uppercase tracking-[0.12em] mb-3">
+        What Makes It Hot
       </h2>
       <div className="space-y-2">
         {display.map((signal, i) => (

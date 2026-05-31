@@ -26,20 +26,20 @@ export default function SearchFeedback({ analyticsId }: SearchFeedbackProps) {
 
   if (submitted) {
     return (
-      <span className="text-xs font-mono text-muted/50">
+      <span className="text-xs font-mono text-muted-a11y" role="status">
         {submitted === 1 ? "Thanks!" : "Thanks \u2014 we\u2019ll improve this."}
       </span>
     );
   }
 
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs font-mono text-muted/50">
-      Did we get this right?
+    <span className="inline-flex flex-wrap items-center gap-1.5 text-xs font-mono text-muted-a11y">
+      <span>Did we get this right?</span>
       <button
         onClick={() => sendFeedback(1)}
         className={clsx(
-          "p-1 rounded hover:bg-green-50 hover:text-green-600 transition-colors",
-          "text-muted/40"
+          "inline-flex min-h-10 min-w-10 items-center justify-center rounded hover:bg-green-50 hover:text-green-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire transition-colors",
+          "text-muted-a11y"
         )}
         aria-label="Yes, good results"
       >
@@ -48,8 +48,8 @@ export default function SearchFeedback({ analyticsId }: SearchFeedbackProps) {
       <button
         onClick={() => sendFeedback(-1)}
         className={clsx(
-          "p-1 rounded hover:bg-red-50 hover:text-red-500 transition-colors",
-          "text-muted/40"
+          "inline-flex min-h-10 min-w-10 items-center justify-center rounded hover:bg-red-50 hover:text-red-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire transition-colors",
+          "text-muted-a11y"
         )}
         aria-label="No, wrong results"
       >

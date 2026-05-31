@@ -33,7 +33,7 @@ export default function BooktrackSection({
   booktrackMoods,
 }: Props) {
   const [copied, setCopied] = useState(false);
-  const [showEmbed, setShowEmbed] = useState(true);
+  const [showEmbed, setShowEmbed] = useState(false);
 
   const hasPlaylists = spotifyPlaylists && spotifyPlaylists.length > 0;
   const hasVibes = !!booktrackPrompt;

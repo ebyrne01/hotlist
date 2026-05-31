@@ -120,7 +120,8 @@ export default function InlineSpiceRating({ bookId }: { bookId: string }) {
               key={i}
               type="button"
               onClick={() => openSignIn()}
-              className="transition-transform cursor-pointer hover:scale-125"
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md transition-transform hover:scale-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire"
+              aria-label={`Rate spice ${i + 1} out of 5`}
             >
               <PepperIcon filled={false} size={16} />
             </button>
@@ -150,7 +151,7 @@ export default function InlineSpiceRating({ bookId }: { bookId: string }) {
         <PepperRow level={userSpice} size={16} />
         <button
           onClick={() => setEditing(true)}
-          className="text-[11px] font-mono text-stone-400 hover:text-fire transition-colors"
+          className="min-h-[44px] rounded-md px-2 text-[11px] font-mono text-stone-400 hover:text-fire transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire"
         >
           edit
         </button>
@@ -169,7 +170,8 @@ export default function InlineSpiceRating({ bookId }: { bookId: string }) {
             type="button"
             disabled={saving}
             onClick={() => saveSpice(i + 1)}
-            className="transition-transform cursor-pointer hover:scale-125"
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md transition-transform hover:scale-110 disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire"
+            aria-label={`Rate spice ${i + 1} out of 5`}
           >
             <PepperIcon filled={i < userSpice} size={16} />
           </button>

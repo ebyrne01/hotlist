@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { clsx } from "clsx";
 import { Headphones } from "lucide-react";
 
@@ -62,6 +63,7 @@ export default function BookCover({
   const [failed, setFailed] = useState(false);
   const isFill = size === "fill";
   const sizeClass = isFill ? "" : sizeStyles[size].className;
+  const imageSize = isFill ? { width: 200, height: 300 } : sizeStyles[size];
 
   if (!coverUrl || failed) {
     return <Placeholder title={title} sizeClass={sizeClass} className={className} />;
@@ -70,10 +72,12 @@ export default function BookCover({
   // When not an audiobook, render a plain img (no wrapper div) to preserve layout
   if (!isAudiobook) {
     return (
-      <img
+      <Image
         src={coverUrl}
         alt={`Cover of ${title}`}
-        {...(!isFill && { width: sizeStyles[size].width, height: sizeStyles[size].height })}
+        width={imageSize.width}
+        height={imageSize.height}
+        unoptimized
         className={clsx("rounded-md shadow-sm", sizeClass, className)}
         onError={() => setFailed(true)}
       />
@@ -82,10 +86,12 @@ export default function BookCover({
 
   return (
     <div className={clsx("relative", isFill ? "w-full h-full" : "inline-block")}>
-      <img
+      <Image
         src={coverUrl}
         alt={`Cover of ${title}`}
-        {...(!isFill && { width: sizeStyles[size].width, height: sizeStyles[size].height })}
+        width={imageSize.width}
+        height={imageSize.height}
+        unoptimized
         className={clsx("rounded-md shadow-sm", sizeClass, className)}
         onError={() => setFailed(true)}
       />

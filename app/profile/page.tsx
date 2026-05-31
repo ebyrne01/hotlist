@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import Image from "next/image";
 import ReadingDnaCard from "@/components/profile/ReadingDnaCard";
 
 interface UserStats {
@@ -126,9 +127,12 @@ export default function ProfilePage() {
       {/* Profile header */}
       <div className="flex items-center gap-4 mb-8">
         {avatarUrl ? (
-          <img
+          <Image
             src={avatarUrl}
             alt={displayName}
+            width={64}
+            height={64}
+            unoptimized
             className="w-16 h-16 rounded-full object-cover border-2 border-border"
             referrerPolicy="no-referrer"
           />
