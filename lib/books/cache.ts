@@ -265,7 +265,18 @@ export async function searchBooksInCache(query: string): Promise<BookDetail[]> {
   // Detect if the query looks like an author name (2-3 words, no common title words)
   const TITLE_NOISE = new Set(["the", "of", "and", "a", "an", "in", "to", "for", "is", "on", "at", "by"]);
   const meaningfulWords = words.filter((w) => !TITLE_NOISE.has(w.toLowerCase()));
-  const looksLikeAuthor = meaningfulWords.length >= 2 && meaningfulWords.length <= 3;
+  const hasStrongTitleMatch = allBooks.some((book) => {
+    const lowerTitle = ((book.title as string) || "").toLowerCase();
+    return (
+      lowerTitle === lowerQuery ||
+      lowerTitle.startsWith(lowerQuery) ||
+      meaningfulWords.every((word) => lowerTitle.includes(word.toLowerCase()))
+    );
+  });
+  const looksLikeAuthor =
+    !hasStrongTitleMatch &&
+    meaningfulWords.length >= 2 &&
+    meaningfulWords.length <= 3;
 
   // Filter single-letter words (initials like "L", "J") from scoring —
   // they cause false positives when matching against titles
