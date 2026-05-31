@@ -17,11 +17,42 @@ const TAB_LABELS: Record<TabKey, string> = {
   finished: "Finished",
 };
 
-const RESPONSE_EMOJI: Record<string, string> = {
-  must_read: "🔥",
-  loved_it: "❤️",
-  it_was_fine: "👍",
-  didnt_finish: "💬",
+const RESPONSE_LABELS: Record<string, { label: string; className: string }> = {
+  must_read: {
+    label: "Must read",
+    className: "border-fire/25 bg-fire/10 text-fire",
+  },
+  on_the_shelf: {
+    label: "On the shelf",
+    className: "border-aged-gold/40 bg-parchment text-muted-a11y",
+  },
+  loved_it: {
+    label: "Loved it",
+    className: "border-fire/25 bg-fire/10 text-fire",
+  },
+  it_was_fine: {
+    label: "It was fine",
+    className: "border-aged-gold/40 bg-parchment text-muted-a11y",
+  },
+  didnt_finish: {
+    label: "DNF",
+    className: "border-oxblood/20 bg-oxblood/5 text-oxblood",
+  },
+};
+
+const EMPTY_COPY: Record<TabKey, { title: string; body: string }> = {
+  want_to_read: {
+    title: "Your future favorites can live here.",
+    body: "Save books from search, book pages, or BookTok grabs and your shelf will start to feel deliciously intentional.",
+  },
+  reading: {
+    title: "Nothing currently open.",
+    body: "Mark a book as reading when it has officially escaped the TBR and moved onto your nightstand.",
+  },
+  finished: {
+    title: "No finished books yet.",
+    body: "Rate a few reads as you finish them and Hotlist will use that taste signal to sharpen your recommendations.",
+  },
 };
 
 interface PageProps {
@@ -147,83 +178,102 @@ export default async function ReadingPage({ searchParams }: PageProps) {
 
   const totalBooks = counts.want_to_read + counts.reading + counts.finished;
 
+  const emptyCopy = EMPTY_COPY[activeTab];
+
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8">
-      <h1 className="font-display text-2xl sm:text-3xl font-bold text-ink">
-        My Reading List
-      </h1>
-
-      {/* Summary stats */}
-      {totalBooks > 0 && (
-        <p className="text-sm font-mono text-muted mt-2">
-          You&apos;ve finished {counts.finished} book{counts.finished !== 1 ? "s" : ""}
-          {counts.want_to_read > 0 && (
-            <> &middot; {counts.want_to_read} on your list</>
-          )}
-          {counts.reading > 0 && (
-            <> &middot; {counts.reading} currently reading</>
-          )}
+    <div className="mx-auto max-w-6xl px-4 py-8 sm:py-12">
+      <header className="surface-parchment -mx-4 -mt-8 border-b border-aged-gold/30 px-4 py-9 sm:mx-0 sm:mt-0 sm:rounded-3xl sm:border sm:px-8 sm:py-10">
+        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-aged-gold">
+          Your shelf
         </p>
-      )}
+        <div className="mt-2 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="font-display text-4xl font-bold leading-tight text-ink sm:text-5xl">
+              Your reading life, organized.
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm font-body leading-6 text-muted-a11y sm:text-base">
+              Keep the next obsession, current fixation, and finished verdicts in one place.
+            </p>
+          </div>
+          {totalBooks > 0 && (
+            <div className="grid grid-cols-3 gap-2 rounded-2xl border border-aged-gold/30 bg-white/70 p-2 shadow-sm sm:min-w-[320px]">
+              {(["want_to_read", "reading", "finished"] as TabKey[]).map((tab) => (
+                <div key={tab} className="rounded-xl bg-cream/80 px-3 py-2 text-center">
+                  <p className="font-display text-2xl font-bold text-ink">{counts[tab]}</p>
+                  <p className="mt-0.5 text-[10px] font-mono uppercase tracking-[0.14em] text-muted-a11y">
+                    {tab === "want_to_read" ? "Saved" : TAB_LABELS[tab]}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </header>
 
-      {/* Tabs */}
-      <div className="flex gap-1 mt-6 border-b border-border">
+      <nav className="mt-6 grid grid-cols-3 gap-2 rounded-2xl border border-aged-gold/30 bg-white/70 p-2 shadow-sm" aria-label="Reading list sections">
         {(["want_to_read", "reading", "finished"] as TabKey[]).map((tab) => (
           <Link
             key={tab}
             href={`/reading?tab=${tab}`}
-            className={`px-4 py-2.5 text-sm font-mono transition-colors border-b-2 -mb-px ${
+            className={`inline-flex min-h-12 flex-col items-center justify-center rounded-xl px-2 py-2 text-center text-xs font-mono uppercase tracking-[0.12em] transition-colors sm:flex-row sm:gap-2 ${
               activeTab === tab
-                ? "text-fire border-fire font-medium"
-                : "text-muted border-transparent hover:text-ink"
+                ? "bg-fire text-white shadow-sm"
+                : "text-muted-a11y hover:bg-parchment hover:text-ink"
             }`}
           >
             {TAB_LABELS[tab]}
             {counts[tab] > 0 && (
-              <span className="ml-1.5 text-xs text-muted/60">
+              <span className={activeTab === tab ? "text-white/80" : "text-muted-a11y/70"}>
                 {counts[tab]}
               </span>
             )}
           </Link>
         ))}
-      </div>
+      </nav>
 
-      {/* Book list */}
       {booksWithRatings.length === 0 ? (
-        <div className="text-center py-16">
-          <p className="text-lg font-body text-muted">
-            {activeTab === "want_to_read" && "No books on your Want to Read list yet"}
-            {activeTab === "reading" && "Not currently reading anything"}
-            {activeTab === "finished" && "No finished books yet"}
+        <div className="mt-6 rounded-3xl border border-aged-gold/30 bg-white p-8 text-center shadow-sm sm:p-10">
+          <p className="font-display text-2xl font-bold text-ink">
+            {emptyCopy.title}
           </p>
-          <p className="text-sm font-body text-muted/60 mt-2">
-            Browse books and mark them to build your reading list.
+          <p className="mx-auto mt-2 max-w-md text-sm font-body leading-6 text-muted-a11y">
+            {emptyCopy.body}
           </p>
-          <Link
-            href="/"
-            className="inline-block mt-6 px-5 py-2.5 bg-fire text-white text-sm font-mono rounded-lg hover:bg-fire/90 transition-colors"
-          >
-            Browse books
-          </Link>
+          <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+            <Link
+              href="/search"
+              className="inline-flex min-h-11 items-center justify-center rounded-lg bg-fire px-5 py-2 text-sm font-mono text-white transition-colors hover:bg-fire/90"
+            >
+              Find books
+            </Link>
+            <Link
+              href="/booktok"
+              className="inline-flex min-h-11 items-center justify-center rounded-lg border border-aged-gold/30 bg-cream px-5 py-2 text-sm font-mono text-muted-a11y transition-colors hover:border-fire/30 hover:text-fire"
+            >
+              Grab from BookTok
+            </Link>
+          </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 mt-6">
+        <div className="mt-6 grid grid-cols-1 gap-3">
           {booksWithRatings.map(({ book, userRating, response }) => (
             <div key={book.id} className="relative group">
-              <div className="flex items-start gap-4 px-4 py-3 bg-white border border-border rounded-lg hover:border-fire/20 transition-colors">
-                {/* Response emoji badge */}
-                {response && RESPONSE_EMOJI[response] && (
-                  <span className="shrink-0 text-lg mt-1" title={response.replace(/_/g, " ")}>
-                    {RESPONSE_EMOJI[response]}
+              <div className="flex items-start gap-3 rounded-2xl border border-aged-gold/30 bg-white px-3 py-3 shadow-sm transition-colors hover:border-fire/25 sm:gap-4 sm:px-4">
+                {response && RESPONSE_LABELS[response] && (
+                  <span className={`mt-1 hidden shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-mono uppercase tracking-[0.12em] sm:inline-flex ${RESPONSE_LABELS[response].className}`}>
+                    {RESPONSE_LABELS[response].label}
                   </span>
                 )}
 
-                {/* Book card in list layout */}
                 <div className="flex-1 min-w-0">
+                  {response && RESPONSE_LABELS[response] && (
+                    <span className={`mb-2 inline-flex rounded-full border px-2.5 py-1 text-[10px] font-mono uppercase tracking-[0.12em] sm:hidden ${RESPONSE_LABELS[response].className}`}>
+                      {RESPONSE_LABELS[response].label}
+                    </span>
+                  )}
                   <BookCard book={book} layout="list" />
                 </div>
 
-                {/* User score display (Finished tab only) */}
                 {activeTab === "finished" && (
                   <div className="shrink-0 text-right hidden sm:block">
                     {(userRating?.score ?? userRating?.starRating) ? (
@@ -238,7 +288,7 @@ export default async function ReadingPage({ searchParams }: PageProps) {
                     ) : (
                       <Link
                         href={`/book/${book.slug}`}
-                        className="text-xs font-mono text-fire hover:text-fire/80 transition-colors"
+                        className="inline-flex min-h-9 items-center text-xs font-mono text-fire transition-colors hover:text-fire/80"
                       >
                         Rate this book &rarr;
                       </Link>
@@ -246,7 +296,6 @@ export default async function ReadingPage({ searchParams }: PageProps) {
                   </div>
                 )}
 
-                {/* Remove button */}
                 <ReadingListActions bookId={book.id} tab={activeTab === "finished" ? "read" : activeTab === "reading" ? "reading" : "want_to_read"} />
               </div>
             </div>

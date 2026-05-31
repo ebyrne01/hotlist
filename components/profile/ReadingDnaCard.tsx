@@ -49,9 +49,10 @@ export default function ReadingDnaCard() {
 
   if (loading) {
     return (
-      <div className="bg-white border border-border rounded-lg p-6 mb-8 animate-pulse">
-        <div className="h-5 bg-border/50 rounded w-40 mb-4" />
-        <div className="h-4 bg-border/30 rounded w-60" />
+      <div className="rounded-2xl border border-aged-gold/30 bg-white p-6 shadow-sm animate-pulse">
+        <div className="mb-4 h-3 w-28 rounded bg-aged-gold/20" />
+        <div className="mb-4 h-6 w-48 rounded bg-border/50" />
+        <div className="h-4 w-64 max-w-full rounded bg-border/30" />
       </div>
     );
   }
@@ -59,19 +60,19 @@ export default function ReadingDnaCard() {
   // No DNA — show CTA
   if (!dna) {
     return (
-      <div className="bg-white border border-border rounded-lg p-6 mb-8">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-xl">&#x1f9ec;</span>
-          <h2 className="font-display text-lg font-bold text-ink">
-            Discover Your Reading DNA
-          </h2>
-        </div>
-        <p className="text-sm font-body text-muted mb-4">
-          Take a 60-second test to get personalized book recommendations.
+      <div className="rounded-2xl border border-aged-gold/30 bg-white p-6 shadow-sm">
+        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-aged-gold">
+          Reading DNA
+        </p>
+        <h2 className="mt-2 font-display text-2xl font-bold text-ink">
+          Build your taste profile.
+        </h2>
+        <p className="mt-2 text-sm font-body leading-6 text-muted-a11y">
+          Take a quick test so Hotlist can learn your preferred tropes, subgenres, and spice range.
         </p>
         <Link
           href="/get-started"
-          className="inline-flex items-center justify-center px-4 py-2 bg-fire text-white text-sm font-mono rounded-lg hover:bg-fire/90 transition-colors"
+          className="mt-5 inline-flex min-h-11 items-center justify-center rounded-lg bg-fire px-4 py-2 text-sm font-mono text-white transition-colors hover:bg-fire/90"
         >
           Get Started
         </Link>
@@ -103,35 +104,39 @@ export default function ReadingDnaCard() {
   }
 
   return (
-    <div className="bg-white border border-border rounded-lg p-6 mb-8">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <span className="text-xl">&#x1f9ec;</span>
-          <h2 className="font-display text-lg font-bold text-ink">
+    <div className="rounded-2xl border border-aged-gold/30 bg-white p-6 shadow-sm">
+      <div className="mb-4 flex items-start justify-between gap-4">
+        <div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-aged-gold">
+            Reading DNA
+          </p>
+          <h2 className="mt-1 font-display text-2xl font-bold text-ink">
             Your Reading DNA
           </h2>
         </div>
         <Link
           href="/reading/dna"
-          className="text-xs font-mono text-muted hover:text-fire transition-colors"
+          className="inline-flex min-h-9 items-center rounded-lg px-2 text-xs font-mono text-muted-a11y transition-colors hover:bg-parchment hover:text-fire"
         >
           Retake Test
         </Link>
       </div>
 
-      <p className="text-xs font-mono text-muted/70 mb-4">{contextLine}</p>
+      <p className="mb-5 rounded-xl border border-aged-gold/25 bg-cream/70 px-3 py-2 text-xs font-mono text-muted-a11y">
+        {contextLine}
+      </p>
 
       {/* Subgenre preferences */}
       {dna.subgenrePreferences && dna.subgenrePreferences.length > 0 && (
         <div className="mb-4">
-          <p className="text-xs font-mono text-muted uppercase tracking-wide mb-2">
+          <p className="mb-2 text-xs font-mono uppercase tracking-wide text-muted-a11y">
             Subgenres
           </p>
           <div className="flex flex-wrap gap-1.5">
             {dna.subgenrePreferences.map((slug) => (
               <span
                 key={slug}
-                className="inline-flex items-center text-xs font-mono px-2 py-1 rounded-lg bg-fire/10 text-fire/90 border border-fire/15"
+                className="inline-flex min-h-8 items-center rounded-lg border border-fire/15 bg-fire/10 px-2.5 py-1 text-xs font-mono text-fire/90"
               >
                 {SUBGENRE_LABEL_MAP[slug] ?? slug}
               </span>
@@ -143,17 +148,17 @@ export default function ReadingDnaCard() {
       {/* Top tropes */}
       {topTropes.length > 0 && (
         <div className="mb-4">
-          <p className="text-xs font-mono text-muted uppercase tracking-wide mb-2">
+          <p className="mb-2 text-xs font-mono uppercase tracking-wide text-muted-a11y">
             Top Tropes
           </p>
           <div className="flex flex-wrap gap-1.5">
             {topTropes.map(([slug, score]) => (
               <span
                 key={slug}
-                className="inline-flex items-center gap-1 text-xs font-mono px-2 py-1 rounded-lg bg-fire/10 text-fire/90 border border-fire/15"
+                className="inline-flex min-h-8 items-center gap-1 rounded-lg border border-aged-gold/30 bg-parchment px-2.5 py-1 text-xs font-mono text-ink"
               >
                 {tropeDisplayName(slug)}
-                <span className="text-fire/50">
+                <span className="text-fire/70">
                   {Math.round(score * 100)}%
                 </span>
               </span>
@@ -164,7 +169,7 @@ export default function ReadingDnaCard() {
 
       {/* Spice preference */}
       <div className="mb-4">
-        <p className="text-xs font-mono text-muted uppercase tracking-wide mb-1">
+        <p className="mb-1 text-xs font-mono uppercase tracking-wide text-muted-a11y">
           Spice Level
         </p>
         <p className="text-sm font-body text-ink">
@@ -176,7 +181,7 @@ export default function ReadingDnaCard() {
 
       {/* AI blurb */}
       {dna.dnaDescription && (
-        <div className="bg-fire/5 border border-fire/10 rounded-lg px-4 py-3 mb-4">
+        <div className="mb-5 rounded-xl border border-fire/10 bg-fire/5 px-4 py-3">
           <p className="font-body text-sm text-ink leading-relaxed">
             {dna.dnaDescription}
           </p>
@@ -185,7 +190,7 @@ export default function ReadingDnaCard() {
 
       <Link
         href="/"
-        className="text-xs font-mono text-fire hover:text-fire/80 transition-colors"
+        className="inline-flex min-h-11 items-center justify-center rounded-lg bg-fire px-4 py-2 text-sm font-mono text-white transition-colors hover:bg-fire/90"
       >
         See your recommendations &rarr;
       </Link>

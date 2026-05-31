@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { CANONICAL_SUBGENRES } from "@/lib/books/subgenre-classifier";
 import BookRow from "@/components/books/BookRow";
@@ -94,129 +94,153 @@ export default function DnaResults() {
     : SPICE_LABELS[Math.round(spicePref)] ?? "Medium";
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-16 text-center">
-      <div className="text-5xl mb-4">🧬</div>
-      <h1 className="font-display text-3xl font-bold text-ink">
-        Your Reading DNA is ready!
-      </h1>
+    <div className="mx-auto max-w-5xl px-4 py-8 sm:py-12">
+      <header className="surface-parchment -mx-4 -mt-8 border-b border-aged-gold/30 px-4 py-10 text-center sm:mx-0 sm:mt-0 sm:rounded-3xl sm:border sm:px-8 sm:py-12">
+        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-aged-gold">
+          Reading DNA
+        </p>
+        <h1 className="mx-auto mt-2 max-w-2xl font-display text-4xl font-bold leading-tight text-ink sm:text-5xl">
+          Your reading DNA is ready.
+        </h1>
+        <p className="mx-auto mt-3 max-w-2xl text-sm font-body leading-6 text-muted-a11y sm:text-base">
+          A sharper little map of what tends to make a book irresistible to you.
+        </p>
+      </header>
 
       {loading ? (
-        <p className="text-sm font-body text-muted mt-4">Loading your profile...</p>
+        <div className="mt-6 rounded-2xl border border-aged-gold/30 bg-white p-8 text-center shadow-sm">
+          <p className="text-sm font-body text-muted-a11y">Loading your profile...</p>
+        </div>
       ) : (
         <>
-          {/* AI-generated blurb */}
           {dna?.dnaDescription && (
-            <div className="mt-6 bg-fire/5 border border-fire/10 rounded-xl px-5 py-4 text-left">
-              <p className="font-body text-ink text-sm leading-relaxed">
+            <section className="mt-6 rounded-2xl border border-fire/10 bg-fire/5 px-5 py-5 shadow-sm sm:px-6">
+              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-fire/70">
+                Your profile
+              </p>
+              <p className="mt-2 font-body text-sm leading-7 text-ink sm:text-base">
                 {dna.dnaDescription}
               </p>
-            </div>
+            </section>
           )}
 
-          {/* Subgenre preferences */}
-          {dna?.subgenrePreferences && dna.subgenrePreferences.length > 0 && (
-            <div className="mt-6">
-              <p className="text-xs font-mono text-muted uppercase tracking-wide mb-3">
-                Your subgenres
-              </p>
-              <div className="flex flex-wrap gap-2 justify-center">
-                {dna.subgenrePreferences.map((slug) => (
-                  <span
-                    key={slug}
-                    className="inline-flex items-center text-xs font-mono px-2.5 py-1.5 rounded-lg bg-fire/10 text-fire/90 border border-fire/15"
-                  >
-                    {SUBGENRE_LABEL_MAP[slug] ?? slug}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Trope affinities */}
-          {topTropes.length > 0 && (
-            <div className="mt-6">
-              <p className="text-xs font-mono text-muted uppercase tracking-wide mb-3">
-                Your top tropes
-              </p>
-              <div className="flex flex-wrap gap-2 justify-center">
-                {topTropes.map(([slug, score]) => (
-                  <span
-                    key={slug}
-                    className="inline-flex items-center gap-1.5 text-xs font-mono px-2.5 py-1.5 rounded-lg bg-fire/10 text-fire/90 border border-fire/15"
-                  >
-                    {tropeNames[slug] ?? slug.replace(/-/g, " ")}
-                    <span className="text-fire/50">
-                      {Math.round(score * 100)}%
-                    </span>
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Spice preference */}
           {dna && (
-            <div className="mt-5">
-              <p className="text-xs font-mono text-muted uppercase tracking-wide mb-1">
-                Spice level
-              </p>
-              <p className="text-sm font-body text-ink">
-                {isRange
-                  ? `${"🌶️".repeat(spiceMin)} – ${"🌶️".repeat(spiceMax)} ${spiceLabel}`
-                  : `${"🌶️".repeat(Math.round(spicePref))} ${spiceLabel}`}
-              </p>
-            </div>
+            <section className="mt-6 grid gap-4 md:grid-cols-3">
+              {dna.subgenrePreferences && dna.subgenrePreferences.length > 0 && (
+                <DnaPanel title="Your subgenres">
+                  <div className="flex flex-wrap gap-2">
+                    {dna.subgenrePreferences.map((slug) => (
+                      <span
+                        key={slug}
+                        className="inline-flex min-h-8 items-center rounded-lg border border-fire/15 bg-fire/10 px-2.5 py-1 text-xs font-mono text-fire/90"
+                      >
+                        {SUBGENRE_LABEL_MAP[slug] ?? slug}
+                      </span>
+                    ))}
+                  </div>
+                </DnaPanel>
+              )}
+
+              {topTropes.length > 0 && (
+                <DnaPanel title="Top tropes">
+                  <div className="flex flex-wrap gap-2">
+                    {topTropes.map(([slug, score]) => (
+                      <span
+                        key={slug}
+                        className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-aged-gold/30 bg-parchment px-2.5 py-1 text-xs font-mono text-ink"
+                      >
+                        {tropeNames[slug] ?? slug.replace(/-/g, " ")}
+                        <span className="text-fire/70">
+                          {Math.round(score * 100)}%
+                        </span>
+                      </span>
+                    ))}
+                  </div>
+                </DnaPanel>
+              )}
+
+              <DnaPanel title="Spice range">
+                <p className="text-sm font-body leading-6 text-ink">
+                  {isRange
+                    ? `${"🌶️".repeat(spiceMin)} – ${"🌶️".repeat(spiceMax)} ${spiceLabel}`
+                    : `${"🌶️".repeat(Math.round(spicePref))} ${spiceLabel}`}
+                </p>
+              </DnaPanel>
+            </section>
           )}
 
-          {/* Recommendation preview */}
           {dna && (
-            <>
-              <div className="mt-10 mb-6 border-t border-fire/10" />
-              <h2 className="font-display text-xl font-bold text-ink">
-                Does this sound like you?
-              </h2>
-              <p className="text-sm font-body text-muted mt-1">
-                Here are some books we think you&apos;ll love
-              </p>
-              <div className="text-left mt-4">
+            <section className="mt-6 rounded-2xl border border-aged-gold/30 bg-white p-5 shadow-sm sm:p-6">
+              <div className="sm:flex sm:items-end sm:justify-between sm:gap-4">
+                <div>
+                  <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-aged-gold">
+                    Taste check
+                  </p>
+                  <h2 className="mt-1 font-display text-2xl font-bold text-ink">
+                    Does this sound like you?
+                  </h2>
+                  <p className="mt-1 text-sm font-body text-muted-a11y">
+                    A few recommendations based on the profile above.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 text-left">
                 {forYouLoading ? (
                   <BookRow books={[]} loading />
                 ) : forYouBooks.length > 0 ? (
                   <BookRow books={forYouBooks} />
                 ) : (
-                  <p className="text-sm font-body text-muted/70 py-4 text-center">
+                  <p className="py-4 text-center text-sm font-body text-muted-a11y">
                     We&apos;re still building your recommendations — check the
                     homepage soon!
                   </p>
                 )}
               </div>
-            </>
+            </section>
           )}
 
-          {/* Fallback when no DNA loaded */}
           {!dna && (
-            <p className="text-sm font-body text-muted mt-3 max-w-sm mx-auto">
-              We&apos;ll use your preferences to recommend books you&apos;ll
-              love. Check out your personalized picks on the homepage.
-            </p>
+            <div className="mt-6 rounded-2xl border border-aged-gold/30 bg-white p-8 text-center shadow-sm">
+              <p className="mx-auto max-w-sm text-sm font-body leading-6 text-muted-a11y">
+                We&apos;ll use your preferences to recommend books you&apos;ll
+                love. Check out your personalized picks on the homepage.
+              </p>
+            </div>
           )}
         </>
       )}
 
-      <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
+      <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
         <Link
           href="/"
-          className="inline-flex items-center justify-center rounded-lg font-body font-medium bg-fire text-white hover:bg-fire/90 px-6 min-h-[44px] transition-colors"
+          className="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-fire px-6 font-mono text-sm text-white transition-colors hover:bg-fire/90 sm:w-auto"
         >
           Yes! Show me more
         </Link>
         <Link
           href="/reading/dna"
-          className="inline-flex items-center justify-center rounded-lg font-body font-medium text-muted hover:text-ink hover:bg-ink/5 px-4 min-h-[44px] transition-colors"
+          className="inline-flex min-h-11 w-full items-center justify-center rounded-lg border border-aged-gold/30 bg-white px-4 font-mono text-sm text-muted-a11y transition-colors hover:border-fire/30 hover:text-fire sm:w-auto"
         >
-          Not quite — retake
+          Not quite, retake
         </Link>
       </div>
+    </div>
+  );
+}
+
+function DnaPanel({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-aged-gold/30 bg-white p-5 shadow-sm">
+      <p className="mb-3 text-xs font-mono uppercase tracking-wide text-muted-a11y">
+        {title}
+      </p>
+      {children}
     </div>
   );
 }
