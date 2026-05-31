@@ -19,6 +19,9 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const STALE_DAYS = 30;
+const P0_LIMIT = 250;
+
+type P0Target = { book_id: string };
 
 export async function GET(request: Request) {
   if (!requireCronAuth(request)) {
@@ -64,12 +67,49 @@ export async function GET(request: Request) {
     // ── Phase 2: Queue stale romance_io signals for re-scrape (~5s budget) ──
     const staleDate = new Date(Date.now() - STALE_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-    const { data: staleSignals } = await supabase
-      .from("spice_signals")
-      .select("book_id")
-      .eq("source", "romance_io")
-      .lt("updated_at", staleDate)
-      .limit(50);
+    const { data: p0Targets, error: p0Error } = await supabase.rpc(
+      "get_p0_canon_enrichment_targets",
+      { p_limit: P0_LIMIT }
+    );
+    if (p0Error) {
+      console.error("[refresh-spice] Failed to load P0 targets:", p0Error);
+      stats.errors++;
+    }
+
+    const p0Ids = ((p0Targets ?? []) as P0Target[]).map(
+      (target) => target.book_id
+    );
+
+    const [{ data: p0RomanceIoSignals }, { data: activeRomanceIoJobs }] = p0Ids.length
+      ? await Promise.all([
+          supabase
+            .from("spice_signals")
+            .select("book_id, updated_at")
+            .eq("source", "romance_io")
+            .in("book_id", p0Ids),
+          supabase
+            .from("enrichment_queue")
+            .select("book_id")
+            .eq("job_type", "romance_io_spice")
+            .in("status", ["pending", "running"])
+            .in("book_id", p0Ids),
+        ])
+      : [{ data: [] }, { data: [] }];
+
+    const signalMap = new Map(
+      (p0RomanceIoSignals ?? []).map((row) => [row.book_id, row.updated_at])
+    );
+    const activeJobIds = new Set(
+      (activeRomanceIoJobs ?? []).map((row) => row.book_id)
+    );
+    const staleSignals = p0Ids
+      .filter((bookId: string) => {
+        if (activeJobIds.has(bookId)) return false;
+        const updatedAt = signalMap.get(bookId);
+        return !updatedAt || updatedAt < staleDate;
+      })
+      .slice(0, 50)
+      .map((book_id) => ({ book_id }));
 
     if (staleSignals && staleSignals.length > 0) {
       console.log(`[refresh-spice] Phase 2: ${staleSignals.length} stale romance_io signals`);
