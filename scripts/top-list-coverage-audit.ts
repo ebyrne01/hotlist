@@ -443,7 +443,12 @@ async function main() {
   }
 
   for (const row of harvestRows) {
-    if (matched.has(row.rank) || row.isJunk) continue;
+    if (row.isJunk) continue;
+    const existingMatch = matched.get(row.rank);
+    if (existingMatch && !isJunkTitle(existingMatch.book.title, existingMatch.book.author)) {
+      continue;
+    }
+
     const titleAuthorMatch = await findByTitleAuthor(row);
     if (titleAuthorMatch) {
       matched.set(row.rank, { book: titleAuthorMatch, method: "title_author" });
