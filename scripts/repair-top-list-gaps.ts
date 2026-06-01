@@ -430,6 +430,19 @@ async function upsertHarvestData(item: RepairPlanItem) {
   const row = item.row;
 
   if (row.asin) {
+    const { data: existingAsinOwner, error: asinOwnerError } = await supabase
+      .from("books")
+      .select("id")
+      .eq("amazon_asin", row.asin)
+      .neq("id", item.bookId)
+      .maybeSingle();
+
+    if (asinOwnerError) throw asinOwnerError;
+    if (existingAsinOwner) {
+      await mergeDuplicateIntoGoodreadsOwner(item.bookId, existingAsinOwner.id, row);
+      return;
+    }
+
     await supabase
       .from("books")
       .update({ amazon_asin: row.asin, updated_at: now })
@@ -545,10 +558,19 @@ async function mergeDuplicateIntoGoodreadsOwner(
   }
 
   if (!targetBook.amazon_asin && (row.asin || sourceBook.amazon_asin)) {
+    const asinToMove = row.asin ?? sourceBook.amazon_asin;
+    if (asinToMove === sourceBook.amazon_asin) {
+      const { error: clearSourceAsinError } = await supabase
+        .from("books")
+        .update({ amazon_asin: null, updated_at: new Date().toISOString() })
+        .eq("id", sourceId);
+      if (clearSourceAsinError) throw clearSourceAsinError;
+    }
+
     const { error: asinError } = await supabase
       .from("books")
       .update({
-        amazon_asin: row.asin ?? sourceBook.amazon_asin,
+        amazon_asin: asinToMove,
         updated_at: new Date().toISOString(),
       })
       .eq("id", targetId);
@@ -585,6 +607,7 @@ async function mergeDuplicateIntoGoodreadsOwner(
 
 async function resolveGoodreadsIdentity(item: RepairPlanItem): Promise<boolean> {
   if (item.row.hasGoodreadsId) return false;
+  if (!(await bookStillExists(item.bookId))) return false;
 
   const goodreadsId = (await resolveToGoodreadsId(
     item.row.inputTitle,
@@ -625,6 +648,19 @@ async function resolveGoodreadsIdentity(item: RepairPlanItem): Promise<boolean> 
 
   const cleanedTitle = stripSeriesSuffix(detail.title);
   const cleanedCover = cleanCoverUrl(detail.coverUrl);
+  const slug = generateBookSlug(cleanedTitle, detail.goodreadsId);
+  const { data: existingSlugOwner, error: slugOwnerError } = await supabase
+    .from("books")
+    .select("id")
+    .eq("slug", slug)
+    .neq("id", item.bookId)
+    .maybeSingle();
+
+  if (slugOwnerError) throw slugOwnerError;
+  if (existingSlugOwner) {
+    return mergeDuplicateIntoGoodreadsOwner(item.bookId, existingSlugOwner.id, item.row);
+  }
+
   const updateFields: Record<string, unknown> = {
     title: cleanedTitle,
     author: detail.author,
@@ -634,7 +670,7 @@ async function resolveGoodreadsIdentity(item: RepairPlanItem): Promise<boolean> 
     published_year: detail.publishedYear ?? null,
     page_count: detail.pageCount ?? null,
     genres: detail.genres ?? [],
-    slug: generateBookSlug(cleanedTitle, detail.goodreadsId),
+    slug,
     metadata_source: "goodreads",
     enrichment_status: "partial",
     data_refreshed_at: now,
@@ -698,6 +734,17 @@ async function queueJobs(item: RepairPlanItem) {
     .upsert(rows, { onConflict: "book_id,job_type" });
 
   if (error) throw error;
+}
+
+async function bookStillExists(bookId: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("books")
+    .select("id")
+    .eq("id", bookId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return Boolean(data);
 }
 
 function summarizePlan(plan: RepairPlanItem[]) {
@@ -778,9 +825,17 @@ async function main() {
     await upsertHarvestData(item);
     if (item.upserts.length > 0) upsertedRows++;
 
+    if (!(await bookStillExists(item.bookId))) {
+      continue;
+    }
+
     if (item.directFixes.includes("resolve_goodreads_id")) {
       const resolved = await resolveGoodreadsIdentity(item);
       if (resolved) goodreadsResolved++;
+    }
+
+    if (!(await bookStillExists(item.bookId))) {
+      continue;
     }
 
     const postFixReadiness =
