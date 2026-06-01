@@ -29,7 +29,7 @@ export default function InlineSpiceRating({ bookId }: { bookId: string }) {
           .select("spice_rating")
           .eq("user_id", data.user.id)
           .eq("book_id", bookId)
-          .single()
+          .maybeSingle()
           .then(({ data: existing }) => {
             if (existing?.spice_rating) {
               setUserSpice(existing.spice_rating);
@@ -65,7 +65,7 @@ export default function InlineSpiceRating({ bookId }: { bookId: string }) {
           .select("status")
           .eq("user_id", user.id)
           .eq("book_id", bookId)
-          .single();
+          .maybeSingle();
 
         if (!currentStatus) {
           await supabase.from("reading_status").upsert(

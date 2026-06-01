@@ -65,13 +65,13 @@ export default function ReaderResponse({ bookId }: ReaderResponseProps) {
           .select("response, is_reading")
           .eq("user_id", uid)
           .eq("book_id", bookId)
-          .single(),
+          .maybeSingle(),
         supabase
           .from("user_ratings")
           .select("star_rating, score, spice_rating, note")
           .eq("user_id", uid)
           .eq("book_id", bookId)
-          .single(),
+          .maybeSingle(),
       ]).then(([statusRes, ratingRes]) => {
         if (statusRes.data) {
           const r = statusRes.data.response as ReaderResponseType | null;
@@ -210,7 +210,7 @@ export default function ReaderResponse({ bookId }: ReaderResponseProps) {
         .select("response")
         .eq("user_id", activeUser.id)
         .eq("book_id", bookId)
-        .single();
+        .maybeSingle();
 
       if (existing.data) {
         await supabase

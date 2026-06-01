@@ -20,7 +20,7 @@ export function InlineUserRating({ bookId }: { bookId: string }) {
           .select("score, star_rating")
           .eq("user_id", data.user.id)
           .eq("book_id", bookId)
-          .single()
+          .maybeSingle()
           .then(({ data: existing }) => {
             if (existing) {
               // Prefer decimal score, fall back to star_rating

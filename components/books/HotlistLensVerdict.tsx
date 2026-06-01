@@ -17,8 +17,22 @@ function spiceLabel(value: number) {
   return "scorching";
 }
 
+function getLensSpice(book: BookDetail) {
+  const romanceIoSpice = book.spice.find(
+    (spice) => spice.source === "romance_io" && spice.confidence === "high"
+  );
+  const communitySpice = book.spice.find(
+    (spice) => spice.source === "hotlist_community" && spice.ratingCount >= 5
+  );
+
+  return romanceIoSpice?.spiceLevel
+    ?? communitySpice?.spiceLevel
+    ?? book.compositeSpice?.score
+    ?? null;
+}
+
 function buildVerdict(book: BookDetail, dna: ReadingDnaRow) {
-  const bookSpice = book.compositeSpice?.score ?? null;
+  const bookSpice = getLensSpice(book);
   const matchedTropes = book.tropes
     .map((trope) => ({
       ...trope,
@@ -46,8 +60,10 @@ function buildVerdict(book: BookDetail, dna: ReadingDnaRow) {
   const strongTropeMatch = matchedTropes.length >= 2 || scored.tropeOverlap >= 1.5;
   const someTropeMatch = matchedTropes.length >= 1 || scored.tropeOverlap > 0;
 
-  const title = strongTropeMatch && spiceAligned
-    ? "Likely your kind of hot."
+  const title = strongTropeMatch
+    ? spiceAligned
+      ? "Likely your kind of hot."
+      : "Strong trope fit. Check the heat."
     : someTropeMatch
       ? "There is something here for your lens."
       : "This may be more of a wild card for you.";
