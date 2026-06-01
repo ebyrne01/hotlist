@@ -7,7 +7,7 @@ import DnaTest from "./DnaTest";
 export const metadata: Metadata = {
   title: "Reading DNA Test — Hotlist",
   description:
-    "Take a 60-second test to discover your romance reading preferences. Get personalized book recommendations based on your favorite subgenres, tropes, and spice level.",
+    "Take a 60-second test to teach Hotlist how to judge whether a romance book is your kind of hot.",
 };
 
 export default async function ReadingDnaPage() {

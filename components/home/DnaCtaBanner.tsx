@@ -4,17 +4,17 @@ export default function DnaCtaBanner() {
   return (
     <section className="py-6">
       <Link
-        href="/get-started"
+        href="/reading/dna"
         className="block rounded-xl border border-fire/20 bg-fire/5 px-5 py-4 hover:bg-fire/10 transition-colors"
       >
         <div className="flex items-center gap-3">
           <span className="text-2xl" aria-hidden="true">🧬</span>
           <div className="flex-1 min-w-0">
             <p className="font-display text-base font-semibold text-ink">
-              Take the Reading DNA Test
+              Build your Hotlist lens
             </p>
             <p className="text-xs font-body text-muted mt-0.5">
-              60 seconds to personalized recommendations.
+              60 seconds to teach Hotlist your kind of hot.
             </p>
           </div>
           <svg

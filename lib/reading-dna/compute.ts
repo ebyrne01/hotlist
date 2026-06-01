@@ -54,7 +54,8 @@ export const SIGNAL_WEIGHTS = {
  *
  * Algorithm:
  * 1. For each trope, sum the weights of all signal books that have that trope
- * 2. Normalize: divide each by the max across all tropes → values 0.0 to 1.0
+ * 2. Clamp disliked/negative-only tropes to 0
+ * 3. Normalize: divide each by the max across all tropes → values 0.0 to 1.0
  *
  * This produces a unit vector where the user's strongest trope = 1.0.
  */
@@ -67,10 +68,14 @@ export function computeTropeAffinities(signals: DnaSignal[]): Record<string, num
     }
   }
 
-  // Normalize by max
-  const maxScore = Math.max(...Object.values(rawScores), 0.001); // avoid div by zero
+  const clampedScores = Object.fromEntries(
+    Object.entries(rawScores).map(([trope, score]) => [trope, Math.max(0, score)])
+  );
+
+  // Normalize by max positive score
+  const maxScore = Math.max(...Object.values(clampedScores), 0.001); // avoid div by zero
   const affinities: Record<string, number> = {};
-  for (const [trope, score] of Object.entries(rawScores)) {
+  for (const [trope, score] of Object.entries(clampedScores)) {
     affinities[trope] = Math.round((score / maxScore) * 100) / 100; // 2 decimal places
   }
 

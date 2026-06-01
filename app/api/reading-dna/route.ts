@@ -18,6 +18,9 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const maxDuration = 30;
 
+const MIN_BOOK_SELECTIONS = 5;
+const QUIZ_TROPE_SIGNAL_WEIGHT = 0.85;
+
 export async function POST(request: NextRequest) {
   const supabase = createClient();
   const {
@@ -46,10 +49,12 @@ export async function POST(request: NextRequest) {
     !Array.isArray(tropeSelections) ||
     tropeSelections.length < 3 ||
     !Array.isArray(bookSelections) ||
-    bookSelections.length < 3
+    bookSelections.length < MIN_BOOK_SELECTIONS
   ) {
     return NextResponse.json(
-      { error: "Invalid test data. Need 1+ spice levels (1-5), 3+ tropes, 3+ books." },
+      {
+        error: `Invalid test data. Need 1+ spice levels (1-5), 3+ tropes, ${MIN_BOOK_SELECTIONS}+ books.`,
+      },
       { status: 400 }
     );
   }
@@ -72,7 +77,7 @@ export async function POST(request: NextRequest) {
     .from("reading_dna_signals")
     .delete()
     .eq("user_id", user.id)
-    .eq("signal_type", "quiz_pick");
+    .in("signal_type", ["quiz_pick", "quiz_dislike"]);
 
   // Get trope vectors for selected books
   const { data: vectorRows } = await admin
@@ -113,7 +118,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Build signals — positive picks + disliked books (zero weight)
+  // Build persisted book signals — positive picks + disliked books.
   const signals: { bookId: string; signalType: string; weight: number }[] =
     bookSelections.map((bookId) => ({
       bookId,
@@ -125,8 +130,8 @@ export async function POST(request: NextRequest) {
     for (const bookId of dislikedBooks) {
       signals.push({
         bookId,
-        signalType: "quiz_pick",
-        weight: 0.0,
+        signalType: "quiz_dislike",
+        weight: SIGNAL_WEIGHTS.not_for_me,
       });
     }
   }
@@ -134,7 +139,8 @@ export async function POST(request: NextRequest) {
   // Save signals
   await saveSignals(user.id, signals);
 
-  // Build DNA profile
+  // Build DNA profile. Explicit trope picks seed the profile directly, while
+  // loved/disliked books tune that taste with real catalog data.
   const dnaSignals: DnaSignal[] = bookSelections
     .filter((id) => vectorMap.has(id))
     .map((id) => ({
@@ -142,6 +148,26 @@ export async function POST(request: NextRequest) {
       weight: SIGNAL_WEIGHTS.quiz_pick,
       tropes: Object.keys(vectorMap.get(id)!),
     }));
+
+  if (tropeSelections.length > 0) {
+    dnaSignals.push({
+      bookId: "__quiz_trope_preferences__",
+      weight: QUIZ_TROPE_SIGNAL_WEIGHT,
+      tropes: tropeSelections,
+    });
+  }
+
+  if (dislikedBooks && dislikedBooks.length > 0) {
+    for (const id of dislikedBooks) {
+      const vector = vectorMap.get(id);
+      if (!vector) continue;
+      dnaSignals.push({
+        bookId: id,
+        weight: SIGNAL_WEIGHTS.not_for_me,
+        tropes: Object.keys(vector),
+      });
+    }
+  }
 
   const profile = buildDnaProfile(dnaSignals, spiceLevels, []);
   await saveDna(user.id, profile, "quiz");

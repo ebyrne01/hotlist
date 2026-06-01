@@ -99,8 +99,8 @@ export default function DislikedBooksStep({
           Any books that weren&apos;t for you?
         </h2>
         <p className="text-sm font-body text-muted mt-2">
-          This helps us avoid recommending similar ones. Skip if nothing comes
-          to mind.
+          This helps Hotlist spot patterns that cool a book off for you. Skip
+          if nothing comes to mind.
         </p>
         {selected.size > 0 && (
           <p className="text-sm font-mono text-muted/70 mt-1">

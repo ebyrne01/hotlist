@@ -51,7 +51,7 @@ const EMPTY_COPY: Record<TabKey, { title: string; body: string }> = {
   },
   finished: {
     title: "No finished books yet.",
-    body: "Rate a few reads as you finish them and Hotlist will use that taste signal to sharpen your recommendations.",
+    body: "Rate a few reads as you finish them and Hotlist will use that taste signal to judge future books through your lens.",
   },
 };
 
@@ -74,7 +74,7 @@ export default async function ReadingPage({ searchParams }: PageProps) {
       <SignInPrompt
         eyebrow="Your shelf"
         title="Save the books you keep thinking about."
-        body="Sign in to keep a want-to-read shelf, track what you are reading, and turn finished books into better recommendations."
+        body="Sign in to keep a want-to-read shelf, track what you are reading, and teach Hotlist what your kind of hot looks like."
         context={{
           title: "Save your reading list.",
           subtitle: "Sign in free so your shelf follows you.",

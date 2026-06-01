@@ -28,8 +28,8 @@ export default function DnaProgressBar({ count, target = 25 }: Props) {
 
       <p className="text-xs font-body text-muted mt-2">
         {unlocked
-          ? "🧬 Reading DNA unlocked! View your taste profile."
-          : `${remaining} more to unlock your taste profile`}
+          ? "🧬 Reading DNA unlocked! View your Hotlist lens."
+          : `${remaining} more to sharpen your Hotlist lens`}
       </p>
     </div>
   );

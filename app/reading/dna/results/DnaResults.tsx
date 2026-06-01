@@ -3,8 +3,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { CANONICAL_SUBGENRES } from "@/lib/books/subgenre-classifier";
-import BookRow from "@/components/books/BookRow";
-import type { BookDetail } from "@/lib/types";
 
 const SUBGENRE_LABEL_MAP: Record<string, string> = Object.fromEntries(
   CANONICAL_SUBGENRES.map((sg) => [sg.slug, sg.label])
@@ -30,8 +28,6 @@ export default function DnaResults() {
   const [dna, setDna] = useState<DnaData | null>(null);
   const [tropeNames, setTropeNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
-  const [forYouBooks, setForYouBooks] = useState<BookDetail[]>([]);
-  const [forYouLoading, setForYouLoading] = useState(false);
 
   useEffect(() => {
     async function fetchDna() {
@@ -57,16 +53,6 @@ export default function DnaResults() {
                 setTropeNames(nameMap);
               }
             }
-          }
-
-          // Fetch For You recommendations (async, non-blocking)
-          if (data.dna) {
-            setForYouLoading(true);
-            fetch("/api/homepage/for-you")
-              .then((r) => (r.ok ? r.json() : { books: [] }))
-              .then((d) => setForYouBooks(d.books ?? []))
-              .catch(() => {})
-              .finally(() => setForYouLoading(false));
           }
         }
       } catch {
@@ -102,10 +88,10 @@ export default function DnaResults() {
           Reading DNA
         </p>
         <h1 className="mx-auto mt-2 max-w-2xl font-display text-4xl font-bold leading-tight text-ink sm:text-5xl">
-          Your reading DNA is ready.
+          Your Hotlist lens is ready.
         </h1>
         <p className="mx-auto mt-3 max-w-2xl text-sm font-body leading-6 text-muted-a11y sm:text-base">
-          A sharper little map of what tends to make a book irresistible to you.
+          Use it to judge the books, shortlists, and BookTok finds you bring to Hotlist.
         </p>
       </header>
 
@@ -118,7 +104,7 @@ export default function DnaResults() {
           {dna?.dnaDescription && (
             <section className="mt-6 rounded-2xl border border-fire/10 bg-fire/5 px-5 py-5 shadow-sm sm:px-6">
               <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-fire/70">
-                Your profile
+                Your lens
               </p>
               <p className="mt-2 font-body text-sm leading-7 text-ink sm:text-base">
                 {dna.dnaDescription}
@@ -129,7 +115,7 @@ export default function DnaResults() {
           {dna && (
             <section className="mt-6 grid gap-4 md:grid-cols-3">
               {dna.subgenrePreferences && dna.subgenrePreferences.length > 0 && (
-                <DnaPanel title="Your subgenres">
+                <DnaPanel title="Subgenres you want flagged">
                   <div className="flex flex-wrap gap-2">
                     {dna.subgenrePreferences.map((slug) => (
                       <span
@@ -144,7 +130,7 @@ export default function DnaResults() {
               )}
 
               {topTropes.length > 0 && (
-                <DnaPanel title="Top tropes">
+                <DnaPanel title="Tropes that make a book pop">
                   <div className="flex flex-wrap gap-2">
                     {topTropes.map(([slug, score]) => (
                       <span
@@ -161,7 +147,7 @@ export default function DnaResults() {
                 </DnaPanel>
               )}
 
-              <DnaPanel title="Spice range">
+              <DnaPanel title="Your hot zone">
                 <p className="text-sm font-body leading-6 text-ink">
                   {isRange
                     ? `${"🌶️".repeat(spiceMin)} – ${"🌶️".repeat(spiceMax)} ${spiceLabel}`
@@ -176,27 +162,33 @@ export default function DnaResults() {
               <div className="sm:flex sm:items-end sm:justify-between sm:gap-4">
                 <div>
                   <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-aged-gold">
-                    Taste check
+                    How to use it
                   </p>
                   <h2 className="mt-1 font-display text-2xl font-bold text-ink">
-                    Does this sound like you?
+                    Bring us a book. We&apos;ll read it through this lens.
                   </h2>
                   <p className="mt-1 text-sm font-body text-muted-a11y">
-                    A few recommendations based on the profile above.
+                    DNA is not here to become another endless feed. It helps Hotlist
+                    explain whether a book is your kind of hot.
                   </p>
                 </div>
               </div>
-              <div className="mt-4 text-left">
-                {forYouLoading ? (
-                  <BookRow books={[]} loading />
-                ) : forYouBooks.length > 0 ? (
-                  <BookRow books={forYouBooks} />
-                ) : (
-                  <p className="py-4 text-center text-sm font-body text-muted-a11y">
-                    We&apos;re still building your recommendations — check the
-                    homepage soon!
-                  </p>
-                )}
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <LensAction
+                  href="/search"
+                  title="Search a book"
+                  body="Check ratings, spice, tropes, and your personal fit."
+                />
+                <LensAction
+                  href="/booktok"
+                  title="Paste a BookTok"
+                  body="Turn a video shortlist into books you can judge side by side."
+                />
+                <LensAction
+                  href="/lists"
+                  title="Compare a Hotlist"
+                  body="Use your lens while deciding between several contenders."
+                />
               </div>
             </section>
           )}
@@ -204,8 +196,8 @@ export default function DnaResults() {
           {!dna && (
             <div className="mt-6 rounded-2xl border border-aged-gold/30 bg-white p-8 text-center shadow-sm">
               <p className="mx-auto max-w-sm text-sm font-body leading-6 text-muted-a11y">
-                We&apos;ll use your preferences to recommend books you&apos;ll
-                love. Check out your personalized picks on the homepage.
+                We&apos;ll use your preferences to judge whether the books you
+                bring us are your kind of hot.
               </p>
             </div>
           )}
@@ -217,7 +209,7 @@ export default function DnaResults() {
           href="/"
           className="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-fire px-6 font-mono text-sm text-white transition-colors hover:bg-fire/90 sm:w-auto"
         >
-          Yes! Show me more
+          Search a book
         </Link>
         <Link
           href="/reading/dna"
@@ -244,5 +236,30 @@ function DnaPanel({
       </p>
       {children}
     </div>
+  );
+}
+
+function LensAction({
+  href,
+  title,
+  body,
+}: {
+  href: string;
+  title: string;
+  body: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="block rounded-2xl border border-aged-gold/30 bg-cream p-4 transition-colors hover:border-fire/30 hover:bg-parchment"
+    >
+      <p className="font-display text-lg font-bold text-ink">{title}</p>
+      <p className="mt-1 text-sm font-body leading-6 text-muted-a11y">
+        {body}
+      </p>
+      <p className="mt-3 font-mono text-xs uppercase tracking-[0.14em] text-fire">
+        Go &rarr;
+      </p>
+    </Link>
   );
 }

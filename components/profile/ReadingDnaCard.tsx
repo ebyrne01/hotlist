@@ -65,10 +65,11 @@ export default function ReadingDnaCard() {
           Reading DNA
         </p>
         <h2 className="mt-2 font-display text-2xl font-bold text-ink">
-          Build your taste profile.
+          Build your Hotlist lens.
         </h2>
         <p className="mt-2 text-sm font-body leading-6 text-muted-a11y">
-          Take a quick test so Hotlist can learn your preferred tropes, subgenres, and spice range.
+          Take a quick test so Hotlist can judge whether the books you bring us
+          are your kind of hot.
         </p>
         <Link
           href="/get-started"
@@ -111,7 +112,7 @@ export default function ReadingDnaCard() {
             Reading DNA
           </p>
           <h2 className="mt-1 font-display text-2xl font-bold text-ink">
-            Your Reading DNA
+            Your Hotlist lens
           </h2>
         </div>
         <Link
@@ -192,7 +193,7 @@ export default function ReadingDnaCard() {
         href="/"
         className="inline-flex min-h-11 items-center justify-center rounded-lg bg-fire px-4 py-2 text-sm font-mono text-white transition-colors hover:bg-fire/90"
       >
-        See your recommendations &rarr;
+        Search with your lens &rarr;
       </Link>
     </div>
   );

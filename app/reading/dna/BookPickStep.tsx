@@ -147,7 +147,8 @@ export default function BookPickStep({
           Pick books you loved
         </h2>
         <p className="text-sm font-body text-muted mt-2">
-          Select at least {MIN_BOOKS}. Search for any book by title or author.
+          Select at least {MIN_BOOKS}. These teach Hotlist what kind of hot
+          actually lands for you.
         </p>
       </div>
 
@@ -263,7 +264,7 @@ export default function BookPickStep({
       )}
       {selected.size >= MIN_BOOKS && selected.size < 8 && (
         <p className="text-center text-sm text-muted font-body">
-          The more variety you add, the better your recommendations. Try another author or series!
+          The more variety you add, the sharper your Hotlist lens gets. Try another author or series!
         </p>
       )}
       {selected.size >= 8 && (

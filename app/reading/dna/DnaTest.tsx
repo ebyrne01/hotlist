@@ -235,6 +235,20 @@ export default function DnaTest({ tropes }: DnaTestProps) {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8 sm:py-12">
+      <section className="mb-6 rounded-2xl border border-aged-gold/30 bg-white p-4 shadow-sm sm:p-5">
+        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-aged-gold">
+          How Reading DNA works
+        </p>
+        <h1 className="mt-1 font-display text-2xl font-bold text-ink">
+          Teach Hotlist how to judge your kind of hot.
+        </h1>
+        <p className="mt-2 text-sm font-body leading-6 text-muted-a11y">
+          Your trope picks seed the profile, books you love strengthen matching
+          patterns, books you dislike cool those patterns down, and spice picks
+          set the heat range we use when you bring us a book.
+        </p>
+      </section>
+
       {/* Progress bar */}
       <div className="flex items-center gap-2 mb-8 max-w-xs mx-auto">
         {STEPS.map((s, i) => (
@@ -317,7 +331,7 @@ export default function DnaTest({ tropes }: DnaTestProps) {
                 onClick={handleSave}
                 disabled={saving}
               >
-                {saving ? "Building your DNA..." : "Build My Reading DNA"}
+                {saving ? "Building your lens..." : "Build My Hotlist Lens"}
               </Button>
             </>
           ) : (
