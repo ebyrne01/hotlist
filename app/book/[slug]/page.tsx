@@ -311,7 +311,7 @@ export default async function BookPage({ params }: PageProps) {
     : bookshopTag
       ? `https://bookshop.org/a/${bookshopTag}/books/search?keywords=${searchTerms}`
       : `https://bookshop.org/books/search?keywords=${searchTerms}`;
-  const similarSearchUrl = `/search?q=${encodeURIComponent(`like ${book.title}`)}`;
+  const anotherBookSearchUrl = `/search?q=${encodeURIComponent(book.author)}`;
 
   // Romance.io URL with fallback for slugs without full path
   const romanceIoUrl = book.romanceIoSlug?.includes("/")
@@ -621,10 +621,10 @@ export default async function BookPage({ params }: PageProps) {
               />
               <div className="grid grid-cols-2 gap-2">
                 <Link
-                  href={similarSearchUrl}
+                  href={anotherBookSearchUrl}
                   className="inline-flex min-h-11 items-center justify-center rounded-lg border border-border bg-cream px-3 py-2 text-center text-xs font-mono uppercase tracking-[0.14em] text-muted-a11y transition-colors hover:border-fire/30 hover:text-fire"
                 >
-                  Find similar
+                  Search author
                 </Link>
                 <a
                   href="#get-this-book"
@@ -783,10 +783,10 @@ export default async function BookPage({ params }: PageProps) {
               </h2>
             </div>
             <Link
-              href={similarSearchUrl}
+              href="/search"
               className="mt-2 text-sm font-mono text-fire transition-colors hover:text-fire/80 sm:mt-0"
             >
-              Not quite? Find similar books &rarr;
+              Not quite? Search another book &rarr;
             </Link>
           </div>
 

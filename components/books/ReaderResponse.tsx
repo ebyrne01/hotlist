@@ -354,7 +354,8 @@ export default function ReaderResponse({ bookId }: ReaderResponseProps) {
         Your Take
       </h3>
       <p className="text-xs font-body leading-5 text-muted-a11y">
-        Save this to your reading shelf and teach Hotlist what to recommend next.
+        Save this to your reading shelf and teach Hotlist what your kind of hot
+        looks like.
       </p>
       {saveState !== "idle" && (
         <p
