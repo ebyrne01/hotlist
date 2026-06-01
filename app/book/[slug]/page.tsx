@@ -27,6 +27,9 @@ import { PepperRow } from "@/components/ui/PepperIcon";
 import WhatsHot from "@/components/books/WhatsHot";
 import WhatMightCoolYouOff from "@/components/books/WhatMightCoolYouOff";
 import DiscussionHub from "@/components/books/DiscussionHub";
+import HotlistLensVerdict from "@/components/books/HotlistLensVerdict";
+import { createClient } from "@/lib/supabase/server";
+import { getDna } from "@/lib/reading-dna";
 
 // ── Helpers ──────────────────────────────────────────
 
@@ -131,6 +134,12 @@ export default async function BookPage({ params }: PageProps) {
 
   // Fetch BookTok creator mentions for this book
   const supabase = getAdminClient();
+  const authClient = createClient();
+  const {
+    data: { user },
+  } = await authClient.auth.getUser();
+  const readingDna = user ? await getDna(user.id) : null;
+
   const { data: mentionRows } = await supabase
     .from("creator_book_mentions")
     .select("sentiment, quote, platform, creator_handle_id, creator_handles(handle)")
@@ -627,6 +636,12 @@ export default async function BookPage({ params }: PageProps) {
             </div>
           </div>
         </section>
+
+        <HotlistLensVerdict
+          book={book}
+          dna={readingDna}
+          isSignedIn={!!user}
+        />
 
         {/* ── 2. WHAT MAKES IT HOT ── */}
         <WhatsHot
