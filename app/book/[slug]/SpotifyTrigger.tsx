@@ -8,9 +8,13 @@ type LookupStatus = "idle" | "loading" | "found" | "none" | "quiet";
 
 export default function SpotifyTrigger({
   bookId,
+  bookTitle,
+  bookAuthor,
   showStatus = false,
 }: {
   bookId: string;
+  bookTitle: string;
+  bookAuthor: string;
   showStatus?: boolean;
 }) {
   const router = useRouter();
@@ -62,6 +66,10 @@ export default function SpotifyTrigger({
 
   if (!showStatus || status === "quiet" || status === "found") return null;
 
+  const spotifySearchUrl = `https://open.spotify.com/search/${encodeURIComponent(
+    `${bookTitle} ${bookAuthor}`
+  )}/playlists`;
+
   return (
     <div className="rounded-3xl border border-aged-gold/30 bg-white p-4 shadow-sm">
       <p className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-fire">
@@ -73,9 +81,21 @@ export default function SpotifyTrigger({
           Looking for a reader-made Spotify soundtrack for this book...
         </p>
       ) : (
-        <p className="mt-2 text-sm font-body text-muted-a11y">
-          No strong Spotify match surfaced yet. We will keep checking as this book gets richer.
-        </p>
+        <div className="mt-2">
+          <p className="text-sm font-body leading-6 text-muted-a11y">
+            No strong Spotify match surfaced yet. We will keep checking as this
+            book gets richer, but you can search Spotify now if you want music
+            for the mood.
+          </p>
+          <a
+            href={spotifySearchUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 inline-flex min-h-11 items-center justify-center rounded-lg border border-fire/25 bg-fire/5 px-4 py-2 text-xs font-mono uppercase tracking-[0.14em] text-fire transition-colors hover:bg-fire/10"
+          >
+            Search Spotify playlists
+          </a>
+        </div>
       )}
     </div>
   );

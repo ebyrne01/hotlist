@@ -688,9 +688,23 @@ export default async function BookPage({ params }: PageProps) {
               goodreadsId={book.goodreadsId}
             />
           ) : (
-            <p className="font-body text-muted-a11y text-sm italic">
-              No synopsis available yet.
-            </p>
+            <div className="rounded-2xl border border-aged-gold/30 bg-white p-4 shadow-sm">
+              <p className="font-display text-xl font-bold text-ink">
+                Synopsis still warming up.
+              </p>
+              <p className="mt-2 text-sm font-body leading-6 text-muted-a11y">
+                We have enough book data to compare ratings, spice, and tropes,
+                but not enough clean description text to summarize it well yet.
+              </p>
+              <a
+                href={`https://www.google.com/search?q=${encodeURIComponent(`"${book.title}" "${book.author}" synopsis`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 inline-flex min-h-11 items-center justify-center rounded-lg border border-fire/25 bg-fire/5 px-4 py-2 text-xs font-mono uppercase tracking-[0.14em] text-fire transition-colors hover:bg-fire/10"
+              >
+                Search for synopsis
+              </a>
+            </div>
           )}
         </section>
 
@@ -707,6 +721,8 @@ export default async function BookPage({ params }: PageProps) {
           {!book.spotifyPlaylists && (
             <SpotifyTrigger
               bookId={book.id}
+              bookTitle={book.title}
+              bookAuthor={book.author}
               showStatus={!book.booktrackPrompt}
             />
           )}
@@ -716,6 +732,8 @@ export default async function BookPage({ params }: PageProps) {
 
           {/* Curated discussions */}
           <DiscussionHub
+            bookTitle={book.title}
+            bookAuthor={book.author}
             links={(discussionLinkRows ?? []).map((r) => ({
               url: r.url as string,
               title: r.title as string,

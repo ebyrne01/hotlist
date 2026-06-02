@@ -1,4 +1,4 @@
-import { ExternalLink, MessageCircle } from "lucide-react";
+import { ExternalLink, MessageCircle, Search } from "lucide-react";
 
 interface DiscussionLink {
   url: string;
@@ -25,8 +25,59 @@ function RedditIcon({ size = 14 }: { size?: number }) {
   );
 }
 
-export default function DiscussionHub({ links }: { links: DiscussionLink[] }) {
-  if (links.length === 0) return null;
+export default function DiscussionHub({
+  links,
+  bookTitle,
+  bookAuthor,
+}: {
+  links: DiscussionLink[];
+  bookTitle: string;
+  bookAuthor: string;
+}) {
+  if (links.length === 0) {
+    const redditSearch = `https://www.google.com/search?q=${encodeURIComponent(
+      `site:reddit.com/r/RomanceBooks "${bookTitle}" "${bookAuthor}"`
+    )}`;
+    const webSearch = `https://www.google.com/search?q=${encodeURIComponent(
+      `"${bookTitle}" "${bookAuthor}" review discussion`
+    )}`;
+
+    return (
+      <div className="rounded-2xl border border-aged-gold/30 bg-white p-4 shadow-sm">
+        <p className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-fire">
+          <MessageCircle size={13} aria-hidden="true" />
+          Reader chatter
+        </p>
+        <h3 className="mt-1 font-display text-xl font-bold text-ink">
+          No discussion links surfaced yet.
+        </h3>
+        <p className="mt-2 text-sm font-body leading-6 text-muted-a11y">
+          We have not pinned a good thread for this book, but you can still
+          look for reader reactions while Hotlist keeps enriching the page.
+        </p>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          <a
+            href={redditSearch}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-fire/25 bg-fire/5 px-3 py-2 text-center text-xs font-mono uppercase tracking-[0.14em] text-fire transition-colors hover:bg-fire/10"
+          >
+            <Search size={13} aria-hidden="true" />
+            Search Reddit
+          </a>
+          <a
+            href={webSearch}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-border bg-cream px-3 py-2 text-center text-xs font-mono uppercase tracking-[0.14em] text-muted-a11y transition-colors hover:border-fire/30 hover:text-fire"
+          >
+            Search reviews
+            <ExternalLink size={13} aria-hidden="true" />
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   const display = links.slice(0, 5);
 
