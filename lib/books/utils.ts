@@ -110,6 +110,25 @@ export function isCompilationTitle(title: string): boolean {
   return COMPILATION_PATTERNS.some((pattern) => pattern.test(title));
 }
 
+/** Foreign-language edition markers that should not crowd public search results. */
+const FOREIGN_EDITION_PATTERNS = [
+  /\(\s*(?:spanish|french|german|italian|portuguese|dutch|swedish|norwegian|danish|finnish|polish|czech|hungarian|romanian|turkish|arabic|chinese|japanese|korean|russian|hindi|bengali|urdu|thai|vietnamese|indonesian|malay|tagalog|catalan|galician|basque)\s+edition\s*\)/i,
+  /\b(?:edizione italiana|édition française|deutsche ausgabe|spanische ausgabe|edición en español|edição portuguesa|édition en français)\b/i,
+  /\s[-–—:]\s+(?:der|die|das|und|ein|eine|le|les|des|du|une|el|los|las|del|gli|della|delle|dei|degli)\b/i,
+];
+
+/**
+ * Detect obvious foreign-language editions that are usually duplicate
+ * translations of the canonical English work.
+ */
+export function isForeignEditionTitle(title: string): boolean {
+  return FOREIGN_EDITION_PATTERNS.some((pattern) => pattern.test(title));
+}
+
+export function isPublicSearchSuppressedTitle(title: string): boolean {
+  return isCompilationTitle(title) || isForeignEditionTitle(title);
+}
+
 /** YA / children's genres to exclude from spicy curated rows */
 const YA_GENRES = new Set([
   "young-adult",

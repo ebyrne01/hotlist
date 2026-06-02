@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { isJunkTitle, isJunkAuthor } from "../romance-filter";
-import { isCompilationTitle } from "../utils";
+import { isCompilationTitle, isForeignEditionTitle, isPublicSearchSuppressedTitle } from "../utils";
 
 describe("isJunkTitle", () => {
   it("rejects study guides and summaries", () => {
@@ -79,5 +79,27 @@ describe("isCompilationTitle", () => {
     expect(isCompilationTitle("Fourth Wing")).toBe(false);
     expect(isCompilationTitle("The Love Hypothesis")).toBe(false);
     expect(isCompilationTitle("A Court of Thorns and Roses")).toBe(false);
+  });
+});
+
+describe("isForeignEditionTitle", () => {
+  it("detects obvious translated edition titles", () => {
+    expect(isForeignEditionTitle("Powerless - Der Thron")).toBe(true);
+    expect(isForeignEditionTitle("Fourth Wing (German Edition)")).toBe(true);
+    expect(isForeignEditionTitle("Onyx Storm - Edizione italiana")).toBe(true);
+  });
+
+  it("accepts canonical English titles and subtitles", () => {
+    expect(isForeignEditionTitle("Powerless")).toBe(false);
+    expect(isForeignEditionTitle("Butcher & Blackbird")).toBe(false);
+    expect(isForeignEditionTitle("The Serpent and the Wings of Night")).toBe(false);
+  });
+});
+
+describe("isPublicSearchSuppressedTitle", () => {
+  it("suppresses compilation and foreign edition clutter", () => {
+    expect(isPublicSearchSuppressedTitle("Powerless - Der Thron")).toBe(true);
+    expect(isPublicSearchSuppressedTitle("ACOTAR Box Set")).toBe(true);
+    expect(isPublicSearchSuppressedTitle("Powerless")).toBe(false);
   });
 });

@@ -10,6 +10,7 @@ import { getDna } from "@/lib/reading-dna";
 import { reRankByDna } from "@/lib/reading-dna/score";
 import { logSearchAnalytics } from "@/lib/search/analytics";
 import { captureSearchDemand } from "@/lib/search/demand-capture";
+import { deduplicateBooks, isPublicSearchSuppressedTitle } from "@/lib/books/utils";
 import { Search, SlidersHorizontal, Sparkles, Video } from "lucide-react";
 import BookCard from "@/components/books/BookCard";
 import SearchFeedback from "@/components/search/SearchFeedback";
@@ -136,6 +137,8 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     }).catch((err) => {
       console.warn("[search] Failed to capture demand signal:", err);
     });
+
+    books = deduplicateBooks(books).filter((book) => !isPublicSearchSuppressedTitle(book.title));
   }
 
   const isSmartSearch =

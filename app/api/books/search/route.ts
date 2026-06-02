@@ -16,7 +16,7 @@ import { getDna } from "@/lib/reading-dna";
 import { reRankByDna } from "@/lib/reading-dna/score";
 import type { BookDetail } from "@/lib/types";
 import { NextRequest, NextResponse } from "next/server";
-import { isCompilationTitle } from "@/lib/books/utils";
+import { isPublicSearchSuppressedTitle } from "@/lib/books/utils";
 
 export async function GET(request: NextRequest) {
   const query = request.nextUrl.searchParams.get("q");
@@ -35,11 +35,12 @@ export async function GET(request: NextRequest) {
     // ── Fast path: title/author → existing keyword search ──
     if (intent.type === "title_author") {
       const books = await findBook(intent.query);
+      const shapedBooks = shapeResults(books, query);
       return NextResponse.json({
         query,
         intent: "title_author",
-        total: books.length,
-        books: shapeResults(books, query),
+        total: shapedBooks.length,
+        books: shapedBooks,
       });
     }
 
@@ -56,11 +57,12 @@ export async function GET(request: NextRequest) {
     // parsing happens on the full /search page after the reader submits.
     if (mode === "quick") {
       const books = await findBook(query);
+      const shapedBooks = shapeResults(books, query);
       return NextResponse.json({
         query,
         intent: "quick",
-        total: books.length,
-        books: shapeResults(books, query),
+        total: shapedBooks.length,
+        books: shapedBooks,
       });
     }
 
@@ -77,11 +79,12 @@ export async function GET(request: NextRequest) {
       !filters.trending
     ) {
       const books = await findBook(filters.textQuery);
+      const shapedBooks = shapeResults(books, query);
       return NextResponse.json({
         query,
         intent: "title_author_fallback",
-        total: books.length,
-        books: shapeResults(books, query),
+        total: shapedBooks.length,
+        books: shapedBooks,
       });
     }
 
@@ -103,23 +106,25 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    const shapedBooks = shapeResults(results, query);
     return NextResponse.json({
       query,
       intent: intent.type,
       filters,
-      total: results.length,
-      books: shapeResults(results, query),
+      total: shapedBooks.length,
+      books: shapedBooks,
     });
   } catch (err) {
     // If anything in the smart path fails, fall back to keyword search
     console.warn("[search] Smart search failed, falling back to keyword:", err);
     try {
       const books = await findBook(query);
+      const shapedBooks = shapeResults(books, query);
       return NextResponse.json({
         query,
         intent: "title_author_fallback",
-        total: books.length,
-        books: shapeResults(books, query),
+        total: shapedBooks.length,
+        books: shapedBooks,
       });
     } catch (fallbackErr) {
       console.error("Book search failed completely:", fallbackErr);
@@ -158,7 +163,7 @@ function shapeResults(books: BookDetail[], query: string) {
         subgenre: book.subgenre,
       };
     })
-    .filter((r) => !isCompilationTitle(r.title))
+    .filter((r) => !isPublicSearchSuppressedTitle(r.title))
     .filter((r) => {
       // Deduplicate by normalized title+author
       const key = `${r.title.toLowerCase().replace(/[^\w\s]/g, "").trim()}::${r.author.toLowerCase().trim()}`;
