@@ -621,10 +621,13 @@ async function processJob(job: QueuedJob): Promise<"data" | "no-data"> {
           { onConflict: "book_id,source" }
         );
       }
-      await supabase.from("books").update({
-        romance_io_slug: spiceData.romanceIoSlug,
+      const bookUpdates: Record<string, string> = {
         romance_io_heat_label: spiceData.heatLabel,
-      }).eq("id", book_id);
+      };
+      if (spiceData.romanceIoSlug) {
+        bookUpdates.romance_io_slug = spiceData.romanceIoSlug;
+      }
+      await supabase.from("books").update(bookUpdates).eq("id", book_id);
 
       // Store romance.io tags as tropes (if any)
       if (spiceData.rawTags && spiceData.rawTags.length > 0) {

@@ -87,6 +87,33 @@ interface SerperResponse {
   organic?: SerperResult[];
 }
 
+async function searchSerper(
+  apiKey: string,
+  query: string,
+  num = 5
+): Promise<SerperResult[]> {
+  const response = await fetch(SERPER_ENDPOINT, {
+    method: "POST",
+    headers: {
+      "X-API-KEY": apiKey,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ q: query, num }),
+  });
+
+  if (!response.ok) {
+    const message = await getSerperErrorMessage(response);
+    console.warn(`[romance.io] Serper API error: ${response.status} ${message}`);
+    if (isSerperProviderUnavailable(response.status, message)) {
+      throw new Error(`rate limit: Serper unavailable for romance.io lookup (${message})`);
+    }
+    return [];
+  }
+
+  const data: SerperResponse = await response.json();
+  return (data.organic ?? []).filter((result) => result.link.includes("romance.io/"));
+}
+
 /**
  * Slugify a string for comparison.
  * Lowercase, remove punctuation, replace spaces with hyphens.
@@ -145,6 +172,125 @@ function confirmAuthor(
   if (lowerSnippet.includes(lastName)) return "snippet";
 
   return false;
+}
+
+function resultMatchesBookContext(result: SerperResult, title: string, author: string): boolean {
+  const haystack = `${result.title} ${result.snippet} ${decodeURIComponent(result.link)}`.toLowerCase();
+  const titleWords = getTitleWords(title);
+  const matchedTitleWords = titleWords.filter((word) => haystack.includes(word)).length;
+  const titleMatches =
+    titleWords.length > 0 &&
+    matchedTitleWords >= Math.max(1, Math.ceil(titleWords.length * 0.6));
+  const authorMatches = Boolean(confirmAuthor(author, result.link, haystack));
+
+  return titleMatches && authorMatches;
+}
+
+function bookSlugFromUrl(link: string): string | null {
+  const match = link.match(/romance\.io\/books\/([^/?#]+\/[^/?#]+)/);
+  return match ? match[1] : null;
+}
+
+function isSimilarPage(link: string): boolean {
+  return /\/similar(?:[/?#]|$)/.test(link);
+}
+
+function slugConfirmsBook(link: string, title: string, author: string): boolean {
+  const bookSlug = bookSlugFromUrl(link);
+  if (!bookSlug) return false;
+
+  const slug = bookSlug.toLowerCase();
+  const titleWords = getTitleWords(title);
+  const matchedTitleWords = titleWords.filter((word) => slug.includes(word)).length;
+  const titleConfirmed =
+    titleWords.length > 0 &&
+    matchedTitleWords >= Math.max(1, Math.ceil(titleWords.length * 0.6));
+  const authorConfirmed = confirmAuthor(author, slug, "");
+
+  return titleConfirmed && Boolean(authorConfirmed);
+}
+
+function snippetSegmentForBook(result: SerperResult, title: string, author: string): string | null {
+  if (isSimilarPage(result.link)) return null;
+
+  const isBookPage =
+    result.link.includes("romance.io/books/") || result.link.includes("romance.io/book/");
+  const slugMatchesTarget = slugConfirmsBook(result.link, title, author);
+  if (isBookPage && !slugMatchesTarget) return null;
+
+  // Exact book pages can safely use the title + snippet.
+  if (slugMatchesTarget) {
+    return `${result.title} ${result.snippet}`;
+  }
+
+  const segments = result.snippet
+    .split(/\s+[;|]\s+|\s+·\s+·\s+|\n+/)
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+
+  const titleWords = getTitleWords(title);
+  for (const segment of segments) {
+    const lower = segment.toLowerCase();
+    const matchedTitleWords = titleWords.filter((word) => lower.includes(word)).length;
+    const titleMatches =
+      titleWords.length > 0 &&
+      matchedTitleWords >= Math.max(1, Math.ceil(titleWords.length * 0.6));
+    const authorMatches = Boolean(confirmAuthor(author, "", segment));
+
+    if (titleMatches && authorMatches) return segment;
+  }
+
+  return null;
+}
+
+function collectRomanceIoSignals(
+  results: SerperResult[],
+  title: string,
+  author: string,
+  current: {
+    bestSpice: { spiceLevel: number; heatLabel: string } | null;
+    bestRating: number | null;
+    allTags: string[];
+  }
+) {
+  for (const result of results) {
+    if (isSimilarPage(result.link)) continue;
+    if (!resultMatchesBookContext(result, title, author)) continue;
+    const scopedSnippet = snippetSegmentForBook(result, title, author);
+    if (!scopedSnippet) continue;
+
+    // Try Serper's structured rating field first (most reliable)
+    if (
+      !current.bestRating &&
+      slugConfirmsBook(result.link, title, author) &&
+      !isSimilarPage(result.link) &&
+      result.rating &&
+      result.rating >= 1 &&
+      result.rating <= 5
+    ) {
+      current.bestRating = Math.round(result.rating * 100) / 100;
+    }
+
+    // Parse snippet for spice data
+    if (!current.bestSpice) {
+      const spice = parseSpiceFromSnippet(scopedSnippet, "");
+      if (spice) current.bestSpice = spice;
+    }
+
+    // Parse snippet for rating (in case Serper structured data is missing)
+    if (!current.bestRating) {
+      const rating = parseRomanceIoRating(scopedSnippet, "");
+      if (rating) current.bestRating = rating;
+    }
+
+    // Extract tags from "tagged as ..." section
+    const snippetTags = extractTagsFromSnippet(scopedSnippet);
+    if (snippetTags.length > 0) {
+      for (const tag of snippetTags) {
+        if (!current.allTags.includes(tag)) current.allTags.push(tag);
+      }
+    }
+  }
 }
 
 /**
@@ -352,58 +498,13 @@ export async function getRomanceIoSpice(
       return null;
     }
 
-    const response = await fetch(SERPER_ENDPOINT, {
-      method: "POST",
-      headers: {
-        "X-API-KEY": apiKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        q: query,
-        num: 5,
-      }),
-    });
-
-    if (!response.ok) {
-      const message = await getSerperErrorMessage(response);
-      console.warn(`[romance.io] Serper API error: ${response.status} ${message}`);
-      if (isSerperProviderUnavailable(response.status, message)) {
-        throw new Error(`rate limit: Serper unavailable for romance.io lookup (${message})`);
-      }
-      return null;
-    }
-
-    const data: SerperResponse = await response.json();
-    const results = data.organic ?? [];
-
     // Filter to romance.io results only (books, series, authors pages)
-    let romanceIoResults = results.filter(
-      (r) => r.link.includes("romance.io/")
-    );
+    let romanceIoResults = await searchSerper(apiKey, query, 5);
 
     // Fallback: if "tagged" query misses, try the original query format
     if (romanceIoResults.length === 0) {
       const fallbackQuery = `romance.io rating "${title}" "${author}"`;
-      const fallbackRes = await fetch(SERPER_ENDPOINT, {
-        method: "POST",
-        headers: {
-          "X-API-KEY": apiKey,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ q: fallbackQuery, num: 5 }),
-      });
-      if (fallbackRes.ok) {
-        const fallbackData: SerperResponse = await fallbackRes.json();
-        romanceIoResults = (fallbackData.organic ?? []).filter(
-          (r) => r.link.includes("romance.io/")
-        );
-      } else {
-        const message = await getSerperErrorMessage(fallbackRes);
-        console.warn(`[romance.io] Fallback Serper API error: ${fallbackRes.status} ${message}`);
-        if (isSerperProviderUnavailable(fallbackRes.status, message)) {
-          throw new Error(`rate limit: Serper unavailable for romance.io lookup (${message})`);
-        }
-      }
+      romanceIoResults = await searchSerper(apiKey, fallbackQuery, 5);
     }
 
     if (romanceIoResults.length === 0) {
@@ -416,18 +517,17 @@ export async function getRomanceIoSpice(
     // Prefer /books/ URLs, but accept /series/ and /authors/ for data
     const bookPageResult = romanceIoResults.find(
       (r) =>
-        r.link.includes("romance.io/books/") ||
-        r.link.includes("romance.io/book/")
+        (r.link.includes("romance.io/books/") ||
+          r.link.includes("romance.io/book/")) &&
+        !isSimilarPage(r.link) &&
+        slugConfirmsBook(r.link, title, author)
     );
 
     const primaryResult = bookPageResult || romanceIoResults[0];
 
-    // Extract the path after /books/ (includes numeric ID + slug, e.g. "67d.../title-author")
-    // Romance.io URLs are /books/{id}/{slug} — we need both parts for valid links
-    const booksMatch = primaryResult.link.match(/romance\.io\/books\/(.+)/);
-    const cleanSlug = booksMatch
-      ? booksMatch[1].split("?")[0]
-      : (primaryResult.link.split("/").pop() || "").split("?")[0];
+    // Extract the path after /books/ (id + slug, e.g. "67d.../title-author").
+    const cleanSlug = bookSlugFromUrl(primaryResult.link) ??
+      (primaryResult.link.split("/").pop() || "").split("?")[0];
 
     const titleWords = getTitleWords(title);
 
@@ -473,87 +573,27 @@ export async function getRomanceIoSpice(
     // Step 4: Extract data from ALL romance.io results
     // Aggregate spice and rating from any result that has them
 
-    let bestSpice: { spiceLevel: number; heatLabel: string } | null = null;
-    let bestRating: number | null = null;
-    const allTags: string[] = [];
+    const signals = {
+      bestSpice: null as { spiceLevel: number; heatLabel: string } | null,
+      bestRating: null as number | null,
+      allTags: [] as string[],
+    };
 
-    for (const result of romanceIoResults) {
-      // Try Serper's structured rating field first (most reliable)
-      if (!bestRating && result.rating && result.rating >= 1 && result.rating <= 5) {
-        bestRating = Math.round(result.rating * 100) / 100;
-      }
-
-      // Parse snippet for spice data
-      if (!bestSpice) {
-        const spice = parseSpiceFromSnippet(result.snippet, result.title);
-        if (spice) bestSpice = spice;
-      }
-
-      // Parse snippet for rating (in case Serper structured data is missing)
-      if (!bestRating) {
-        const rating = parseRomanceIoRating(result.snippet, result.title);
-        if (rating) bestRating = rating;
-      }
-
-      // Extract tags from "tagged as ..." section
-      const snippetTags = extractTagsFromSnippet(result.snippet);
-      if (snippetTags.length > 0) {
-        for (const tag of snippetTags) {
-          if (!allTags.includes(tag)) allTags.push(tag);
-        }
-      }
-    }
+    collectRomanceIoSignals(romanceIoResults, title, author, signals);
 
     // Step 5: If we found spice/tags but no rating, run a rating-targeted query.
     // The "tagged as" query anchors snippets on the tag section (lower on the page),
     // which reliably contains spice + heat label but often cuts off the star rating
     // that lives higher up. This second query anchors on the rating section instead.
     // Only fires when we already confirmed a match — costs ~$0.001 per extra call.
-    if (!bestRating) {
+    if (!signals.bestRating) {
       try {
         const ratingQuery = `site:romance.io "${title}" "of 5 stars"`;
-        const ratingRes = await fetch(SERPER_ENDPOINT, {
-          method: "POST",
-          headers: {
-            "X-API-KEY": apiKey,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ q: ratingQuery, num: 3 }),
-        });
+        const ratingResults = await searchSerper(apiKey, ratingQuery, 3);
+        collectRomanceIoSignals(ratingResults, title, author, signals);
 
-        if (ratingRes.ok) {
-          const ratingData: SerperResponse = await ratingRes.json();
-          const ratingResults = (ratingData.organic ?? []).filter(
-            (r) => r.link.includes("romance.io/")
-          );
-
-          for (const result of ratingResults) {
-            // Serper structured rating field
-            if (!bestRating && result.rating && result.rating >= 1 && result.rating <= 5) {
-              bestRating = Math.round(result.rating * 100) / 100;
-            }
-            // Parse from snippet text
-            if (!bestRating) {
-              const rating = parseRomanceIoRating(result.snippet, result.title);
-              if (rating) bestRating = rating;
-            }
-            // Also grab any spice data we might have missed
-            if (!bestSpice) {
-              const spice = parseSpiceFromSnippet(result.snippet, result.title);
-              if (spice) bestSpice = spice;
-            }
-            if (bestRating) break;
-          }
-
-          if (bestRating) {
-            console.log(`[romance.io] "${title}" → rating=${bestRating} (from rating-targeted query)`);
-          }
-        } else {
-          const message = await getSerperErrorMessage(ratingRes);
-          console.warn(`[romance.io] Rating Serper API error: ${ratingRes.status} ${message}`);
-          if (isSerperProviderUnavailable(ratingRes.status, message)) {
-            throw new Error(`rate limit: Serper unavailable for romance.io lookup (${message})`);
-          }
+        if (signals.bestRating) {
+          console.log(`[romance.io] "${title}" → rating=${signals.bestRating} (from rating-targeted query)`);
         }
       } catch (err) {
         console.warn(`[romance.io] Rating follow-up query failed for "${title}":`, err);
@@ -563,49 +603,67 @@ export async function getRomanceIoSpice(
       }
     }
 
-    // Use the book page URL if available, otherwise the best match
-    const bestUrl = bookPageResult?.link || primaryResult.link;
+    // Step 6: If rating exists but spice was truncated, run spice-targeted
+    // follow-ups. This is the missing half of the old two-query strategy:
+    // Google may expose the rating section while cutting off "Steam rating".
+    if (!signals.bestSpice) {
+      const spiceQueries = [
+        `site:romance.io "${title}" "${author}" "Steam rating:"`,
+        `site:romance.io "${title}" "Steam rating:"`,
+        `site:romance.io "${title}" "${author}" "Explicit open door"`,
+        `site:romance.io "${title}" "${author}" "Explicit and plentiful"`,
+      ];
+
+      for (const spiceQuery of spiceQueries) {
+        try {
+          const spiceResults = await searchSerper(apiKey, spiceQuery, 5);
+          collectRomanceIoSignals(spiceResults, title, author, signals);
+          const foundSpice = signals.bestSpice as { spiceLevel: number; heatLabel: string } | null;
+          if (foundSpice) {
+            console.log(
+              `[romance.io] "${title}" → spice=${foundSpice.spiceLevel} ` +
+                `(${foundSpice.heatLabel}) from spice-targeted query`
+            );
+            break;
+          }
+        } catch (err) {
+          console.warn(`[romance.io] Spice follow-up query failed for "${title}":`, err);
+          if (err instanceof Error && err.message.startsWith("rate limit:")) {
+            throw err;
+          }
+        }
+      }
+    }
+
     // Only store a slug from confirmed /books/ URLs — slugs from /series/ or
     // /authors/ pages produce broken links when we reconstruct the URL.
     // Capture full path after /books/ (id + slug) since romance.io requires both.
-    const bestSlug = bookPageResult
-      ? (bookPageResult.link.match(/romance\.io\/books\/(.+)/)?.[1] || "").split("?")[0]
-      : "";
+    const bestSlug = bookPageResult ? bookSlugFromUrl(bookPageResult.link) ?? "" : "";
+    const bestUrl = bestSlug
+      ? `https://www.romance.io/books/${bestSlug}`
+      : `https://www.romance.io/search?q=${encodeURIComponent(`${title} ${author}`)}`;
 
-    if (!bestSpice) {
+    if (!signals.bestSpice) {
       console.log(
         `[romance.io] Found "${title}" on romance.io but couldn't parse spice from any snippet`
       );
-      // Still return if we have a rating — the link and slug are valuable
-      if (bestRating || confidence === "high") {
-        await cacheResult(query, "hit");
-        return {
-          spiceLevel: 3, // default to moderate if we can't parse
-          heatLabel: "Open Door",
-          romanceIoSlug: bestSlug,
-          romanceIoUrl: bestUrl,
-          romanceIoRating: bestRating,
-          confidence,
-          rawTags: allTags,
-        };
-      }
       await cacheResult(query, "no_data");
       return null;
     }
 
     console.log(
-      `[romance.io] "${title}" → spice=${bestSpice.spiceLevel} (${bestSpice.heatLabel}), rating=${bestRating ?? "none"}, tags=${allTags.length}`
+      `[romance.io] "${title}" → spice=${signals.bestSpice.spiceLevel} (${signals.bestSpice.heatLabel}), rating=${signals.bestRating ?? "none"}, tags=${signals.allTags.length}`
     );
 
     await cacheResult(query, "hit");
     return {
-      spiceLevel: bestSpice.spiceLevel,
-      heatLabel: bestSpice.heatLabel,
+      spiceLevel: signals.bestSpice.spiceLevel,
+      heatLabel: signals.bestSpice.heatLabel,
       romanceIoSlug: bestSlug,
       romanceIoUrl: bestUrl,
-      romanceIoRating: bestRating,
+      romanceIoRating: signals.bestRating,
       confidence,
-      rawTags: allTags,
+      rawTags: signals.allTags,
     };
   } catch (err) {
     console.warn(`[romance.io] Error searching for "${title}":`, err);
