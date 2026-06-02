@@ -25,6 +25,8 @@ const SOURCE_WEIGHTS: Record<string, number> = {
   genre_bucketing: 0.2,
 };
 
+const SPICE_SIGNAL_BATCH_SIZE = 200;
+
 export interface CompositeSpice {
   score: number;
   primarySource: SpiceSource;
@@ -141,16 +143,22 @@ export async function getCompositeSpiceBatch(
 
   const supabase = getAdminClient();
 
-  const { data: rows } = await supabase
-    .from("spice_signals")
-    .select("book_id, source, spice_value, confidence, evidence")
-    .in("book_id", bookIds);
+  const rows: Record<string, unknown>[] = [];
+  for (let i = 0; i < bookIds.length; i += SPICE_SIGNAL_BATCH_SIZE) {
+    const chunk = bookIds.slice(i, i + SPICE_SIGNAL_BATCH_SIZE);
+    const { data } = await supabase
+      .from("spice_signals")
+      .select("book_id, source, spice_value, confidence, evidence")
+      .in("book_id", chunk);
 
-  if (!rows || rows.length === 0) return new Map();
+    rows.push(...((data ?? []) as Record<string, unknown>[]));
+  }
+
+  if (rows.length === 0) return new Map();
 
   // Group signals by book_id
   const byBook = new Map<string, SpiceSignal[]>();
-  for (const row of rows as Record<string, unknown>[]) {
+  for (const row of rows) {
     const bookId = row.book_id as string;
     if (!byBook.has(bookId)) byBook.set(bookId, []);
     byBook.get(bookId)!.push({

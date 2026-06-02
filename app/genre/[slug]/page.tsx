@@ -2,9 +2,15 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { hydrateBookDetailBatch } from "@/lib/books/cache";
-import { deduplicateBooks, isCompilationTitle } from "@/lib/books/utils";
+import { deduplicateBooks, isPublicSearchSuppressedTitle } from "@/lib/books/utils";
 import { isJunkTitle } from "@/lib/books/romance-filter";
 import { CANONICAL_SUBGENRES } from "@/lib/books/subgenre-classifier";
+import {
+  FEATURED_SHELF_LIMIT,
+  fetchFeaturedShelfCandidateRows,
+  fetchShelfBuzzScores,
+  rankFeaturedGenreBooks,
+} from "@/lib/books/featured-shelf";
 import type { BookDetail } from "@/lib/types";
 import GenreFilterClient from "./GenreFilterClient";
 
@@ -49,44 +55,12 @@ export default async function GenrePage({ params }: GenrePageProps) {
     .eq("subgenre", params.slug)
     .eq("is_canon", true);
 
-  // Fetch top books by popularity (GR rating count) — ensures blockbusters appear first
-  const PAGE_SIZE = 50;
-
-  // Step 1: get the most popular book IDs in this genre via book_ratings join
-  const { data: topRated } = await supabase
-    .from("book_ratings")
-    .select("book_id, rating_count")
-    .eq("source", "goodreads")
-    .not("rating_count", "is", null)
-    .order("rating_count", { ascending: false })
-    .limit(5000);
-
-  // Step 2: get all canon book IDs in this genre
-  const { data: genreBookRows } = await supabase
-    .from("books")
-    .select("id")
-    .eq("subgenre", params.slug)
-    .eq("is_canon", true)
-    .not("cover_url", "is", null);
-
-  const genreBookIds = new Set(
-    (genreBookRows ?? []).map((r: { id: string }) => r.id)
+  // Featured shelves should lead with verified hot/new titles, not just the
+  // biggest legacy Goodreads count.
+  const genreBookRows = await fetchFeaturedShelfCandidateRows(
+    supabase,
+    params.slug
   );
-
-  // Step 3: intersect and take top PAGE_SIZE
-  const topBookIds = (topRated ?? [])
-    .filter((r: { book_id: string }) => genreBookIds.has(r.book_id))
-    .slice(0, PAGE_SIZE)
-    .map((r: { book_id: string }) => r.book_id);
-
-  // Step 4: fetch full book rows
-  const { data: dbBooks } = topBookIds.length > 0
-    ? await supabase
-        .from("books")
-        .select("*")
-        .in("id", topBookIds)
-        .eq("is_canon", true)
-    : { data: null };
 
   const books: BookDetail[] = [];
   const relatedTropeMap = new Map<
@@ -94,22 +68,19 @@ export default async function GenrePage({ params }: GenrePageProps) {
     { slug: string; name: string; count: number }
   >();
 
-  if (dbBooks && dbBooks.length > 0) {
+  if (genreBookRows.length > 0) {
     const hydratedMap = await hydrateBookDetailBatch(
       supabase,
-      dbBooks as Record<string, unknown>[]
+      genreBookRows as Record<string, unknown>[]
     );
 
-    // Preserve popularity order from topBookIds
-    const idOrder = new Map(topBookIds.map((id: string, i: number) => [id, i]));
-    for (const row of dbBooks) {
+    for (const row of genreBookRows) {
       const hydrated = hydratedMap.get(row.id as string);
       if (hydrated) books.push(hydrated);
     }
-    books.sort((a, b) => (idOrder.get(a.id) ?? 999) - (idOrder.get(b.id) ?? 999));
 
     // Find top tropes across books in this genre (for filter refinement)
-    const bookIds = dbBooks.map((b) => b.id as string);
+    const bookIds = genreBookRows.map((b) => b.id as string);
     const { data: bookTropes } = await supabase
       .from("book_tropes")
       .select("book_id, trope_id, tropes(id, slug, name)")
@@ -137,18 +108,32 @@ export default async function GenrePage({ params }: GenrePageProps) {
     .sort((a, b) => b.count - a.count)
     .slice(0, 15);
 
-  // Deduplicate and filter junk
+  const buzzScores =
+    books.length > 0
+      ? await fetchShelfBuzzScores(
+          supabase,
+          books.map((book) => book.id)
+        )
+      : new Map<string, number>();
+
+  // Deduplicate, filter junk, then rank by verified hot/new shelf quality.
   const cleanBooks = deduplicateBooks(books).filter((book) => {
     if (isJunkTitle(book.title)) return false;
-    if (isCompilationTitle(book.title)) return false;
+    if (isPublicSearchSuppressedTitle(book.title)) return false;
     if (/\[.*\]/.test(book.title) && book.title.includes("Author:"))
       return false;
     if (book.title.length > 100) return false;
     return true;
   });
 
+  const featuredBooks = rankFeaturedGenreBooks(
+    cleanBooks,
+    params.slug,
+    buzzScores
+  ).slice(0, FEATURED_SHELF_LIMIT);
+
   // Shape for client
-  const initialBooks = cleanBooks.map((b) => {
+  const initialBooks = featuredBooks.map((b) => {
     let coverUrl = b.coverUrl;
     if (
       coverUrl &&

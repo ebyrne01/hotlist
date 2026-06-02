@@ -27,6 +27,7 @@ function cleanText(text: string): string {
 }
 
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const HYDRATION_BATCH_SIZE = 200;
 
 /**
  * Unified dedup resolver — checks whether a book already exists in the DB.
@@ -690,32 +691,39 @@ export async function hydrateBookDetailBatch(
   const books = dbBooks.map(mapDbBook);
   const bookIds = books.map((b) => b.id);
 
-  // 4 parallel batch queries instead of 4N sequential queries
-  const [ratingsRes, spiceRes, compositeMap, tropesRes] = await Promise.all([
-    supabase.from("book_ratings").select("*").in("book_id", bookIds),
-    supabase.from("book_spice").select("*").in("book_id", bookIds),
+  // Batch-hydrate related data in chunks. Large genre shelves can exceed
+  // PostgREST URL limits if every book ID is sent in one `.in(...)` call.
+  const [ratingsRows, spiceRows, compositeMap, tropeRows] = await Promise.all([
+    fetchRowsByBookId(supabase, "book_ratings", "*", bookIds),
+    fetchRowsByBookId(supabase, "book_spice", "*", bookIds),
     getCompositeSpiceBatch(bookIds),
-    supabase
-      .from("book_tropes")
-      .select("book_id, trope_id, tropes(id, slug, name, description)")
-      .in("book_id", bookIds),
+    fetchRowsByBookId(
+      supabase,
+      "book_tropes",
+      "book_id, trope_id, tropes(id, slug, name, description)",
+      bookIds
+    ),
   ]);
 
   // Index ratings by book_id
   const ratingsMap = new Map<string, Rating[]>();
-  for (const r of (ratingsRes.data ?? []) as Record<string, unknown>[]) {
+  for (const r of ratingsRows) {
     const bid = r.book_id as string;
     if (!ratingsMap.has(bid)) ratingsMap.set(bid, []);
-    ratingsMap.get(bid)!.push({
-      source: r.source as Rating["source"],
-      rating: r.rating ? parseFloat(r.rating as string) : null,
-      ratingCount: r.rating_count as number | null,
-    });
+    const source = r.source as Rating["source"];
+    const rating = r.rating ? parseFloat(r.rating as string) : null;
+    const ratingCount = r.rating_count as number | null;
+
+    if (source === "amazon" && ratingCount && ratingCount < 50) {
+      ratingsMap.get(bid)!.push({ source, rating: null, ratingCount });
+    } else {
+      ratingsMap.get(bid)!.push({ source, rating, ratingCount });
+    }
   }
 
   // Index spice by book_id
   const spiceMap = new Map<string, SpiceRating[]>();
-  for (const s of (spiceRes.data ?? []) as Record<string, unknown>[]) {
+  for (const s of spiceRows) {
     const bid = s.book_id as string;
     if (!spiceMap.has(bid)) spiceMap.set(bid, []);
     spiceMap.get(bid)!.push({
@@ -728,7 +736,7 @@ export async function hydrateBookDetailBatch(
 
   // Index tropes by book_id
   const tropesMap = new Map<string, Trope[]>();
-  for (const bt of (tropesRes.data ?? []) as Record<string, unknown>[]) {
+  for (const bt of tropeRows) {
     const bid = bt.book_id as string;
     const t = bt.tropes as Record<string, unknown> | null;
     if (!t) continue;
@@ -753,6 +761,27 @@ export async function hydrateBookDetailBatch(
   }
 
   return result;
+}
+
+async function fetchRowsByBookId(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  table: string,
+  select: string,
+  bookIds: string[]
+): Promise<Record<string, unknown>[]> {
+  const rows: Record<string, unknown>[] = [];
+  for (let i = 0; i < bookIds.length; i += HYDRATION_BATCH_SIZE) {
+    const chunk = bookIds.slice(i, i + HYDRATION_BATCH_SIZE);
+    const { data } = await supabase
+      .from(table)
+      .select(select)
+      .in("book_id", chunk);
+
+    rows.push(...((data ?? []) as Record<string, unknown>[]));
+  }
+
+  return rows;
 }
 
 export function mapDbBook(row: Record<string, unknown>): Book {
