@@ -113,6 +113,13 @@ const STUCK_JOB_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes — reset jobs stuck 
 const SPOTIFY_PER_TICK_CAP = 3;
 let p0CanonTargetIds: Set<string> | null = null;
 
+type EnrichmentJobEvidence = {
+  allow_paid_top_list_spend?: boolean;
+  source?: string;
+  priority?: string;
+  rank?: number;
+} | null;
+
 async function getP0CanonTargetIds(): Promise<Set<string>> {
   if (p0CanonTargetIds) return p0CanonTargetIds;
 
@@ -136,28 +143,33 @@ async function getP0CanonTargetIds(): Promise<Set<string>> {
   return p0CanonTargetIds;
 }
 
-async function isAllowedPaidSerperJob(job: QueuedJob): Promise<boolean> {
-  if (!PAID_SERPER_JOB_TYPES.has(job.job_type)) return true;
-
+async function getJobEvidence(jobId: string): Promise<EnrichmentJobEvidence> {
   const supabase = getAdminClient();
   const { data: queuedJob } = await supabase
     .from("enrichment_queue")
     .select("evidence")
-    .eq("id", job.id)
+    .eq("id", jobId)
     .single();
 
-  const evidence = queuedJob?.evidence as
-    | { allow_paid_top_list_spend?: boolean; source?: string; priority?: string; rank?: number }
-    | null
-    | undefined;
+  return (queuedJob?.evidence as EnrichmentJobEvidence | undefined) ?? null;
+}
 
-  if (
+function isHighDemandTopListRepair(evidence: EnrichmentJobEvidence): boolean {
+  return (
     evidence?.allow_paid_top_list_spend === true &&
     evidence.source === "top_list_repair" &&
     ["P0", "P1"].includes(evidence.priority ?? "") &&
     typeof evidence.rank === "number" &&
     evidence.rank <= 200
-  ) {
+  );
+}
+
+async function isAllowedPaidSerperJob(job: QueuedJob): Promise<boolean> {
+  if (!PAID_SERPER_JOB_TYPES.has(job.job_type)) return true;
+
+  const evidence = await getJobEvidence(job.id);
+
+  if (isHighDemandTopListRepair(evidence)) {
     return true;
   }
 
@@ -572,7 +584,12 @@ async function processJob(job: QueuedJob): Promise<"data" | "no-data"> {
 
     case "romance_io_spice": {
       if (!book_title || !book_author) break;
-      const spiceData = await getRomanceIoSpice(book_title, book_author);
+      const evidence = await getJobEvidence(job.id);
+      const allowIndexedListSnippets = isHighDemandTopListRepair(evidence);
+      const spiceData = await getRomanceIoSpice(book_title, book_author, undefined, {
+        allowIndexedListSnippets,
+        bypassPersistentMissCache: allowIndexedListSnippets,
+      });
       if (!spiceData || (spiceData.confidence !== "high" && spiceData.confidence !== "medium")) {
         // Serper returned nothing or low-confidence match — run genre bucketing
         // as fallback, then signal no-data so the job retries
